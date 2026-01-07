@@ -62,9 +62,9 @@ export default function Home() {
         <div style={{ fontWeight: 'bold', fontSize: '24px', letterSpacing: '-0.5px' }}>
           Mamba<span style={{ color: 'var(--primary)' }}>X</span>
         </div>
-        <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '14px' }}>
+        <Link href="/auth/phone" className="btn-secondary" style={{ padding: '8px 16px', fontSize: '14px', textDecoration: 'none' }}>
           Log In
-        </button>
+        </Link>
       </header>
 
       {/* Hero Section */}
