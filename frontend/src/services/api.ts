@@ -128,11 +128,15 @@ export const authService = {
     },
 
     async uploadPhoto(file: File) {
+        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
         const formData = new FormData();
         formData.append("file", file);
 
         const response = await fetch(`${API_URL}/upload`, {
             method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`
+            },
             body: formData
         });
 

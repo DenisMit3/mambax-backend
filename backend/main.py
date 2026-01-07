@@ -11,6 +11,8 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://localhost:3001",
+    "https://silver-memory-beta.vercel.app",
+    "https://silver-memory.vercel.app",
 ]
 
 app.add_middleware(
@@ -27,6 +29,9 @@ from fastapi import File, UploadFile
 import shutil
 from pathlib import Path
 import os
+import uuid
+import time
+
 os.makedirs("static/uploads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -48,54 +53,35 @@ async def login(user_data: schemas.UserLogin, db: AsyncSession = Depends(databas
     # 2. Get or Create User
     user = await crud.get_user_by_identifier(db, user_data.identifier)
     
-    # For login, user must exist OR we auto-create if it looks like a phone? 
-    # Logic pivot: if entering TG ID, user MUST exist. If Phone, maybe new?
-    # For now, simplistic: if verify_otp passed, we trust CRUD found or we deal with it.
-    
     if not user:
-        # If passed OTP verification but user not found (rare edge case if using in-memory OTP)
-        # We try to create if it looks like a phone. 
-        # But crud.get_user_by_identifier handles lookup.
-        # Let's assume if they verified OTP, we must have known them or created a temp record?
-        # Simpler: Auto-create if phone. Fail if TG ID and not found?
         if user_data.identifier.startswith("+") or user_data.identifier.isdigit() and len(user_data.identifier) > 7:
              user = await crud.create_user(db, schemas.UserCreate(phone=user_data.identifier))
         else:
              raise HTTPException(status_code=400, detail="User not found")
 
-    
     # 3. Generate Token
     access_token = auth.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/auth/request-otp")
 async def request_otp(data: schemas.OTPRequest, db: AsyncSession = Depends(database.get_db)):
-    # 1. Check if user exists to get Telegram ID
-    # data.identifier can be Phone or Telegram ID
-    
     user = await crud.get_user_by_identifier(db, data.identifier)
-    
-    # If user not found by identifier, and identifier looks like a phone number, we can proceed (OTP via SMS mock)
-    # If identifier is TG ID and user not found -> cannot send message.
     
     otp = auth.generate_otp()
     auth.save_otp(data.identifier, otp)
     
     if user and user.telegram_id:
-        # Send via Telegram
         success = await auth.send_otp_via_telegram(user.telegram_id, otp)
         if success:
             return {"message": "OTP sent via Telegram"}
         else:
              return {"message": "Failed to send to Telegram, check bot status."}
     else:
-        # User not found OR no TG ID linked.
         print(f"DEMO OTP for {data.identifier}: {otp}")
         return {"message": "OTP generated (Demo mode)"}
 
 @app.post("/auth/telegram", response_model=schemas.Token)
 async def telegram_login(login_data: schemas.TelegramLogin, db: AsyncSession = Depends(database.get_db)):
-    # 1. Validate Data
     user_data = auth.validate_telegram_data(login_data.init_data)
     if not user_data:
         raise HTTPException(status_code=400, detail="Invalid Telegram Data")
@@ -103,24 +89,20 @@ async def telegram_login(login_data: schemas.TelegramLogin, db: AsyncSession = D
     tg_id = str(user_data["id"])
     username = user_data.get("username")
     
-    # 2. Get or Create User
     user = await crud.get_user_by_telegram_id(db, tg_id)
     if not user:
-        # Create new user
         user = await crud.create_user(db, schemas.UserCreate(phone=None, telegram_id=tg_id, username=username))
     elif username and user.username != username:
-        # Update username if changed (implementation detail: requires update method in crud, or direct here)
         user.username = username
         await db.commit()
     
-    # 3. Generate Token
     access_token = auth.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/profile", response_model=schemas.ProfileResponse)
 async def create_profile(
     profile: schemas.ProfileCreate, 
-    user_id: str, # In real app, extract from JWT
+    user_id: str, 
     db: AsyncSession = Depends(database.get_db)
 ):
     return await crud.create_profile(db, profile, user_id)
@@ -129,7 +111,7 @@ async def create_profile(
 async def get_profiles(
     skip: int = 0, 
     limit: int = 20, 
-    current_user: str = Depends(auth.get_current_user), # We need to know who is asking to exclude them
+    current_user: str = Depends(auth.get_current_user), 
     db: AsyncSession = Depends(database.get_db)
 ):
     return await crud.get_profiles(db, skip, limit, exclude_user_id=current_user)
@@ -146,7 +128,7 @@ async def get_my_profile(
 
 @app.post("/location")
 async def update_location(
-    loc: dict, # {lat: flutter, lon: float}
+    loc: dict, 
     current_user: str = Depends(auth.get_current_user),
     db: AsyncSession = Depends(database.get_db)
 ):
@@ -178,15 +160,34 @@ async def upload_file(
     upload_dir.mkdir(parents=True, exist_ok=True)
     
     # Secure filename
-    import time
     file_extension = Path(file.filename).suffix
-    file_name = f"{int(time.time())}_{current_user}{file_extension}"
+    # Use UUID to prevent collisions and remove user info from filename if needed
+    file_name = f"{uuid.uuid4()}{file_extension}"
     file_path = upload_dir / file_name
     
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        
-    return {"url": f"/static/uploads/{file_name}"}
+     
+    # Return absolute URL using Railway domain if available, otherwise relative?
+    # Actually, returning fully qualified URL is safer for frontend
+    # But for now, let's return the relative path that matches app.mount
+    # Frontend seems to handle it as src="..." so it needs base URL
+    
+    # Let's return the full URL based on the environment or constructing it
+    # Ideally, frontend should prepend API_URL, but let's see how frontend uses it.
+    # Frontend: <img src={photo} ... />
+    # If photo is "/static/...", correct if frontend and backend on same domain? NO. They are different.
+    # So we MUST return full URL.
+    
+    base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN") or os.getenv("App_URL") 
+    if not base_url:
+         # Fallback for local
+         base_url = "https://mambax-backend-production.up.railway.app" # Hardcode prod for now or http://localhost:8000
+    
+    if not base_url.startswith("http"):
+        base_url = f"https://{base_url}"
+
+    return {"url": f"{base_url}/static/uploads/{file_name}"}
 
 @app.post("/likes")
 async def like_user(
@@ -210,7 +211,6 @@ async def get_messages(
     current_user: str = Depends(auth.get_current_user),
     db: AsyncSession = Depends(database.get_db)
 ):
-    # TODO: Verify user is part of match
     return await crud.get_messages(db, match_id)
 
 @app.post("/matches/{match_id}/messages", response_model=schemas.MessageResponse)
@@ -220,26 +220,7 @@ async def send_message(
     current_user: str = Depends(auth.get_current_user),
     db: AsyncSession = Depends(database.get_db)
 ):
-    # TODO: Verify user is part of match
     return await crud.create_message(db, match_id, current_user, msg.text)
-
-from fastapi import File, UploadFile
-import shutil
-import uuid
-
-@app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    # Simple local upload
-    file_ext = file.filename.split(".")[-1]
-    filename = f"{uuid.uuid4()}.{file_ext}"
-    file_path = f"static/uploads/{filename}"
-    
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    # Return URL (assuming localhost for now, in prod use env var)
-    # user will preprend API_URL or we return full path
-    return {"url": f"http://localhost:8000/{file_path}"}
 
 @app.on_event("startup")
 async def startup():
