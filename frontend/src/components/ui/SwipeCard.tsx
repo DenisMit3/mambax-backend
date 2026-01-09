@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { motion, useMotionValue, useTransform, useAnimation, PanInfo } from "framer-motion";
@@ -44,13 +45,14 @@ export function SwipeCard({ name, age, bio, image, onSwipe }: SwipeCardProps) {
                 position: 'absolute',
                 top: 0,
                 width: '100%',
-                maxWidth: '400px',
-                height: '600px',
+                height: '100%',
+                maxWidth: '480px', // Match mobile constraint
+                maxHeight: '100%',
                 cursor: 'grab',
                 background: 'var(--surface)',
                 borderRadius: 'var(--radius-lg)',
                 overflow: 'hidden',
-                boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
             }}
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}

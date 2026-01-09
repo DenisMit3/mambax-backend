@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { SwipeCard } from "@/components/ui/SwipeCard";
-import { X, Heart, Star } from "lucide-react";
+import { X, Heart } from "lucide-react";
 import { authService } from "@/services/api";
 
 type Profile = {
@@ -80,32 +80,25 @@ export default function DiscoverPage() {
     const currentProfile = profiles[currentIndex];
 
     return (
-        <div className="container" style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
+        <div style={{
             height: '100dvh',
-            maxHeight: '100dvh',
-            overflow: 'hidden',
-            paddingBottom: '80px', // Space for BottomNav
-            position: 'relative'
+            width: '100%',
+            position: 'relative',
+            background: 'var(--background)',
+            overflow: 'hidden'
         }}>
 
-            {/* Top Bar */}
-            <div style={{ width: '100%', padding: '15px 0', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
-                <h1 className="title-gradient" style={{ fontSize: '24px', fontWeight: 800 }}>MambaX</h1>
-            </div>
-
-            {/* Card Area - Flex Glow to fill space */}
+            {/* Main Swipe Area */}
             <div style={{
-                flex: 1,
-                width: '100%',
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: '60px', // Space for BottomNav
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                position: 'relative',
-                overflow: 'hidden',
-                padding: '10px 0'
+                padding: '10px'
             }}>
                 <SwipeCard
                     key={currentProfile.id}
@@ -117,47 +110,40 @@ export default function DiscoverPage() {
                 />
             </div>
 
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', alignItems: 'center', zIndex: 10, flexShrink: 0 }}>
+            {/* Floating Action Buttons */}
+            <div style={{
+                position: 'fixed',
+                bottom: '90px', // Above nav
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                gap: '24px',
+                zIndex: 20
+            }}>
                 <button
-                    className="btn"
-                    style={{
-                        width: '64px', height: '64px', borderRadius: '50%',
-                        background: 'var(--surface)',
-                        border: '1px solid #FF4D6D',
-                        color: '#FF4D6D',
-                        boxShadow: 'var(--shadow-lg)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}
                     onClick={() => handleSwipe("left")}
+                    style={{
+                        width: '56px', height: '56px', borderRadius: '50%',
+                        background: 'white',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#FF4D6D'
+                    }}
                 >
-                    <X size={32} strokeWidth={3} />
-                </button>
-
-                <button className="btn" style={{
-                    width: '48px', height: '48px', borderRadius: '50%',
-                    background: 'var(--surface)',
-                    border: '1px solid #FFB800',
-                    color: '#FFB800',
-                    boxShadow: 'var(--shadow-md)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                    <Star size={24} strokeWidth={3} />
+                    <X size={28} strokeWidth={3} />
                 </button>
 
                 <button
-                    className="btn"
-                    style={{
-                        width: '64px', height: '64px', borderRadius: '50%',
-                        background: 'var(--primary-gradient)',
-                        border: 'none',
-                        color: 'white',
-                        boxShadow: 'var(--shadow-glow-primary)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}
                     onClick={() => handleSwipe("right")}
+                    style={{
+                        width: '56px', height: '56px', borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #FF5A27 0%, #FF2E55 100%)',
+                        boxShadow: '0 8px 20px rgba(255, 90, 39, 0.3)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'white'
+                    }}
                 >
-                    <Heart size={32} fill="white" strokeWidth={0} />
+                    <Heart size={28} fill="white" strokeWidth={0} />
                 </button>
             </div>
 

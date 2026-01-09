@@ -2,24 +2,29 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:16-alpine
-    container_name: mambax-db
-    restart: always
-    environment:
-      POSTGRES_USER: mambax_user
-      POSTGRES_PASSWORD: mambax_password
-      POSTGRES_DB: mambax_db
-    ports:
-      - "5432:5432"
+    image: postgres:15
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:alpine
-    container_name: mambax-redis
-    restart: always
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=mambax
     ports:
-      - "6379:6379"
+      - "5432:5432" # Оставляем доступ снаружи для удобства отладки
+
+  backend:
+    build: ./backend
+    # Команда переопределяется в Dockerfile, но можно явно указать здесь
+    # command: ./start.sh
+    volumes:
+      - ./backend:/app # Монтируем код для Live Reload
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/mambax
+      - SECRET_KEY=your-super-secret-key-change-in-production
+    depends_on:
+      - db
 
 volumes:
   postgres_data:

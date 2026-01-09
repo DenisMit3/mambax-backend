@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authService } from "@/services/api";
 
-import { Suspense } from "react";
 
 function OtpContent() {
-    const router = useRouter();
     const searchParams = useSearchParams();
-    const phone = searchParams.get("phone");
+    const router = useRouter();
+    const phone = searchParams.get("phone") || "";
 
     const [otp, setOtp] = useState(["", "", "", ""]);
+    const [loading, setLoading] = useState(false);
     const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
     const handleChange = (index: number, value: string) => {

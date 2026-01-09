@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -14,8 +15,53 @@ export default function ChatListPage() {
 
     useEffect(() => {
         authService.getMatches()
-            .then(data => setMatches(data))
-            .catch(err => console.error("Matches error", err));
+            .then(data => {
+                if (data && data.length > 0) {
+                    setMatches(data);
+                } else {
+                    // Inject Mock Data if no real matches
+                    setMatches([
+                        {
+                            id: "mock1",
+                            user: { id: "u1", name: "Alice", photos: ["https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop"] },
+                            last_message: "Hey! How are you? 😊"
+                        },
+                        {
+                            id: "mock2",
+                            user: { id: "u2", name: "Elena", photos: ["https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=400&fit=crop"] },
+                            last_message: null
+                        },
+                        {
+                            id: "mock3",
+                            user: { id: "u3", name: "Kate", photos: ["https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=400&fit=crop"] },
+                            last_message: "See you tonight! 🥂"
+                        }
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    ] as any);
+                }
+            })
+            .catch(err => {
+                console.error("Matches error", err);
+                // Fallback mock data when API fails
+                setMatches([
+                    {
+                        id: "mock1",
+                        user: { id: "u1", name: "Alice", photos: ["https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop"] },
+                        last_message: "Hey! How are you? 😊"
+                    },
+                    {
+                        id: "mock2",
+                        user: { id: "u2", name: "Elena", photos: ["https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=400&fit=crop"] },
+                        last_message: null
+                    },
+                    {
+                        id: "mock3",
+                        user: { id: "u3", name: "Kate", photos: ["https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=400&fit=crop"] },
+                        last_message: "See you tonight! 🥂"
+                    }
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ] as any);
+            });
     }, []);
 
     return (
@@ -29,8 +75,8 @@ export default function ChatListPage() {
             {/* Header */}
             <div style={{ padding: '20px 0 10px 0', flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                    <h1 className="title-gradient" style={{ fontSize: '28px', fontWeight: 800 }}>Chats</h1>
-                    <MoreVertical color="white" />
+                    <h1 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--foreground)' }}>Chats</h1>
+                    <MoreVertical color="var(--foreground)" />
                 </div>
 
                 {/* Search */}
@@ -50,7 +96,7 @@ export default function ChatListPage() {
                         style={{
                             background: 'transparent',
                             border: 'none',
-                            color: 'white',
+                            color: 'var(--foreground)',
                             fontSize: '16px',
                             flex: 1,
                             outline: 'none'
@@ -70,7 +116,7 @@ export default function ChatListPage() {
                     <div style={{ display: 'flex', gap: '15px', overflowX: 'auto', paddingBottom: '10px' }}>
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {matches.map((m: any) => (
-                            <Link href={`/chat/${m.id}`} key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '70px', textDecoration: 'none', color: 'white' }}>
+                            <Link href={`/chat/${m.id}`} key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '70px', textDecoration: 'none', color: 'var(--foreground)' }}>
                                 <div style={{ position: 'relative', width: '64px', height: '64px', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--primary)' }}>
                                     <img
                                         src={m.user.photos?.[0] || "https://placehold.co/400x400/png"}

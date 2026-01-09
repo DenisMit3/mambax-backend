@@ -69,4 +69,7 @@ class Message(Base):
     match_id = Column(String, ForeignKey("matches.id"))
     sender_id = Column(String, ForeignKey("users.id"))
     text = Column(String)
+    type = Column(String, default="text") # text, voice, photo
+    audio_url = Column(String, nullable=True)
+    duration = Column(String, nullable=True) # e.g. "0:05"
     created_at = Column(String)

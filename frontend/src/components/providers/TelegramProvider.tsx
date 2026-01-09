@@ -28,7 +28,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
           const tg = windowAsTelegram.Telegram.WebApp;
           tg.ready();
           tg.expand();
-          setIsReady(true);
+
           console.log("Telegram Web App Initialized");
 
           // Sync Theme

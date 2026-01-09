@@ -123,11 +123,14 @@ async def get_matches(db: AsyncSession, user_id: str):
             })
     return response
 
-async def create_message(db: AsyncSession, match_id: str, sender_id: str, text: str):
+async def create_message(db: AsyncSession, match_id: str, sender_id: str, msg_data: schemas.MessageCreate):
     msg = models.Message(
         match_id=match_id,
         sender_id=sender_id,
-        text=text,
+        text=msg_data.text,
+        type=msg_data.type,
+        audio_url=msg_data.audio_url,
+        duration=msg_data.duration,
         created_at=str(datetime.utcnow())
     )
     db.add(msg)

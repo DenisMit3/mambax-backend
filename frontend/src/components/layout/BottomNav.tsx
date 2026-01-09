@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Flame, Map, Heart, MessageCircle, User } from "lucide-react";
-import clsx from "clsx";
 
 export function BottomNav() {
     const pathname = usePathname();
@@ -19,22 +18,17 @@ export function BottomNav() {
     return (
         <nav style={{
             position: 'fixed',
-            bottom: 20,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 'calc(100% - 40px)',
-            maxWidth: '440px',
-            background: 'var(--glass)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            border: '1px solid var(--glass-border)',
-            borderRadius: '24px',
-            padding: '12px 10px',
+            bottom: 0,
+            left: 0,
+            width: '100%',
+            background: 'var(--surface)',  // Solid background instead of glass
+            borderTop: '1px solid var(--border)', // Top border
+            padding: '8px 0 20px 0', // Extra padding for safe area (iOS)
             zIndex: 100,
             display: 'flex',
             justifyContent: 'space-around',
             alignItems: 'center',
-            boxShadow: 'var(--shadow-md)'
+            boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
         }}>
             {navItems.map((item) => {
                 const isActive = pathname === item.href;

@@ -25,6 +25,7 @@ class ProfileBase(BaseModel):
     interests: List[str] = []
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    photos: List[str] = []
 
 class ProfileCreate(ProfileBase):
     pass
@@ -57,11 +58,17 @@ class LikeCreate(BaseModel):
 
 class MessageCreate(BaseModel):
     text: str
+    type: str = "text"
+    audio_url: Optional[str] = None
+    duration: Optional[str] = None
 
 class MessageResponse(BaseModel):
     id: str
     sender_id: str
     text: str
+    type: str
+    audio_url: Optional[str] = None
+    duration: Optional[str] = None
     created_at: str
     
     class Config:

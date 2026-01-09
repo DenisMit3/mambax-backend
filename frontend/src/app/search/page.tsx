@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { BottomNav } from "@/components/layout/BottomNav";
-import { Search as SearchIcon, SlidersHorizontal, MapPin } from "lucide-react";
+import { SlidersHorizontal, MapPin } from "lucide-react";
 
 // Mock Data for Grid
 const MOCK_GRID_PROFILES = [

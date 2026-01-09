@@ -1,0 +1,104 @@
+================================================================================
+                        PROJECT ANALYSIS & AUDIT REPORT
+================================================================================
+Date: 2026-01-09
+Project: MambaX (Sait Znakomstv)
+Scope: Full Stack Audit (Frontend, Backend, Legacy Services)
+
+--------------------------------------------------------------------------------
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+The project is a hybrid of a modern Telegram Mini App frontend (Next.js 16) and a 
+nascent/legacy microservices backend structure that was largely unimplemented. 
+
+We have successfully created a functional Monolithic Backend (FastAPI) which covers
+the core logic, but it currently provides a different API contract than what the 
+Frontend expects.
+
+The fastest path to a "Store-ready" MVP is to adapt the new Backend to match the 
+existing Frontend's API requirements.
+
+--------------------------------------------------------------------------------
+2. FRONTEND ANALYSIS
+--------------------------------------------------------------------------------
+Path: /frontend
+Stack: 
+  - Framework: Next.js 16.1.1 (React 19)
+  - Platform: Telegram Mini App (@twa-dev/sdk)
+  - UI: Radix UI, Tailwind (via clsx), Framer Motion
+  - Maps: React Leaflet
+
+State:
+  - This is a high-quality, production-ready implementation.
+  - It expects the backend to be running on localhost:8001 (dev) or vercel.app (prod).
+  - It assumes a Monolithic-style REST API (despite the /services folder structure).
+
+API Client (`frontend/src/services/api.ts`):
+  - Base URL: http://localhost:8001
+  - Auth Flow: SMS OTP / Telegram InitData
+  - Profile Flow: CRUD on /profile, view /me
+  - Discovery Flow: GET /profiles
+  - Interaction Flow: POST /likes (swipes)
+
+--------------------------------------------------------------------------------
+3. BACKEND ANALYSIS
+--------------------------------------------------------------------------------
+Path: /backend (Current Active Work)
+Stack:
+  - Framework: FastAPI
+  - DB: PostgreSQL + asyncpg (SQLAlchemy 2.0)
+  - Auth: OAuth2 (Email/Password) - *MISMATCH*
+  - Websockets: Implemented for Chat
+
+Path: /services & /proto (Legacy/Planned)
+State:
+  - Intended Architecture: Microservices (Auth, Geo, Matching) with gRPC.
+  - Actual Status: Directories are mostly empty shells.
+  - Recommendation: Abandon strict microservices for now; stick to the Monolith 
+    in `/backend` but organize code modules to mimic services if needed later.
+
+--------------------------------------------------------------------------------
+4. API GAP ANALYSIS (Frontend Expectation vs Backend Reality)
+--------------------------------------------------------------------------------
+
+| Feature       | Frontend Expects (via api.ts)         | Current Backend Implementation      | Action Required                   |
+|---------------|---------------------------------------|-------------------------------------|-----------------------------------|
+| Port          | 8001                                  | 8000                                | Switch Port                       |
+| Auth          | POST /auth/request-otp                | N/A (Uses /register)                | Implement Mock OTP                |
+|               | POST /auth/login (phone/otp)          | POST /auth/login (email/pass)       | Adapter Endpoint                  |
+|               | POST /auth/telegram (init_data)       | N/A                                 | Implement Adapter                 |
+| Discovery     | GET /profiles                         | GET /api/feed                       | Rename/Alias Endpoint             |
+| Self          | GET /me                               | GET /users/me                       | Rename/Alias Endpoint             |
+| Profile       | POST /profile (create/update)         | POST /users/me/photo                | Merge Logic                       |
+| Swipes        | POST /likes                           | POST /api/swipe                     | Adapter (map params)              |
+| Matches       | GET /matches                          | GET /api/matches                    | Compatible (check fields)         |
+| Messages      | GET/POST /matches/{id}/messages       | WS /ws/{token} + GET /chat/history  | Add REST wrappers for WS logic    |
+
+--------------------------------------------------------------------------------
+5. INFRASTRUCTURE & DEPLOYMENT
+--------------------------------------------------------------------------------
+Docker:
+  - Dockerfile and docker-compose.yml created for Backend + Postgres.
+  - Needs update to expose port 8001 instead of 8000.
+
+Database:
+  - Postgres 15 is correctly configured.
+  - Migrations (Alembic) are set up.
+
+--------------------------------------------------------------------------------
+6. RECOMMENDATIONS & NEXT STEPS
+--------------------------------------------------------------------------------
+1. Adapt Backend API:
+   - Create a compatibility layer in `backend/api/legacy_adapter.py`.
+   - Implement the specific endpoints expected by Frontend.
+   
+2. Run Frontend:
+   - Need to install Node.js dependencies (`npm install` in /frontend).
+   - Run `npm run dev`.
+
+3. Mobile Testing:
+   - The Frontend is already optimized for mobile (touch events, viewport).
+   - Using the Frontend is significantly better than the temporary `index.html`.
+
+--------------------------------------------------------------------------------
+Signed: Antigravity AI Agent

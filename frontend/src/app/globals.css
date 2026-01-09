@@ -1,47 +1,59 @@
 :root {
-  /* Brand Colors - Premium Gradient Base */
-  --primary: #FF4D6D;
-  --primary-gradient: linear-gradient(135deg, #FF4D6D 0%, #FF8E53 100%);
-  --secondary-gradient: linear-gradient(135deg, #6B4CFF 0%, #B94CFF 100%);
+  /* Brand Colors - Mamba Style */
+  --primary: #FF5A27;
+  /* Mamba orange */
+  --primary-gradient: linear-gradient(135deg, #FF5A27 0%, #FF2E55 100%);
+  --secondary-gradient: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%);
   --accent: #FFB800;
 
-  /* Backgrounds - Rich Dark Theme */
-  --background: #0a0a0f;
-  /* Slightly blue-ish deep dark */
-  --surface: #18181f;
-  --surface-hover: #22222b;
-  --overlay: rgba(0, 0, 0, 0.85);
+  /* Backgrounds - Clean Light/Dark Adaptive */
+  --background: #FFFFFF;
+  /* Mamba uses white for clean look, we can support dark mode via media query later if needed */
+  --surface: #FFFFFF;
+  --surface-hover: #F5F5F7;
+  --overlay: rgba(0, 0, 0, 0.6);
 
   /* Glassmorphism */
-  --glass: rgba(24, 24, 31, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-highlight: rgba(255, 255, 255, 0.05);
+  --glass: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(0, 0, 0, 0.05);
 
-  /* Text */
-  --foreground: #FFFFFF;
-  --text-secondary: #A1A1AA;
-  --text-muted: #71717A;
+  /* Text - High Contrast */
+  --foreground: #121212;
+  --text-secondary: #8E8E93;
+  --text-muted: #C7C7CC;
 
   /* Borders */
-  --border: #27272A;
+  --border: #E5E5EA;
 
   /* Radius */
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
   --radius-xl: 32px;
   --radius-full: 9999px;
 
   /* Spacing */
-  --container-padding: 20px;
+  --container-padding: 16px;
   --max-width: 480px;
-  /* Mobile first constraint */
 
-  /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
-  --shadow-glow-primary: 0 0 20px rgba(255, 77, 109, 0.4);
+  /* Shadows - Soft & Premium */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.12);
+  --shadow-glow-primary: 0 8px 20px rgba(255, 90, 39, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #000000;
+    --surface: #121212;
+    --surface-hover: #1C1C1E;
+    --foreground: #FFFFFF;
+    --text-secondary: #8E8E93;
+    --border: #2C2C2E;
+    --glass: rgba(28, 28, 30, 0.9);
+    --glass-border: rgba(255, 255, 255, 0.1);
+  }
 }
 
 /* Reset & Base */

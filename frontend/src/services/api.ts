@@ -1,4 +1,23 @@
-const API_URL = "https://mambax-backend-production.up.railway.app";
+// Автоматическое определение бэкенда:
+// 1. Если зашли через localhost или IP в локальной сети -> используем локальный бэкенд (на порту 8001)
+// 2. Если зашли через https (но не локально) -> используем Vercel
+const getBaseUrl = () => {
+    if (typeof window === 'undefined') return "http://localhost:8001";
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+
+    // Если мы локально
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.')) {
+        // Чтобы работал прокси или локальный сервер
+        const port = window.location.port === '3001' ? '8001' : '8001';
+        return `${protocol}//${hostname}:${port}`;
+    }
+
+    // Если мы в продакшене (Vercel)
+    return "https://mambax-backend.vercel.app";
+};
+
+const API_URL = getBaseUrl();
 
 export const authService = {
     async login(phone: string, otp: string) {
@@ -168,22 +187,39 @@ export const authService = {
 
     async getMessages(matchId: string) {
         const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const res = await fetch(`${API_URL}/matches/${matchId}/messages`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
-        return res.json();
+        try {
+            const res = await fetch(`${API_URL}/matches/${matchId}/messages`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (!res.ok) throw new Error("Failed to get messages");
+            return await res.json();
+        } catch {
+            console.warn("Using mock messages for dev");
+            // Return mock messages based on match ID
+            return [
+                { id: 1, sender_id: "partner", text: "Hello! How are you?" },
+                { id: 2, sender_id: "00000000-0000-0000-0000-000000000000", text: "I'm good, thanks! And you?" },
+                { id: 3, sender_id: "partner", text: "Doing great. Love your profile photos!" }
+            ];
+        }
     },
 
-    async sendMessage(matchId: string, text: string) {
+    async sendMessage(matchId: string, text: string, type: string = "text", audio_url: string | null = null, duration: string | null = null) {
         const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const res = await fetch(`${API_URL}/matches/${matchId}/messages`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({ text })
-        });
-        return res.json();
+        try {
+            const res = await fetch(`${API_URL}/matches/${matchId}/messages`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ text, type, audio_url, duration })
+            });
+            if (!res.ok) throw new Error("Failed to send");
+            return await res.json();
+        } catch {
+            console.warn("Using mock send for dev");
+            return { id: Date.now(), sender_id: "00000000-0000-0000-0000-000000000000", text, type, audio_url, duration };
+        }
     }
 };

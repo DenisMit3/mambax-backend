@@ -1,9 +1,10 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { authService } from "@/services/api";
-import { Bot, Save, ArrowLeft, Camera, X } from "lucide-react";
+import { X, Camera } from "lucide-react";
 import Link from "next/link";
 
 export default function EditProfilePage() {
@@ -83,39 +84,80 @@ export default function EditProfilePage() {
     if (loading) return <div className="flex-center h-screen">Loading...</div>;
 
     return (
-        <div style={{ paddingBottom: '40px', minHeight: '100dvh', background: 'var(--background)' }}>
+        <div style={{ paddingBottom: '80px', minHeight: '100dvh', background: 'var(--background)' }}>
 
             {/* Header */}
-            <div style={{
-                padding: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '15px',
+            <header style={{
                 position: 'sticky',
                 top: 0,
-                background: 'rgba(10,10,10,0.8)',
+                zIndex: 50,
+                background: 'rgba(255,255,255,0.9)',
                 backdropFilter: 'blur(10px)',
-                zIndex: 50
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                height: '56px'
             }}>
-                <Link href="/profile">
-                    <div className="icon-btn">
-                        <ArrowLeft size={24} />
-                    </div>
+                <Link href="/profile" style={{ display: 'flex', alignItems: 'center', color: 'var(--primary)' }}>
+                    <span style={{ fontSize: '16px', fontWeight: 500 }}>Cancel</span>
                 </Link>
-                <h1 style={{ fontSize: '20px', fontWeight: 700 }}>Edit Profile</h1>
-            </div>
+                <h1 style={{ fontSize: '17px', fontWeight: 600, color: 'var(--foreground)' }}>Edit Profile</h1>
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    style={{ fontSize: '16px', fontWeight: 600, color: 'var(--primary)' }}
+                >
+                    {saving ? "..." : "Done"}
+                </button>
+            </header>
 
-            <div className="container" style={{ padding: '20px' }}>
+            <div style={{ maxWidth: '600px', margin: '0 auto' }}>
 
                 {/* Photos Section */}
-                <section style={{ marginBottom: '30px' }}>
-                    <h3 style={{ marginBottom: '15px', color: 'var(--text-muted)' }}>Photos</h3>
-                    <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px' }}>
-                        {/* Add Button */}
+                <section style={{ padding: '20px 16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+
+                        {/* Existing Photos */}
+                        {photos.map((url, i) => (
+                            <div key={i} style={{
+                                position: 'relative',
+                                aspectRatio: '2/3',
+                                borderRadius: '12px',
+                                overflow: 'hidden',
+                                boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'
+                            }}>
+                                <img
+                                    src={url}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                                <button
+                                    onClick={() => removePhoto(i)}
+                                    style={{
+                                        position: 'absolute',
+                                        top: '6px',
+                                        right: '6px',
+                                        background: 'rgba(255, 255, 255, 0.9)',
+                                        width: '24px',
+                                        height: '24px',
+                                        borderRadius: '50%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                >
+                                    <X size={14} color="#000" />
+                                </button>
+                            </div>
+                        ))}
+
+                        {/* Add Photo Button */}
                         <div style={{
-                            minWidth: '100px',
-                            height: '140px',
-                            borderRadius: '16px',
+                            aspectRatio: '2/3',
+                            borderRadius: '12px',
+                            background: 'var(--surface-hover)',
                             border: '2px dashed var(--border)',
                             display: 'flex',
                             flexDirection: 'column',
@@ -124,8 +166,15 @@ export default function EditProfilePage() {
                             cursor: 'pointer',
                             position: 'relative'
                         }}>
-                            <Camera size={24} color="var(--primary)" />
-                            <span style={{ fontSize: '12px', marginTop: '5px', color: 'var(--primary)' }}>Add</span>
+                            <div style={{
+                                width: '40px', height: '40px',
+                                borderRadius: '50%', background: 'var(--primary)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                marginBottom: '8px'
+                            }}>
+                                <Camera size={20} color="white" />
+                            </div>
+                            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>Add Photo</span>
                             <input
                                 type="file"
                                 accept="image/*"
@@ -134,125 +183,122 @@ export default function EditProfilePage() {
                             />
                         </div>
 
-                        {/* Photo List */}
-                        {photos.map((url, i) => (
-                            <div key={i} style={{ position: 'relative', minWidth: '100px', height: '140px' }}>
-                                <img
-                                    src={url}
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '16px' }}
-                                />
-                                <button
-                                    onClick={() => removePhoto(i)}
-                                    style={{
-                                        position: 'absolute',
-                                        top: '5px',
-                                        right: '5px',
-                                        background: 'rgba(0,0,0,0.5)',
-                                        borderRadius: '50%',
-                                        padding: '4px',
-                                        border: 'none',
-                                        color: 'white',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <X size={12} />
-                                </button>
-                            </div>
-                        ))}
                     </div>
+                    <p style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                        Drag to reorder photos coming soon
+                    </p>
                 </section>
 
-                {/* Form Fields */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Form Fields - iOS Style Grouped */}
+                <div style={{ padding: '0 16px 30px' }}>
 
-                    {/* Name */}
-                    <div className="input-group">
-                        <label>Name</label>
-                        <input
-                            type="text"
-                            className="input"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                        />
-                    </div>
+                    <h3 style={{ textTransform: 'uppercase', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', paddingLeft: '4px' }}>
+                        About You
+                    </h3>
 
-                    {/* Bio */}
-                    <div className="input-group">
-                        <label>About Me</label>
-                        <textarea
-                            className="input"
-                            rows={4}
-                            value={bio}
-                            onChange={e => setBio(e.target.value)}
-                            placeholder="Tell us about yourself..."
-                            style={{ resize: 'none' }}
-                        />
-                    </div>
-
-                    {/* Gender */}
-                    <div className="input-group">
-                        <label>Gender</label>
-                        <select
-                            className="input"
-                            value={gender}
-                            onChange={e => setGender(e.target.value)}
-                        >
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
-                        </select>
-                    </div>
-
-                    {/* Interests */}
-                    <div className="input-group">
-                        <label>Interests</label>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
-                            {interests.map((tag, i) => (
-                                <span key={i} style={{
-                                    background: 'var(--surface-hover)',
-                                    padding: '5px 12px',
-                                    borderRadius: '20px',
-                                    fontSize: '13px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '5px'
-                                }}>
-                                    {tag}
-                                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setInterests(interests.filter(t => t !== tag))} />
-                                </span>
-                            ))}
-                        </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ background: 'var(--surface)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                        <div className="input-group" style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
+                            <label style={{ width: '100px', fontWeight: 500 }}>Name</label>
                             <input
                                 type="text"
-                                className="input"
+                                value={name}
+                                onChange={e => setName(e.target.value)}
+                                style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '16px', outline: 'none' }}
+                                placeholder="Your Name"
+                            />
+                        </div>
+
+                        <div className="input-group" style={{ padding: '12px 16px', display: 'flex', gap: '10px' }}>
+                            <label style={{ width: '100px', fontWeight: 500, paddingTop: '4px' }}>Bio</label>
+                            <textarea
+                                value={bio}
+                                onChange={e => setBio(e.target.value)}
+                                style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '16px', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
+                                rows={4}
+                                placeholder="Describe yourself..."
+                            />
+                        </div>
+                    </div>
+
+                    <h3 style={{ textTransform: 'uppercase', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', marginTop: '24px', paddingLeft: '4px' }}>
+                        Details
+                    </h3>
+
+                    <div style={{ background: 'var(--surface)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                        <div className="input-group" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center' }}>
+                            <label style={{ width: '100px', fontWeight: 500 }}>Gender</label>
+                            <select
+                                value={gender}
+                                onChange={e => setGender(e.target.value)}
+                                style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '16px', outline: 'none' }}
+                            >
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <h3 style={{ textTransform: 'uppercase', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', marginTop: '24px', paddingLeft: '4px' }}>
+                        Interests
+                    </h3>
+
+                    <div style={{
+                        background: 'var(--surface)',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        border: '1px solid var(--border)',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px'
+                    }}>
+                        {interests.map((tag, i) => (
+                            <span key={i} style={{
+                                background: 'rgba(255, 90, 39, 0.1)',
+                                color: 'var(--primary)',
+                                padding: '6px 12px',
+                                borderRadius: '100px',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}>
+                                {tag}
+                                <X size={14} style={{ cursor: 'pointer' }} onClick={() => setInterests(interests.filter(t => t !== tag))} />
+                            </span>
+                        ))}
+
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <input
+                                type="text"
                                 value={newInterest}
                                 onChange={e => setNewInterest(e.target.value)}
-                                placeholder="Add interest (e.g. Travel)"
+                                placeholder="+ Add Interest"
                                 onKeyDown={e => e.key === 'Enter' && addInterest()}
+                                style={{
+                                    background: 'transparent',
+                                    border: '1px dashed var(--text-muted)',
+                                    borderRadius: '100px',
+                                    padding: '6px 12px',
+                                    fontSize: '14px',
+                                    outline: 'none',
+                                    width: '120px'
+                                }}
                             />
-                            <button className="icon-btn" onClick={addInterest} style={{ background: 'var(--primary-gradient)' }}>
-                                <Save size={18} />
-                            </button>
+                            {newInterest && (
+                                <button
+                                    onClick={addInterest}
+                                    style={{
+                                        position: 'absolute', right: '4px',
+                                        color: 'var(--primary)', fontWeight: 700
+                                    }}>
+                                    +
+                                </button>
+                            )}
                         </div>
                     </div>
 
                 </div>
-
-                {/* Save Button */}
-                <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="btn btn-primary"
-                    style={{
-                        width: '100%',
-                        marginTop: '30px',
-                        padding: '15px',
-                        fontSize: '16px',
-                        fontWeight: 600
-                    }}
-                >
-                    {saving ? "Saving..." : "Save Changes"}
-                </button>
 
             </div>
         </div>

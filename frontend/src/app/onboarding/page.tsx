@@ -1,9 +1,10 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authService } from "@/services/api";
-import { ArrowRight, User, Camera, Heart } from "lucide-react";
+import { ArrowRight, Star, Shield, Zap, Camera } from "lucide-react";
 
 export default function OnboardingPage() {
     const router = useRouter();

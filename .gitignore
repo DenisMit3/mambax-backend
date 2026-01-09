@@ -3,7 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+.venv/
 .env
+*.db
+*.sqlite
+backend/static/uploads/
 
 # Node
 node_modules/

@@ -1,9 +1,9 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState } from "react";
 import { BottomNav } from "@/components/layout/BottomNav";
-import { Lock, Eye } from "lucide-react";
-import Image from "next/image";
+import { Lock } from "lucide-react";
 
 export default function LikesPage() {
     const [activeTab, setActiveTab] = useState<'likes' | 'guests'>('likes');

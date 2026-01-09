@@ -24,7 +24,7 @@ async def cmd_start(message: types.Message):
     # Get WebApp URL from env
     web_app_url = os.getenv("FRONTEND_URL")
     if not web_app_url:
-        web_app_url = "https://mambax-frontend.vercel.app" # Default fallback
+        web_app_url = "http://192.168.1.136:3000" # Local WiFi for development
         logging.warning("FRONTEND_URL not set in .env, using default: %s", web_app_url)
 
     kb = [
