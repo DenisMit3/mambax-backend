@@ -1,30 +1,136 @@
 version: '3.8'
 
 services:
-  db:
-    image: postgres:15
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: mambax_postgres
+    environment:
+      POSTGRES_USER: mambax_user
+      POSTGRES_PASSWORD: mambax_password
+      POSTGRES_DB: mambax_db
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
-      - POSTGRES_DB=mambax
-    ports:
-      - "5432:5432" # Оставляем доступ снаружи для удобства отладки
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U mambax_user -d mambax_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - mambax-network
 
-  backend:
-    build: ./backend
-    # Команда переопределяется в Dockerfile, но можно явно указать здесь
-    # command: ./start.sh
-    volumes:
-      - ./backend:/app # Монтируем код для Live Reload
+  # Redis Cache (Optional but recommended)
+  redis:
+    image: redis:7-alpine
+    container_name: mambax_redis
     ports:
-      - "8000:8000"
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - mambax-network
+
+  # Backend API (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mambax_backend
+    ports:
+      - "8001:8001"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/mambax
-      - SECRET_KEY=your-super-secret-key-change-in-production
+      - DATABASE_URL=postgresql+asyncpg://mambax_user:mambax_password@postgres:5432/mambax_db
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=supersecretkey123-change-in-production
+      - ENVIRONMENT=development
+      - LOCAL_NETWORK_ACCESS=True
+      - ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,*
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - FRONTEND_URL=http://localhost:3000
+      - BACKEND_URL=http://localhost:8001
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_CLAIMS_EMAIL=${VAPID_CLAIMS_EMAIL:-mailto:admin@mambax.com}
+      - SEED_ON_STARTUP=${SEED_ON_STARTUP:-False}
+      - ADMIN_PHONE=+79062148253
+      - ADMIN_USERNAME=RezidentMD
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/static/uploads
     depends_on:
-      - db
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8001/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - mambax-network
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: mambax_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8001
+      - BACKEND_URL=http://backend:8001
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - mambax-network
+
+  # Telegram Bot (Optional - runs separately for local dev)
+  telegram-bot:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mambax_bot
+    command: [ "python", "bot.py" ]
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://mambax_user:mambax_password@postgres:5432/mambax_db
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - FRONTEND_URL=http://localhost:3000
+      - PYTHONPATH=/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - mambax-network
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_uploads:
+    driver: local
+
+networks:
+  mambax-network:
+    driver: bridge

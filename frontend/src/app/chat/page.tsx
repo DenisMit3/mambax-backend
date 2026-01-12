@@ -7,60 +7,22 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { authService } from "@/services/api";
 
-// Mock Data Removed
-
-
 export default function ChatListPage() {
-    const [matches, setMatches] = useState([]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [matches, setMatches] = useState<any[]>([]);
 
     useEffect(() => {
         authService.getMatches()
             .then(data => {
-                if (data && data.length > 0) {
+                if (data && Array.isArray(data)) {
                     setMatches(data);
                 } else {
-                    // Inject Mock Data if no real matches
-                    setMatches([
-                        {
-                            id: "mock1",
-                            user: { id: "u1", name: "Alice", photos: ["https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop"] },
-                            last_message: "Hey! How are you? 😊"
-                        },
-                        {
-                            id: "mock2",
-                            user: { id: "u2", name: "Elena", photos: ["https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=400&fit=crop"] },
-                            last_message: null
-                        },
-                        {
-                            id: "mock3",
-                            user: { id: "u3", name: "Kate", photos: ["https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=400&fit=crop"] },
-                            last_message: "See you tonight! 🥂"
-                        }
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    ] as any);
+                    setMatches([]);
                 }
             })
             .catch(err => {
                 console.error("Matches error", err);
-                // Fallback mock data when API fails
-                setMatches([
-                    {
-                        id: "mock1",
-                        user: { id: "u1", name: "Alice", photos: ["https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop"] },
-                        last_message: "Hey! How are you? 😊"
-                    },
-                    {
-                        id: "mock2",
-                        user: { id: "u2", name: "Elena", photos: ["https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=400&fit=crop"] },
-                        last_message: null
-                    },
-                    {
-                        id: "mock3",
-                        user: { id: "u3", name: "Kate", photos: ["https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=400&fit=crop"] },
-                        last_message: "See you tonight! 🥂"
-                    }
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ] as any);
+                setMatches([]);
             });
     }, []);
 

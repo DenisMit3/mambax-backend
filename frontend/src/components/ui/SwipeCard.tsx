@@ -2,6 +2,7 @@
 "use client";
 
 import { motion, useMotionValue, useTransform, useAnimation, PanInfo } from "framer-motion";
+import { Gift } from "lucide-react";
 
 interface SwipeCardProps {
     name: string;
@@ -9,9 +10,10 @@ interface SwipeCardProps {
     bio: string;
     image: string;
     onSwipe: (direction: "left" | "right") => void;
+    onGiftClick?: () => void;
 }
 
-export function SwipeCard({ name, age, bio, image, onSwipe }: SwipeCardProps) {
+export function SwipeCard({ name, age, bio, image, onSwipe, onGiftClick, onProfileClick }: SwipeCardProps & { onProfileClick?: () => void }) {
     const x = useMotionValue(0);
     const controls = useAnimation();
 
@@ -75,7 +77,8 @@ export function SwipeCard({ name, age, bio, image, onSwipe }: SwipeCardProps) {
                     left: 0,
                     right: 0,
                     height: '50%',
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%)'
+                    background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%)',
+                    pointerEvents: 'none'
                 }} />
 
                 {/* Stamps */}
@@ -87,8 +90,52 @@ export function SwipeCard({ name, age, bio, image, onSwipe }: SwipeCardProps) {
                     NOPE
                 </motion.div>
 
-                {/* Info Content */}
-                <div style={{ position: 'absolute', bottom: 30, left: 20, right: 20, textAlign: 'left' }}>
+                {/* Gift Button */}
+                {onGiftClick && (
+                    <button
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onGiftClick();
+                        }}
+                        style={{
+                            position: 'absolute',
+                            top: '20px',
+                            right: '20px',
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #ec4899, #a855f7)',
+                            boxShadow: '0 4px 12px rgba(236, 72, 153, 0.4)',
+                            border: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            zIndex: 10
+                        }}
+                    >
+                        <Gift size={24} color="white" />
+                    </button>
+                )}
+
+                {/* Info Content - Click to View Profile */}
+                <div
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (onProfileClick) onProfileClick();
+                    }}
+                    style={{
+                        position: 'absolute',
+                        bottom: 30,
+                        left: 20,
+                        right: 20,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        zIndex: 5
+                    }}
+                >
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
                         <h2 style={{ fontSize: '32px', fontWeight: 800, textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
                             {name}, {age}

@@ -115,13 +115,11 @@ input[type="file"] {
 
 /* Utilities */
 .container {
-  max-width: var(--max-width);
+  width: 100%;
   margin: 0 auto;
   padding: 0 var(--container-padding);
   min-height: 100vh;
   position: relative;
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
 }
 
 .glass-panel {
@@ -214,4 +212,66 @@ input[type="file"] {
 
 .animate-pulse {
   animation: pulse 1.5s ease-in-out infinite;
+}
+
+@media (min-width: 768px) {
+  .desktop-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    background-color: #1a1a1a;
+    width: 100%;
+    padding: 0;
+  }
+
+  .mobile-frame {
+    width: 100%;
+    max-width: 480px;
+    min-height: 100vh;
+    background: var(--background);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    position: relative;
+  }
+
+  .container {
+    max-width: 480px;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    margin: 0 auto;
+  }
+
+  /* Force Desktop View Overrides */
+  body.force-desktop-view .desktop-wrapper {
+    display: block;
+    background-color: var(--background);
+    width: 100%;
+    height: auto;
+  }
+
+  body.force-desktop-view .mobile-frame {
+    max-width: 100%;
+    width: 100%;
+    box-shadow: none;
+    border: none;
+    min-height: auto;
+  }
+
+  body.force-desktop-view .container {
+    max-width: 1200px;
+    /* Standard desktop width */
+    width: 100%;
+    border: none;
+    padding: 0 24px;
+  }
+}
+
+@media (max-width: 767px) {
+  .container {
+    max-width: 100%;
+    border: none;
+    padding: 0 var(--container-padding);
+  }
 }

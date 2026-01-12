@@ -1,272 +1,671 @@
-# Chat API - WebSocket эндпоинт для обмена сообщениями в реальном времени
+"""
+Chat API & WebSocket
+===============================
+Unified endpoints for real-time messaging, calling, and interactions.
+"""
 
 import json
 from datetime import datetime
 from uuid import UUID
+from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, File, UploadFile, Header, Query
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 
-from core.security import verify_token
-from core.websocket import manager
-from db.session import async_session_maker
-from models.chat import Message
-from schemas.chat import MessageResponse
+from backend.core.security import verify_token
+# Use the advanced service manager instead of the core one
+from backend.services.chat import (
+    manager,
+    set_typing,
+    get_typing_users,
+    mark_as_read,
+    add_reaction,
+    remove_reaction,
+    search_gifs,
+    get_trending_gifs,
+    initiate_call,
+    answer_call,
+    end_call,
+    send_webrtc_signal,
+    create_ephemeral_message,
+    mark_ephemeral_viewed,
+    get_unread_count,
+    increment_unread,
+    get_online_status,
+    format_last_seen,
+    ChatEvent,
+    AVAILABLE_REACTIONS,
+    create_text_message,
+    create_photo_message,
+    create_voice_message
+)
+from backend.db.session import async_session_maker
+from backend import database, auth, crud, models
+from backend.schemas.chat import MessageResponse
+from backend.metrics import ACTIVE_USERS_GAUGE, MESSAGES_COUNTER
 
 
+
+# Explicitly no prefix on the router itself, so we can control paths manually (e.g. /chat/...)
+# or we could add prefix="/chat" but we need to match legacy /chat/history endpoints.
+# The user asked for clean merge.
 router = APIRouter(tags=["Chat"])
 
+# ============================================================================
+# SCHEMAS
+# ============================================================================
 
-async def save_message(
-    sender_id: UUID,
-    receiver_id: UUID,
-    content: str
-) -> Message:
-    """
-    Сохраняет сообщение в БД.
-    Использует отдельную сессию для WebSocket.
-    """
-    async with async_session_maker() as db:
-        message = Message(
-            sender_id=sender_id,
-            receiver_id=receiver_id,
-            content=content,
-        )
-        db.add(message)
-        await db.commit()
-        await db.refresh(message)
-        return message
+class SendMessageRequest(BaseModel):
+    match_id: str
+    text: Optional[str] = None
+    type: str = "text"
+    media_url: Optional[str] = None
+    photo_url: Optional[str] = None # Backwards compatibility
+    thumbnail_url: Optional[str] = None
+    duration: Optional[int] = None
+    gif_id: Optional[str] = None
+    reply_to_id: Optional[str] = None
+    is_ephemeral: bool = False
+    ephemeral_seconds: int = 10
 
+class TypingRequest(BaseModel):
+    match_id: str
+    is_typing: bool
 
-async def get_chat_history(
-    user1_id: UUID,
-    user2_id: UUID,
-    limit: int = 50
-) -> list[Message]:
-    """
-    Получает историю сообщений между двумя пользователями.
-    """
-    async with async_session_maker() as db:
-        stmt = (
-            select(Message)
-            .where(
-                or_(
-                    and_(
-                        Message.sender_id == user1_id,
-                        Message.receiver_id == user2_id
-                    ),
-                    and_(
-                        Message.sender_id == user2_id,
-                        Message.receiver_id == user1_id
-                    )
-                )
-            )
-            .order_by(Message.timestamp.desc())
-            .limit(limit)
-        )
-        result = await db.execute(stmt)
-        messages = list(result.scalars().all())
-        messages.reverse()  # Возвращаем в хронологическом порядке
-        return messages
+class MarkReadRequest(BaseModel):
+    match_id: str
+    message_ids: Optional[List[str]] = None
+
+class ReactionRequest(BaseModel):
+    message_id: str
+    emoji: Optional[str] = None  # None = remove reaction
+
+class CallRequest(BaseModel):
+    match_id: str
+    call_type: str = "video"  # "audio" or "video"
+
+class AnswerCallRequest(BaseModel):
+    call_id: str
+    accept: bool
+
+class WebRTCSignalRequest(BaseModel):
+    call_id: str
+    to_user: str
+    signal_type: str  # "offer", "answer", "ice-candidate"
+    signal_data: dict
 
 
-async def mark_messages_as_read(
-    reader_id: UUID,
-    sender_id: UUID
-) -> int:
-    """
-    Отмечает все сообщения от sender как прочитанные.
-    Возвращает количество обновлённых сообщений.
-    """
-    async with async_session_maker() as db:
-        stmt = (
-            select(Message)
-            .where(
-                and_(
-                    Message.sender_id == sender_id,
-                    Message.receiver_id == reader_id,
-                    Message.is_read == False
-                )
-            )
-        )
-        result = await db.execute(stmt)
-        messages = result.scalars().all()
-        
-        count = 0
-        for msg in messages:
-            msg.is_read = True
-            count += 1
-        
-        await db.commit()
-        return count
+# ============================================================================
+# WEBSOCKET ENDPOINT
+# ============================================================================
 
-
-@router.websocket("/ws/{token}")
+@router.websocket("/chat/ws/{token}")
 async def websocket_endpoint(websocket: WebSocket, token: str):
     """
-    WebSocket эндпоинт для чата.
-    
-    Протокол:
-    1. Клиент подключается с токеном в URL
-    2. Токен валидируется
-    3. Клиент отправляет JSON сообщения:
-       {"type": "message", "receiver_id": "uuid", "content": "текст"}
-       {"type": "typing", "receiver_id": "uuid", "is_typing": true}
-       {"type": "read", "message_id": "uuid"}
-    4. Сервер отправляет:
-       {"type": "message", "message_id": "uuid", "sender_id": "uuid", "content": "текст", "timestamp": "..."}
-       {"type": "typing", "user_id": "uuid", "is_typing": true}
-       {"type": "read", "message_id": "uuid", "reader_id": "uuid"}
+    🔌 Unified WebSocket for Chat, Calls, and Real-time events.
+    Path: /chat/ws/{token}
     """
-    # Валидируем токен
-    user_id = verify_token(token)
-    if not user_id:
+    # Verify token
+    try:
+        user_id = verify_token(token)
+        if not user_id:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+    except Exception:
         await websocket.close(code=4001, reason="Invalid token")
         return
     
-    # Подключаем пользователя
-    await manager.connect(user_id, websocket)
+    # Connect
+    await manager.connect(websocket, user_id)
+    ACTIVE_USERS_GAUGE.inc()
+
     
     try:
         while True:
-            # Получаем сообщение от клиента
+            # Receive message
             data = await websocket.receive_text()
             
             try:
-                message_data = json.loads(data)
-            except json.JSONDecodeError:
-                await websocket.send_json({"error": "Invalid JSON"})
-                continue
-            
-            msg_type = message_data.get("type", "message")
-            
-            if msg_type == "message":
-                # Обработка текстового сообщения
-                receiver_id = message_data.get("receiver_id")
-                content = message_data.get("content")
+                message = json.loads(data)
+                event_type = message.get("type", "message")
                 
-                if not receiver_id or not content:
-                    await websocket.send_json({"error": "Missing receiver_id or content"})
-                    continue
+                # --- Message Handling ---
+                if event_type == "message":
+                    await handle_message(websocket, user_id, message)
                 
-                # Сохраняем в БД
-                db_message = await save_message(
-                    sender_id=UUID(user_id),
-                    receiver_id=UUID(receiver_id),
-                    content=content
-                )
+                elif event_type == "photo":
+                    message["type"] = "message"
+                    message["msg_type"] = "photo"
+                    await handle_message(websocket, user_id, message)
                 
-                # Формируем ответ
-                outgoing = {
-                    "type": "message",
-                    "message_id": str(db_message.id),
-                    "sender_id": str(db_message.sender_id),
-                    "content": db_message.content,
-                    "timestamp": db_message.timestamp.isoformat(),
-                }
+                elif event_type == "voice":
+                    message["type"] = "message"
+                    message["msg_type"] = "voice"
+                    await handle_message(websocket, user_id, message)
                 
-                # Отправляем получателю (если онлайн)
-                await manager.send_personal_message(outgoing, receiver_id)
+                # --- Typing ---
+                elif event_type == "typing":
+                    if "receiver_id" in message and "match_id" not in message:
+                         message["recipient_id"] = message.get("receiver_id")
+                    await handle_typing(user_id, message)
                 
-                # Подтверждаем отправителю
-                await websocket.send_json({
-                    "type": "sent",
-                    "message_id": str(db_message.id),
-                    "timestamp": db_message.timestamp.isoformat(),
-                })
-            
-            elif msg_type == "typing":
-                # Уведомление о наборе текста
-                receiver_id = message_data.get("receiver_id")
-                is_typing = message_data.get("is_typing", True)
+                # --- Read Receipts ---
+                elif event_type == "read":
+                    await handle_read(user_id, message)
                 
-                if receiver_id:
-                    await manager.send_personal_message({
-                        "type": "typing",
-                        "user_id": user_id,
-                        "is_typing": is_typing,
-                    }, receiver_id)
-            
-            elif msg_type == "read":
-                # Отметка о прочтении
-                sender_id = message_data.get("sender_id")
-                
-                if sender_id:
-                    count = await mark_messages_as_read(
-                        reader_id=UUID(user_id),
-                        sender_id=UUID(sender_id)
-                    )
-                    
-                    # Уведомляем отправителя
-                    await manager.send_personal_message({
-                        "type": "read",
-                        "reader_id": user_id,
-                        "count": count,
-                    }, sender_id)
-            
-            elif msg_type == "history":
-                # Запрос истории чата
-                partner_id = message_data.get("partner_id")
-                limit = message_data.get("limit", 50)
-                
-                if partner_id:
-                    messages = await get_chat_history(
-                        user1_id=UUID(user_id),
-                        user2_id=UUID(partner_id),
-                        limit=limit
-                    )
-                    
-                    await websocket.send_json({
-                        "type": "history",
-                        "messages": [
-                            {
-                                "message_id": str(m.id),
-                                "sender_id": str(m.sender_id),
-                                "content": m.content,
-                                "timestamp": m.timestamp.isoformat(),
-                                "is_read": m.is_read,
-                            }
-                            for m in messages
-                        ]
-                    })
-    
-    except WebSocketDisconnect:
-        manager.disconnect(user_id)
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-        manager.disconnect(user_id)
+                # --- Reactions ---
+                elif event_type == "reaction":
+                    await handle_reaction(user_id, message)
 
+                # --- Gift Notifications ---
+                elif event_type == "gift_read":
+                    await handle_gift_read(user_id, message, websocket)
+                
+                # --- Calls & WebRTC ---
+                elif event_type == "call":
+                    await handle_call(user_id, message)
+                
+                elif event_type == "offer":
+                    await handle_webrtc_offer(user_id, message)
+                
+                elif event_type == "answer":
+                    await handle_webrtc_answer(user_id, message)
+                
+                elif event_type == "candidate":
+                    await handle_webrtc_candidate(user_id, message)
+                
+                elif event_type == "call_end":
+                    await handle_webrtc_end(user_id, message)
+                
+                elif event_type == "ping":
+                    await websocket.send_json({"type": "pong"})
+            
+            except json.JSONDecodeError:
+                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
+            except Exception as e:
+                print(f"WS Error: {e}")
+                await websocket.send_json({"type": "error", "message": str(e)})
+
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, user_id)
+        ACTIVE_USERS_GAUGE.dec()
+        await manager.broadcast_online_status(user_id, False)
+
+
+# ============================================================================
+# WS HANDLERS
+# ============================================================================
+
+async def handle_message(websocket: WebSocket, sender_id: str, data: dict):
+    match_id = data.get("match_id")
+    text = data.get("content") or data.get("text")
+    msg_type = data.get("msg_type") or data.get("type", "text")
+    
+    if msg_type == "message": msg_type = "text"
+
+    # Quick validation
+    if not match_id:
+        return # Skip invalid
+
+    # Use DB for persistence
+    from backend.crud_pkg import chat as crud_chat
+    from backend.models.interaction import Match
+
+    async with async_session_maker() as db:
+        match_obj = await db.get(Match, UUID(match_id))
+        if not match_obj:
+             await websocket.send_json({"type": "error", "message": "Match not found"})
+             return
+             
+        # Determine recipient
+        recipient_id = str(match_obj.user2_id) if str(match_obj.user1_id) == sender_id else str(match_obj.user1_id)
+        
+        # Access Check
+        if str(match_obj.user1_id) != sender_id and str(match_obj.user2_id) != sender_id:
+             return
+
+        # Prepare payload
+        msg_data = {
+            "receiver_id": UUID(recipient_id),
+            "text": text,
+            "type": msg_type,
+            "audio_url": data.get("media_url") if msg_type == "voice" else None,
+            "duration": data.get("duration"),
+            # Photo handling
+            "photo_url": data.get("media_url") if msg_type == "photo" else None
+        }
+
+        # Create
+        db_msg = await crud_chat.create_message(
+            db,
+            UUID(match_id),
+            UUID(sender_id),
+            msg_data
+        )
+        MESSAGES_COUNTER.inc()
+
+
+        # Broadcast payload
+        content_extras = {}
+        if msg_type == "voice":
+            content_extras["media_url"] = db_msg.audio_url
+            content_extras["duration"] = db_msg.duration
+        elif msg_type == "photo":
+            content_extras["media_url"] = db_msg.photo_url
+            content_extras["photo_url"] = db_msg.photo_url
+
+        ws_msg = {
+            "id": str(db_msg.id),
+            "message_id": str(db_msg.id), # Compassionate for old frontend
+            "match_id": str(db_msg.match_id),
+            "sender_id": str(db_msg.sender_id),
+            "receiver_id": str(db_msg.receiver_id),
+            "content": db_msg.text,
+            "text": db_msg.text,
+            "type": msg_type,
+            "created_at": db_msg.created_at.isoformat(),
+            "timestamp": db_msg.created_at.isoformat(),
+            **content_extras
+        }
+
+        # Send to Recipient
+        await manager.send_to_match(match_id, sender_id, recipient_id, {
+            "type": msg_type, # Or "message"
+            **ws_msg
+        })
+
+        # Push Notification if offline
+        if not manager.is_online(recipient_id):
+            increment_unread(recipient_id, match_id)
+            from backend.services.notification import send_push_notification
+            push_body = text or "New message"
+            if msg_type == "voice": push_body = "🎤 Voice message"
+            if msg_type == "photo": push_body = "📷 Photo"
+            
+            await send_push_notification(
+                db,
+                user_id=UUID(recipient_id),
+                title="New Message",
+                body=push_body,
+                url=f"/chat/{match_id}"
+            )
+
+async def handle_typing(user_id: str, data: dict):
+    match_id = data.get("match_id")
+    is_typing = data.get("is_typing", False)
+    
+    if match_id:
+        await set_typing(match_id, user_id, is_typing)
+        # Broadcast to partner
+        # We need recipient ID.
+        recipient_id = data.get("recipient_id") or data.get("receiver_id")
+        if recipient_id:
+            await manager.send_personal(recipient_id, {
+                "type": "typing", # Frontend expects "typing"
+                "match_id": match_id,
+                "user_id": user_id,
+                "is_typing": is_typing
+            })
+
+async def handle_read(user_id: str, data: dict):
+    match_id = data.get("match_id")
+    message_ids = data.get("message_ids")
+    sender_id = data.get("sender_id") # Legacy
+    
+    if match_id:
+        await mark_as_read(match_id, user_id, message_ids)
+        
+        # Notify sender
+        recipient_id = data.get("recipient_id") or sender_id
+        if recipient_id:
+            await manager.send_personal(recipient_id, {
+                "type": "read",
+                "match_id": match_id,
+                "reader_id": user_id,
+                "message_ids": message_ids
+            })
+
+async def handle_reaction(user_id: str, data: dict):
+    message_id = data.get("message_id")
+    emoji = data.get("emoji")
+    recipient_id = data.get("recipient_id") or data.get("receiver_id")
+    
+    if emoji:
+        event = await add_reaction(message_id, user_id, emoji)
+    else:
+        event = await remove_reaction(message_id, user_id)
+    
+    if recipient_id:
+        await manager.send_personal(recipient_id, event)
+
+async def handle_gift_read(user_id: str, data: dict, websocket: WebSocket):
+    transaction_id = data.get("transaction_id")
+    if transaction_id:
+        try:
+            from backend.models.monetization import GiftTransaction
+            async with async_session_maker() as db:
+                tx = await db.get(GiftTransaction, UUID(transaction_id))
+                if tx and str(tx.receiver_id) == user_id and not tx.is_read:
+                    tx.is_read = True
+                    tx.read_at = datetime.utcnow()
+                    await db.commit()
+                    await websocket.send_json({
+                        "type": "gift_read_ack",
+                        "transaction_id": transaction_id,
+                        "status": "success"
+                    })
+        except Exception as e:
+            print(f"Error marking gift as read: {e}")
+
+# --- Call Handlers ---
+async def handle_call(user_id: str, data: dict):
+    action = data.get("action")
+    if action == "initiate":
+        match_id = data.get("match_id")
+        callee_id = data.get("callee_id") 
+        call_type = data.get("call_type", "video")
+        call = await initiate_call(match_id, user_id, callee_id, call_type)
+        # Notify caller handled in initiate_call for callee, here we ack caller?
+    elif action == "answer":
+         await answer_call(data.get("call_id"), user_id, data.get("accept", False))
+    elif action == "end":
+         await end_call(data.get("call_id"), user_id)
+    elif action == "signal":
+         await send_webrtc_signal(data.get("call_id"), user_id, data.get("to_user"), data.get("signal_type"), data.get("signal_data"))
+
+async def handle_webrtc_offer(user_id: str, data: dict):
+    receiver_id = data.get("receiver_id")
+    if receiver_id:
+        await manager.send_personal(receiver_id, {
+            "type": "offer",
+            "offer": data.get("offer"),
+            "caller_id": user_id,
+            "match_id": data.get("match_id")
+        })
+
+async def handle_webrtc_answer(user_id: str, data: dict):
+    receiver_id = data.get("receiver_id")
+    if receiver_id:
+        await manager.send_personal(receiver_id, {
+            "type": "answer",
+            "answer": data.get("answer"),
+            "answerer_id": user_id,
+            "match_id": data.get("match_id")
+        })
+
+async def handle_webrtc_candidate(user_id: str, data: dict):
+    receiver_id = data.get("receiver_id")
+    if receiver_id:
+        await manager.send_personal(receiver_id, {
+            "type": "candidate",
+            "candidate": data.get("candidate"),
+            "from_user": user_id,
+            "match_id": data.get("match_id")
+        })
+
+async def handle_webrtc_end(user_id: str, data: dict):
+    receiver_id = data.get("receiver_id")
+    if receiver_id:
+        await manager.send_personal(receiver_id, {
+            "type": "call_end",
+            "from_user": user_id,
+            "match_id": data.get("match_id")
+        })
+
+# ============================================================================
+# REST ENDPOINTS
+# ============================================================================
 
 @router.get("/chat/history/{partner_id}", response_model=list[MessageResponse])
 async def get_history(
     partner_id: UUID,
     limit: int = 50,
+    current_user: str = Depends(auth.get_current_user),
 ):
     """
-    REST эндпоинт для получения истории чата.
-    Альтернатива WebSocket запросу history.
+    Get chat history (Legacy REST endpoint)
     """
-    # TODO: Get current_user from auth
-    from uuid import uuid4
-    current_user_id = uuid4()
-    
-    messages = await get_chat_history(current_user_id, partner_id, limit)
-    
-    return [
-        MessageResponse(
-            id=m.id,
-            sender_id=m.sender_id,
-            receiver_id=m.receiver_id,
-            content=m.content,
-            timestamp=m.timestamp,
-            is_read=m.is_read,
+    current_user_id = UUID(current_user)
+    async with async_session_maker() as db:
+        # Verify Match
+        from backend.models.interaction import Match
+        from backend.models.chat import Message
+        
+        result = await db.execute(
+             select(Match).where(
+                and_(Match.is_active == True,
+                     or_(
+                        and_(Match.user1_id == current_user_id, Match.user2_id == partner_id),
+                        and_(Match.user1_id == partner_id, Match.user2_id == current_user_id)
+                     ))
+             )
         )
-        for m in messages
-    ]
+        match = result.scalar_one_or_none()
+        if not match:
+            raise HTTPException(status_code=403, detail="Conversation not found")
 
+        # Fetch messages
+        stmt = (
+            select(Message)
+            .where(
+                or_(
+                    and_(Message.sender_id == current_user_id, Message.receiver_id == partner_id),
+                    and_(Message.sender_id == partner_id, Message.receiver_id == current_user_id)
+                )
+            )
+            .order_by(Message.created_at.desc())
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        messages = list(result.scalars().all())
+        messages.reverse()
+        
+        return [
+            MessageResponse(
+                id=m.id,
+                match_id=m.match_id,
+                sender_id=m.sender_id,
+                receiver_id=m.receiver_id,
+                content=m.text,
+                created_at=m.created_at,
+                is_read=m.is_read
+            )
+            for m in messages
+        ]
+
+
+@router.get("/chat/reactions")
+async def get_reactions_endpoint():
+    return {"reactions": AVAILABLE_REACTIONS}
+
+@router.post("/chat/call/initiate")
+async def initiate_call_endpoint(
+    req: CallRequest,
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db)
+):
+    # Determine callee logic (simplified)
+    # Ideally should fetch match and get other user
+    from backend.models.interaction import Match
+    match_obj = await db.get(Match, UUID(req.match_id))
+    if not match_obj: raise HTTPException(404, "Match not found")
+    
+    user1, user2 = str(match_obj.user1_id), str(match_obj.user2_id)
+    callee_id = user2 if current_user == user1 else user1
+    
+    call = await initiate_call(req.match_id, current_user, callee_id, req.call_type)
+    return {"call": call.dict()}
+
+@router.post("/chat/call/answer")
+async def answer_call_endpoint(req: AnswerCallRequest, current_user: str = Depends(auth.get_current_user)):
+    return await answer_call(req.call_id, current_user, req.accept)
+
+@router.post("/chat/call/end")
+async def end_call_endpoint(call_id: str = Query(...), current_user: str = Depends(auth.get_current_user)):
+    # Note: frontend might send in body or query, adapting to query based on signature in realtime_chat
+    # Original used: async def end_call_api(call_id: str, ...)
+    # If it was a POST, usually body unless specified. But FastAPI handles Query params in POST too if no body model matches.
+    # Let's support Body if needed, but original code:
+    # @router.post("/call/end") async def end_call_api(call_id: str, ...)
+    # This implies query param in FastAPI for POST unless Body is used.
+    # We'll stick to query or maybe Body? The Safe bet is Body.
+    # Let's use a small model or just Query to match original.
+    return await end_call(call_id, current_user)
+
+@router.post("/chat/call/signal")
+async def send_signal_endpoint(req: WebRTCSignalRequest, current_user: str = Depends(auth.get_current_user)):
+    return await send_webrtc_signal(req.call_id, current_user, req.to_user, req.signal_type, req.signal_data)
+
+@router.post("/chat/ephemeral/send")
+async def send_ephemeral_endpoint(
+    match_id: str,
+    media_url: Optional[str] = None,
+    text: Optional[str] = None,
+    seconds: int = 10,
+    current_user: str = Depends(auth.get_current_user)
+):
+    msg = await create_ephemeral_message(match_id, current_user, text, media_url, seconds)
+    return {"message": msg.dict()}
+
+@router.post("/chat/ephemeral/viewed/{message_id}")
+async def viewed_ephemeral_endpoint(message_id: str, current_user: str = Depends(auth.get_current_user)):
+    return await mark_ephemeral_viewed(message_id)
 
 @router.get("/chat/online")
-async def get_online_users():
-    """Возвращает количество онлайн пользователей."""
-    return {"online_count": manager.get_online_count()}
+async def get_online_users_list():
+    # Helper to get count
+    # Note: manager from services/chat.py doesn't have get_online_count helper directly exposed as public valid method
+    # It has active_connections dict.
+    return {"online_count": len(manager.active_connections)}
+
+@router.get("/chat/online/{user_id}")
+async def check_online_status_endpoint(user_id: str):
+    return get_online_status(user_id)
+
+@router.post("/chat/upload")
+async def upload_chat_media(file: UploadFile = File(...), current_user: str = Depends(auth.get_current_user)):
+    import shutil, os, uuid
+    from pathlib import Path
+    allowed_types = ["audio/webm", "audio/mp3", "audio/wav", "audio/mpeg", "image/jpeg", "image/png", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+    
+    upload_dir = Path("static/uploads/chat")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    
+    ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
+    filename = f"{uuid.uuid4()}.{ext}"
+    file_path = upload_dir / filename
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    url = f"/static/uploads/chat/{filename}"
+    return {"url": url, "type": file.content_type}
+
+@router.post("/chat/send", response_model=MessageResponse)
+@router.post("/chat/send_message") # Alias for compatibility
+async def send_message(
+    msg: SendMessageRequest,
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db)
+):
+    # Logic similar to WS handle_message but for REST
+    from backend.crud_pkg import chat as crud_chat
+    from backend.models.interaction import Match
+    from backend.services.security import spam_detector
+    
+    if msg.text:
+         check = spam_detector.check_message(current_user, msg.text)
+         if check["is_spam"]: raise HTTPException(400, check["message"])
+
+    match_obj = await db.get(Match, UUID(msg.match_id))
+    if not match_obj: raise HTTPException(404, "Match not found")
+    
+    user1_id, user2_id = str(match_obj.user1_id), str(match_obj.user2_id)
+    if current_user not in (user1_id, user2_id): raise HTTPException(403, "Access denied")
+    
+    receiver_id = user2_id if current_user == user1_id else user1_id
+    
+    msg_data = {
+        "receiver_id": UUID(receiver_id),
+        "text": msg.text,
+        "type": msg.type,
+        "audio_url": msg.media_url if msg.type == "voice" else None,
+        "duration": msg.duration,
+        "photo_url": msg.media_url if msg.type == "photo" else (msg.photo_url or msg.media_url)
+    }
+    
+    db_msg = await crud_chat.create_message(db, UUID(msg.match_id), UUID(current_user), msg_data)
+    MESSAGES_COUNTER.inc()
+
+    
+    # Try notify WS
+    await manager.send_to_match(msg.match_id, current_user, receiver_id, {
+        "type": msg.type,
+        "message_id": str(db_msg.id),
+        "match_id": str(db_msg.match_id),
+        "sender_id": str(db_msg.sender_id),
+        "content": db_msg.text,
+        "timestamp": db_msg.created_at.isoformat()
+    })
+
+    # Push Notification if offline
+    if not manager.is_online(receiver_id):
+        increment_unread(receiver_id, msg.match_id)
+        from backend.services.notification import send_push_notification
+        push_body = msg.text or "New message"
+        if msg.type == "voice": push_body = "🎤 Voice message"
+        if msg.type == "photo": push_body = "📷 Photo"
+
+        await send_push_notification(
+            db,
+            user_id=UUID(receiver_id),
+            title="New Message",
+            body=push_body,
+            url=f"/chat/{msg.match_id}"
+        )
+    
+    return MessageResponse(
+        id=db_msg.id,
+        match_id=db_msg.match_id,
+        sender_id=db_msg.sender_id,
+        receiver_id=db_msg.receiver_id,
+        content=db_msg.text,
+        created_at=db_msg.created_at,
+        is_read=db_msg.is_read
+    )
+
+@router.post("/chat/typing")
+async def set_typing_endpoint(req: TypingRequest, current_user: str = Depends(auth.get_current_user)):
+    await set_typing(req.match_id, current_user, req.is_typing)
+    return {"status": "ok"}
+
+@router.get("/chat/typing/{match_id}")
+async def get_typing_endpoint(match_id: str, current_user: str = Depends(auth.get_current_user)):
+    return {"typing_users": get_typing_users(match_id, exclude_user_id=current_user)}
+
+@router.post("/chat/read")
+async def mark_read_endpoint(req: MarkReadRequest, current_user: str = Depends(auth.get_current_user)):
+    return await mark_as_read(req.match_id, current_user, req.message_ids)
+
+@router.get("/chat/unread")
+async def get_unread_endpoint(match_id: str = None, current_user: str = Depends(auth.get_current_user)):
+    return get_unread_count(current_user, match_id)
+
+@router.post("/chat/reaction")
+async def reaction_endpoint(req: ReactionRequest, current_user: str = Depends(auth.get_current_user)):
+    if req.emoji:
+        return await add_reaction(req.message_id, current_user, req.emoji)
+    else:
+        return await remove_reaction(req.message_id, current_user)
+
+@router.get("/chat/gifs/search")
+async def search_gifs_endpoint(q: str, limit: int = 20, offset: int = 0):
+    return await search_gifs(q, limit, offset)
+
+@router.get("/chat/gifs/trending")
+async def trending_gifs_endpoint(limit: int = 20):
+    return await get_trending_gifs(limit)

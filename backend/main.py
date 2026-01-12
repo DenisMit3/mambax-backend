@@ -1,117 +1,106 @@
-from fastapi import FastAPI, File, UploadFile, Depends, HTTPException
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from contextlib import asynccontextmanager
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from sqlalchemy import text
 from pathlib import Path
-import shutil
+from urllib.parse import urlparse
+from dotenv import load_dotenv
 import os
-import uuid
-import time
-import random
-import httpx
+import re
+import sentry_sdk
 
-import crud, schemas, auth, database, models
-from api.health import router as health_router
-from api.auth import router as auth_router
-from api.interaction import router as interaction_router
-from api.chat import router as chat_router
-from api.users import router as users_router
+from backend import database
+from backend.config.settings import settings
+from backend.seed import seed_db
 
-# --- Seeding Logic ---
-async def seed_db(db: AsyncSession):
-    # Check if test match exists
-    result = await db.execute(select(models.Match).where(models.Match.id == "mock1"))
-    if result.scalars().first():
-        print("Test match already exists, skipping seed.")
-        return 
+# Initialize Sentry for production error tracking
+if settings.is_production and settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment="production",
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.1,
+        enable_tracing=True,
+    )
 
-    print("Checking for existing users...")
-    # Check if users already exist
-    result = await db.execute(select(models.User).limit(2))
-    existing_users = result.scalars().all()
+# Load environment variables
+load_dotenv()
+
+# --- Helpers ---
+
+def is_allowed_origin(origin: str) -> bool:
+    """Check if an origin is allowed for CORS."""
+    if not origin: return False
     
-    user_ids = []
+    environment = os.environ.get("ENVIRONMENT", "production").lower()
+    is_dev = environment == "development"
     
-    if len(existing_users) >= 2:
-        print("Users found, creating match from existing users...")
-        user_ids = [u.id for u in existing_users]
-    else:
-        print("Seeding database with new demo users...")
-        demo_users = [
-            {"name": "Alice", "gender": "female", "age": 24, "bio": "Loves hiking and coffee ☕", "img": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=500&q=60"},
-            {"name": "Bob", "gender": "male", "age": 28, "bio": "Tech enthusiast and gamer 🎮", "img": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=60"},
-            {"name": "Carol", "gender": "female", "age": 22, "bio": "Art student 🎨", "img": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=500&q=60"},
-            {"name": "David", "gender": "male", "age": 30, "bio": "Chef at a local bistro 🍳", "img": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=60"},
-            {"name": "Eva", "gender": "female", "age": 26, "bio": "Traveling the world 🌍", "img": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=500&q=60"},
-        ]
-
-        for u in demo_users:
-            try:
-                # Create User
-                db_user = models.User(phone=None, telegram_id=None, username=u["name"].lower())
-                db.add(db_user)
-                await db.commit()
-                await db.refresh(db_user)
-                user_ids.append(db_user.id)
-                
-                # Create Profile
-                profile = models.Profile(
-                    user_id=db_user.id,
-                    name=u["name"],
-                    age=u["age"],
-                    gender=u["gender"],
-                    bio=u["bio"],
-                    photos=[u["img"]],
-                    interests=["Demo", "Vercel"],
-                    is_complete=True
-                )
-                db.add(profile)
-                await db.commit()
-            except Exception as e:
-                print(f"Skipping user {u['name']}: {e}")
-                await db.rollback()
-
-    # Create a test match 'mock1' for testing chat
-    if len(user_ids) >= 2:
-        try:
-            test_match = models.Match(
-                id="mock1",
-                user1_id=user_ids[0],
-                user2_id=user_ids[1],
-                created_at=str(time.time())
-            )
-            db.add(test_match)
-            await db.commit()
-            print("Test match 'mock1' created successfully!")
-        except Exception as e:
-            print(f"Failed to create match: {e}")
-            await db.rollback()
+    try:
+        parsed = urlparse(origin)
+        host = parsed.hostname or ""
+        port = parsed.port
+    except Exception:
+        return False
     
-    print("Seeding logic complete.")
+    # 1. Localhost
+    if host == "localhost":
+        return True if is_dev else port in [3000, 3001, 8001]
+    
+    # 2. 127.0.0.1
+    if host == "127.0.0.1":
+        return True if is_dev else port in [3000, 3001, 8001]
+    
+    # 3. Local network
+    if settings.LOCAL_NETWORK_ACCESS:
+        if re.match(r"^192\.168\.\d{1,3}\.\d{1,3}$", host): return True
+        if re.match(r"^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$", host): return True
+        if re.match(r"^172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}$", host): return True
+    
+    # 4. Vercel
+    if host.endswith(".vercel.app"): return True
+    
+    # 5. Telegram
+    if host == "web.telegram.org": return True
+    
+    # 6. Custom
+    allowed_origins_str = os.environ.get("ALLOWED_ORIGINS", "")
+    if allowed_origins_str:
+        allowed_list = [o.strip() for o in allowed_origins_str.split(",") if o.strip()]
+        if "*" in allowed_list: return True
+        if origin in allowed_list: return True
+        origin_clean = origin.rstrip("/")
+        for allowed in allowed_list:
+            if origin_clean == allowed.rstrip("/"): return True
+    
+    return False
+
+# --- Lifespan ---
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Create tables
-    try:
-        print("Starting up: Creating database tables...")
-        async with database.engine.begin() as conn:
-            await conn.run_sync(database.Base.metadata.create_all)
-        print("Database tables created/verified.")
+    if len(settings.SECRET_KEY) < 32:
+        raise RuntimeError(f"SECRET_KEY too short ({len(settings.SECRET_KEY)} chars). Must be 32+ characters.")
         
-        # Seed DB
-        async with database.async_session() as session:
-             async with session.begin():
-                 await seed_db(session)
-                 
-    except Exception as e:
-        print(f"Startup error: {e}")
+    print("Starting up: Creating database tables...")
+    async with database.engine.begin() as conn:
+        await conn.run_sync(database.Base.metadata.create_all)
+    print("Database tables created/verified.")
+    
+    # Seed DB
+    if settings.SEED_ON_STARTUP:
+         async with database.async_session() as session:
+             await seed_db(session)
+    else:
+         print("Skipping DB seeding (SEED_ON_STARTUP is False)")
+    
     yield
     # Shutdown
     print("Shutting down...")
+
+# --- App Init ---
 
 app = FastAPI(
     title="MambaX API",
@@ -120,26 +109,139 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # Allow ALL origins to fix Vercel dynamic URL issues
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# --- Middleware ---
 
-from api.traycer import router as traycer_router
+CORS_ALLOWED_HEADERS = "authorization, content-type, x-requested-with, accept, origin, cache-control, pragma"
+CORS_EXPOSE_HEADERS = "content-length, content-type"
 
-# Include routers
+@app.middleware("http")
+async def cors_middleware(request: Request, call_next):
+    origin = request.headers.get("origin", "")
+    
+    if request.method == "OPTIONS":
+        if is_allowed_origin(origin):
+            response = Response(status_code=204)
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            requested_headers = request.headers.get("Access-Control-Request-Headers", "")
+            response.headers["Access-Control-Allow-Headers"] = requested_headers or CORS_ALLOWED_HEADERS
+            response.headers["Access-Control-Expose-Headers"] = CORS_EXPOSE_HEADERS
+            response.headers["Access-Control-Max-Age"] = "86400"
+            return response
+        else:
+            print(f"CORS: Rejected preflight from origin: {origin}")
+            return Response(status_code=403, content="CORS not allowed")
+    
+    response = await call_next(request)
+    
+    if origin and is_allowed_origin(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = CORS_ALLOWED_HEADERS
+        response.headers["Access-Control-Expose-Headers"] = CORS_EXPOSE_HEADERS
+    
+    return response
+
+if settings.is_production:
+    app.add_middleware(HTTPSRedirectMiddleware)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    from backend.services.security import check_rate_limit
+    from fastapi.responses import JSONResponse
+    
+    if request.url.path.startswith("/static") or request.url.path == "/health" or "debug" in request.url.path:
+        return await call_next(request)
+    
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+    
+    endpoint_type = "default"
+    path = request.url.path
+    if "/auth" in path: endpoint_type = "auth"
+    elif "/likes" in path: endpoint_type = "likes"
+    elif "/messages" in path: endpoint_type = "messages"
+    elif "/upload" in path: endpoint_type = "upload"
+    
+    result = check_rate_limit(client_ip, endpoint_type)
+    
+    if not result.allowed:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "Too Many Requests",
+                "remaining": result.remaining,
+                "reset_at": result.reset_at,
+                "retry_after": result.retry_after
+            },
+            headers={
+                "Retry-After": str(result.retry_after or 60),
+                "X-RateLimit-Remaining": str(result.remaining),
+                "X-RateLimit-Reset": result.reset_at
+            }
+        )
+    
+    response = await call_next(request)
+    response.headers["X-RateLimit-Remaining"] = str(result.remaining)
+    response.headers["X-RateLimit-Reset"] = result.reset_at
+    return response
+
+# --- Routers ---
+
+from backend.api.health import router as health_router
+from backend.api.auth import router as auth_router
+from backend.api.interaction import router as interaction_router
+from backend.api.discovery import router as discovery_router
+from backend.api.chat import router as chat_router
+from backend.api.users import router as users_router
+from backend.api.traycer import router as traycer_router
+from backend.api.bot_webhook import router as bot_webhook_router
+from backend.api.verification import router as verification_router
+from backend.api import stripe_webhook
+from backend.api.security import router as security_router
+from backend.api.ux_features import router as ux_features_router
+from backend.api.notification import router as notification_router
+from backend.api.safety import router as safety_router
+from backend.api.admin import router as admin_router
+from backend.api.monetization import router as monetization_router, gifts_router, payments_router, dev_router
+from backend.api.marketing import router as marketing_router
+from backend.api.system import router as system_router
+from backend.api.advanced import router as advanced_router
+from backend.api.debug import router as debug_router
+
+
 app.include_router(health_router, tags=["Health"])
 app.include_router(auth_router)
 app.include_router(interaction_router)
+app.include_router(discovery_router)
 app.include_router(chat_router)
 app.include_router(users_router)
 app.include_router(traycer_router)
+app.include_router(bot_webhook_router)
+app.include_router(verification_router)
+app.include_router(stripe_webhook.router, prefix="/api/v1", tags=["Payments"])
+app.include_router(security_router)
+app.include_router(ux_features_router)
+app.include_router(notification_router)
+app.include_router(safety_router)
+app.include_router(admin_router)
+app.include_router(monetization_router)
+app.include_router(gifts_router)
+app.include_router(payments_router)
+app.include_router(dev_router)
+app.include_router(marketing_router)
+app.include_router(system_router)
+app.include_router(advanced_router)
+app.include_router(debug_router)
 
-# Mount static files
-# Mount static files
+# --- Static Files & Root ---
+
 static_dir = Path(__file__).parent / "static"
 if not static_dir.exists():
     static_dir.mkdir(parents=True, exist_ok=True)
@@ -149,399 +251,17 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 async def read_root():
     return FileResponse("static/index.html")
 
-# Initialize database endpoint (for Vercel)
-@app.get("/init")
-async def init_database():
-    """Manually initialize database - call this once after deployment"""
-    try:
-        # Create tables
-        async with database.engine.begin() as conn:
-            await conn.run_sync(database.Base.metadata.create_all)
-        
-        # Seed with demo data
-        async with database.async_session() as session:
-            async with session.begin():
-                await seed_db(session)
-        
-        return {"status": "success", "message": "Database initialized"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-# Force fix match endpoint
-@app.get("/fix-match")
-async def fix_match_endpoint():
-    try:
-        async with database.async_session() as session:
-            async with session.begin():
-                # 1. Check if match exists
-                match = await session.get(models.Match, "mock1")
-                if match:
-                    return {"status": "ok", "message": "Match mock1 already exists"}
-                
-                # 2. Get any 2 users
-                result = await session.execute(select(models.User).limit(2))
-                users = result.scalars().all()
-                
-                if len(users) < 2:
-                    return {"status": "error", "message": "Not enough users to create match"}
-                
-                # 3. Create match
-                print(f"Creating match mock1 between {users[0].id} and {users[1].id}")
-                new_match = models.Match(
-                    id="mock1",
-                    user1_id=users[0].id,
-                    user2_id=users[1].id,
-                    created_at=str(time.time())
-                )
-                session.add(new_match)
-                # Commit happens automatically with session.begin() context
-                
-        return {"status": "success", "message": "Match mock1 created!"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-# Database migration endpoint - adds missing columns
-@app.get("/migrate")
-async def migrate_database():
-    """Add missing columns to database tables"""
-    try:
-        async with database.engine.begin() as conn:
-            # Add duration column to messages table if it doesn't exist
-            await conn.execute(text(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS duration VARCHAR"
-            ))
-        return {"status": "success", "message": "Migration complete: duration column added"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-# --- Routes ---
-
-# In-memory mock store for local development
-MOCK_USER_STORE = {
-    "00000000-0000-0000-0000-000000000000": {
-        "id": "00000000-0000-0000-0000-000000000000",
-        "user_id": "00000000-0000-0000-0000-000000000000",
-        "name": "Local Demo User",
-        "age": 25,
-        "gender": "robot",
-        "photos": [],
-        "interests": ["Coding", "Debugging"],
-        "bio": "I am a local simulation."
-    }
-}
-
-@app.post("/auth/login", response_model=schemas.Token)
-async def login(user_data: schemas.UserLogin, db: AsyncSession = Depends(database.get_db)):
-    if not auth.verify_otp(user_data.identifier, user_data.otp):
-         raise HTTPException(status_code=400, detail="Invalid OTP")
-    
-    user = await crud.get_user_by_identifier(db, user_data.identifier)
-    
-    if not user:
-        if user_data.identifier.startswith("+") or user_data.identifier.isdigit() and len(user_data.identifier) > 7:
-             user = await crud.create_user(db, schemas.UserCreate(phone=user_data.identifier))
-        else:
-             raise HTTPException(status_code=400, detail="User not found")
-
-    access_token = auth.create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@app.post("/auth/request-otp")
-async def request_otp(data: schemas.OTPRequest, db: AsyncSession = Depends(database.get_db)):
-    user = await crud.get_user_by_identifier(db, data.identifier)
-    
-    otp = auth.generate_otp()
-    auth.save_otp(data.identifier, otp)
-    
-    if user and user.telegram_id:
-        success = await auth.send_otp_via_telegram(user.telegram_id, otp)
-        if success:
-            return {"message": "OTP sent via Telegram"}
-        else:
-             return {"message": "Failed to send to Telegram, check bot status."}
-    else:
-        print(f"DEMO OTP for {data.identifier}: {otp}")
-        return {"message": "OTP generated (Demo mode)"}
-
-@app.post("/auth/telegram", response_model=schemas.Token)
-async def telegram_login(login_data: schemas.TelegramLogin, db: AsyncSession = Depends(database.get_db)):
-    user_data = auth.validate_telegram_data(login_data.init_data)
-    if not user_data:
-        raise HTTPException(status_code=400, detail="Invalid Telegram Data")
-    
-    tg_id = str(user_data["id"])
-    username = user_data.get("username")
-    
-    user = await crud.get_user_by_telegram_id(db, tg_id)
-    if not user:
-        user = await crud.create_user(db, schemas.UserCreate(phone=None, telegram_id=tg_id, username=username))
-    elif username and user.username != username:
-        user.username = username
-        await db.commit()
-    
-    access_token = auth.create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@app.post("/profile", response_model=schemas.ProfileResponse)
-async def create_profile(
-    profile: schemas.ProfileCreate, 
-    user_id: str, 
-    db: AsyncSession = Depends(database.get_db)
-):
-    return await crud.create_profile(db, profile, user_id)
-
-@app.get("/profiles", response_model=list[schemas.ProfileResponse])
-async def get_profiles(
-    skip: int = 0, 
-    limit: int = 20, 
-    current_user: str = Depends(auth.get_current_user), 
-    db: AsyncSession = Depends(database.get_db)
-):
-    return await crud.get_profiles(db, skip, limit, exclude_user_id=current_user)
-
-@app.get("/me", response_model=schemas.ProfileResponse)
-async def get_my_profile(
-    current_user: str = Depends(auth.get_current_user),
-    db: AsyncSession = Depends(database.get_db)
-):
-    if current_user == "00000000-0000-0000-0000-000000000000":
-        return schemas.ProfileResponse(**MOCK_USER_STORE[current_user])
-
-    profile = await crud.get_user_profile(db, current_user)
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    return profile
-
-@app.put("/profile", response_model=schemas.ProfileResponse)
-async def update_profile(
-    profile_update: schemas.ProfileUpdate,
-    current_user: str = Depends(auth.get_current_user),
-    db: AsyncSession = Depends(database.get_db)
-):
-    if current_user == "00000000-0000-0000-0000-000000000000":
-        data = MOCK_USER_STORE[current_user]
-        if profile_update.name: data["name"] = profile_update.name
-        if profile_update.bio: data["bio"] = profile_update.bio
-        if profile_update.gender: data["gender"] = profile_update.gender
-        if profile_update.interests: data["interests"] = profile_update.interests
-        if profile_update.photos: data["photos"] = profile_update.photos
-        if profile_update.age: data["age"] = profile_update.age
-        
-        return schemas.ProfileResponse(**data)
-
-    updated_profile = await crud.update_profile(db, current_user, profile_update)
-    if not updated_profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    return updated_profile
-
-@app.post("/location")
-async def update_location(
-    loc: dict, 
-    current_user: str = Depends(auth.get_current_user),
-    db: AsyncSession = Depends(database.get_db)
-):
-    profile = await crud.get_user_profile(db, current_user)
-    if profile:
-        profile.latitude = loc.get("lat")
-        profile.longitude = loc.get("lon")
-        await db.commit()
-    return {"status": "ok"}
-
-@app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    try:
-        # Vercel Blob Storage API endpoint
-        blob_token = os.getenv("BLOB_READ_WRITE_TOKEN")
-        
-        if not blob_token:
-            # Если токен не настроен, возвращаем mock
-            print("BLOB_READ_WRITE_TOKEN not configured. Using mock avatar.")
-            mock_id = str(uuid.uuid4())[:8]
-            return {"url": f"https://api.dicebear.com/7.x/avataaars/svg?seed={mock_id}"}
-        
-        # Читаем файл
-        contents = await file.read()
-        filename = f"{uuid.uuid4()}{Path(file.filename).suffix}"
-        
-        # Загружаем в Vercel Blob через REST API
-        async with httpx.AsyncClient() as client:
-            response = await client.put(
-                f"https://blob.vercel-storage.com/{filename}",
-                headers={
-                    "Authorization": f"Bearer {blob_token}",
-                    "x-content-type": file.content_type or "application/octet-stream",
-                },
-                content=contents,
-                timeout=30.0
-            )
-            
-            if response.status_code != 200:
-                raise Exception(f"Blob upload failed: {response.status_code}")
-            
-            result = response.json()
-            return {"url": result["url"]}
-        
-    except Exception as e:
-        print(f"Upload failed: {e}. Returning mock avatar.")
-        mock_id = str(uuid.uuid4())[:8]
-        return {"url": f"https://api.dicebear.com/7.x/avataaars/svg?seed={mock_id}"}
-
-@app.post("/likes")
-async def like_user(
-    like_data: schemas.LikeCreate,
-    current_user: str = Depends(auth.get_current_user),
-    db: AsyncSession = Depends(database.get_db)
-):
-    result = await crud.create_like(db, like_data, current_user)
-    return result
-
-@app.get("/matches", response_model=list[schemas.MatchResponse])
-async def get_matches(
-    current_user: str = Depends(auth.get_current_user),
-    db: AsyncSession = Depends(database.get_db)
-):
-    return await crud.get_matches(db, current_user)
-
-@app.get("/matches/{match_id}/messages", response_model=list[schemas.MessageResponse])
-async def get_messages(
-    match_id: str,
-    current_user: str = Depends(auth.get_current_user),
-    db: AsyncSession = Depends(database.get_db)
-):
-    return await crud.get_messages(db, match_id)
-
-@app.post("/matches/{match_id}/messages", response_model=schemas.MessageResponse)
-async def send_message(
-    match_id: str,
-    msg: schemas.MessageCreate,
-    current_user: str = Depends(auth.get_current_user),
-    db: AsyncSession = Depends(database.get_db)
-):
-    # AUTO-FIX: If sending to 'mock1' and it doesn't exist, create it on the fly
-    if match_id == "mock1":
-        match = await db.get(models.Match, "mock1")
-        if not match:
-            print("Match 'mock1' missing. Auto-creating...")
-            
-            # 1. Ensure we have users
-            result = await db.execute(select(models.User).limit(2))
-            users = list(result.scalars().all()) # Convert to list to append
-            print(f"Found {len(users)} users.")
-            
-            if len(users) < 2:
-                print("Not enough users. Creating temporary users...")
-                needed = 2 - len(users)
-                for i in range(needed):
-                    try:
-                        temp_user = models.User(
-                            username=f"auto_user_{int(time.time())}_{i}",
-                            phone=None,
-                            telegram_id=None
-                        )
-                        db.add(temp_user)
-                        await db.commit()
-                        await db.refresh(temp_user)
-                        users.append(temp_user)
-                    except Exception as e:
-                        print(f"Error creating temp user: {e}")
-                        await db.rollback()
-            
-            # 2. Create Match
-            if len(users) >= 2:
-                try:
-                    new_match = models.Match(
-                        id="mock1",
-                        user1_id=users[0].id,
-                        user2_id=users[1].id,
-                        created_at=str(time.time())
-                    )
-                    db.add(new_match)
-                    await db.commit()
-                    print("Auto-created match 'mock1' successfully")
-                except Exception as e:
-                    print(f"Failed to auto-create match (maybe verification race): {e}")
-                    await db.rollback()
-            else:
-                 print("CRITICAL: Could not ensure 2 users exist.")
-    
-    # FIX: Ensure the Guest User (0000...) exists in the DB so we can use it
-    if current_user == "00000000-0000-0000-0000-000000000000":
-        guest_user = await db.get(models.User, current_user)
-        if not guest_user:
-            print("Guest user missing. Creating '00000000-0000-0000-0000-000000000000'...")
-            try:
-                new_guest = models.User(
-                    id="00000000-0000-0000-0000-000000000000",
-                    username="guest_user",
-                    phone=None,
-                    telegram_id=None,
-                    is_active=True
-                )
-                db.add(new_guest)
-                await db.commit()
-                print("Guest user created successfully via send_message trigger.")
-            except Exception as e:
-                print(f"Failed to create guest user: {e}")
-                await db.rollback()
-        
-        # Don't swap ID, use the valid zero-ID now
-        pass
-
-    return await crud.create_message(db, match_id, current_user, msg)
-
-@app.post("/upload")
-async def upload_file(
-    file: UploadFile = File(...),
-    current_user: str = Depends(auth.get_current_user)
-):
-    """Upload file to Vercel Blob Storage"""
-    
-    # Read file content
-    content = await file.read()
-    filename = f"{uuid.uuid4()}-{file.filename}"
-    
-    # Get Vercel Blob token from environment
-    blob_token = os.environ.get("BLOB_READ_WRITE_TOKEN")
-    
-    if not blob_token:
-        raise HTTPException(status_code=500, detail="Blob storage not configured")
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.put(
-                f"https://blob.vercel-storage.com/{filename}",
-                content=content,
-                headers={
-                    "Authorization": f"Bearer {blob_token}",
-                    "x-api-version": "7",
-                    "Content-Type": file.content_type or "application/octet-stream"
-                }
-            )
-            
-            if response.status_code != 200:
-                raise HTTPException(
-                    status_code=500, 
-                    detail=f"Blob upload failed: {response.text}"
-                )
-            
-            result = response.json()
-            return {"url": result.get("url")}
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload error: {str(e)}")
+# --- Run ---
 
 if __name__ == "__main__":
     import uvicorn
-    import os
-    
-    # Режим HTTPS (используем сгенерированные вручную сертификаты)
     cert = "cert.pem"
     key = "key.pem"
-    
+    port = int(os.getenv("PORT", 8000))
+
     if os.path.exists(cert) and os.path.exists(key):
-        print("Starting in HTTPS mode...")
-        uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True, 
-                    ssl_keyfile=key, ssl_certfile=cert)
+        print(f"Starting in HTTPS mode on port {port}...")
+        uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True, ssl_keyfile=key, ssl_certfile=cert)
     else:
-        print("Certificates not found. Starting in HTTP mode...")
-        uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
+        print(f"Starting in HTTP mode on port {port}...")
+        uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

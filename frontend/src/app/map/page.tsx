@@ -5,7 +5,10 @@ import { useEffect, useState } from "react";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { authService } from "@/services/api";
 import dynamic from "next/dynamic";
-import Head from "next/head";
+// Removed next/head as it's not supported in App Router
+
+// Import Leaflet CSS
+import "leaflet/dist/leaflet.css";
 
 // Dynamically import react-leaflet components with SSR disabled
 const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
@@ -26,6 +29,15 @@ export default function MapPage() {
 
         // Import Leaflet and create icon only on client side
         import("leaflet").then((L) => {
+            // Fix Leaflet's default icon path issues in webpack
+            // @ts-ignore
+            delete L.Icon.Default.prototype._getIconUrl;
+            L.Icon.Default.mergeOptions({
+                iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+                iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+                shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+            });
+
             const icon = new L.Icon({
                 iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
                 iconSize: [25, 41],
@@ -39,16 +51,8 @@ export default function MapPage() {
                 const { latitude, longitude } = pos.coords;
                 setPosition([latitude, longitude]);
 
-                // Send to backend
-                const token = localStorage.getItem("token");
-                await fetch("http://localhost:8000/location", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ lat: latitude, lon: longitude })
-                });
+                // Send to backend using the service (uses correct API_URL)
+                await authService.updateLocation(latitude, longitude);
             });
         }
 
@@ -69,57 +73,52 @@ export default function MapPage() {
     }
 
     return (
-        <>
-            <Head>
-                <link
-                    rel="stylesheet"
-                    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-                    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-                    crossOrigin=""
-                />
-            </Head>
-            <div style={{ height: "100vh", width: "100%", display: "flex", flexDirection: "column" }}>
-                <div style={{ flex: 1, position: "relative" }}>
-                    {position ? (
-                        <MapContainer center={position} zoom={13} style={{ height: "100%", width: "100%" }}>
-                            <TileLayer
-                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            />
+        <div style={{ height: "100vh", width: "100%", display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, position: "relative" }}>
+                {position ? (
+                    <MapContainer center={position} zoom={13} style={{ height: "100%", width: "100%" }}>
+                        <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
 
-                            {/* Me */}
-                            <Marker position={position} icon={leafletIcon}>
-                                <Popup>You are here</Popup>
-                            </Marker>
+                        {/* Me */}
+                        <Marker position={position} icon={leafletIcon}>
+                            <Popup>You are here</Popup>
+                        </Marker>
 
-                            {/* Others - Mocking positions around me for demo */}
-                            {others.map((user, i) => {
-                                // Stable random based on ID or index to avoid hydration mismatch
-                                const offset = (i * 0.001) % 0.01;
-                                const lat = user.latitude || (position[0] + offset);
-                                const lon = user.longitude || (position[1] + offset);
+                        {/* Others - Mocking positions around me for demo */}
+                        {others.map((user, i) => {
+                            // Stable random based on ID or index to avoid hydration mismatch
+                            const offsetLat = ((i * 1337) % 20 - 10) / 1000; // Deterministic randomish
+                            const offsetLon = ((i * 7331) % 20 - 10) / 1000;
 
-                                return (
-                                    <Marker key={user.id || i} position={[lat, lon]} icon={leafletIcon}>
-                                        <Popup>
-                                            <div style={{ textAlign: "center" }}>
-                                                <img src={user.photos?.[0]} style={{ width: 40, height: 40, borderRadius: "50%" }} alt={user.name || "User"} />
-                                                <br />
-                                                <b>{user.name}, {user.age}</b>
-                                            </div>
-                                        </Popup>
-                                    </Marker>
-                                )
-                            })}
-                        </MapContainer>
-                    ) : (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-                            <p>Loading Map / Requesting Location...</p>
-                        </div>
-                    )}
-                </div>
+                            // If user has location, use it, otherwise offset from me
+                            const lat = user.latitude || (position[0] + offsetLat);
+                            const lon = user.longitude || (position[1] + offsetLon);
 
-                <BottomNav />
+                            return (
+                                <Marker key={user.id || i} position={[lat, lon]} icon={leafletIcon}>
+                                    <Popup>
+                                        <div style={{ textAlign: "center" }}>
+                                            {user.photos?.[0] && (
+                                                <img src={user.photos[0]} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} alt={user.name || "User"} />
+                                            )}
+                                            <br />
+                                            <b>{user.name}, {user.age}</b>
+                                        </div>
+                                    </Popup>
+                                </Marker>
+                            )
+                        })}
+                    </MapContainer>
+                ) : (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+                        <p>Loading Map / Requesting Location...</p>
+                    </div>
+                )}
             </div>
-        </>
+
+            <BottomNav />
+        </div>
     );
 }

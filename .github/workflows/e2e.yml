@@ -1,0 +1,80 @@
+name: E2E Tests
+
+on:
+  deployment_status:
+  push:
+    branches: [ main, dev ]
+    paths:
+      - 'frontend/**'
+  pull_request:
+    branches: [ main, dev ]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  test:
+    name: Playwright Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Start Backend Services
+        run: |
+          # Ensure env files exist for docker-compose
+          cp ../backend/.env.example ../backend/.env
+          
+          # Start services
+          docker-compose -f ../docker-compose.yml up -d backend postgres redis
+          
+          # Wait for backend health
+          echo "Waiting for backend health..."
+          timeout 60s bash -c 'until curl -s http://localhost:8001/health; do sleep 2; done'
+        env:
+          TELEGRAM_BOT_TOKEN: "test_token"
+          SECRET_KEY: "test_secret_key_must_be_long_enough"
+          VAPID_PRIVATE_KEY: "test_vapid_key"
+          VAPID_PUBLIC_KEY: "test_vapid_public_key"
+
+      - name: Run Playwright Tests
+        run: npx playwright test
+        env:
+          CI: true
+          # Add any other env vars needed for frontend to run
+          NEXT_PUBLIC_API_URL: http://localhost:8001
+          # In true E2E we need backend running.
+          # We might need to start backend services here.
+      
+      # For now, we assume frontend can run in isolation or mocks, 
+      # BUT the request said "auth flow... swipe... match". 
+      # Real E2E needs backend.
+      # The user setup includes Docker.
+      # Setting up full stack in CI is complex. 
+      # Often we use mocks or docker-compose in CI.
+      # For this task, I will add a step to start backend if possible, or assume mocks.
+      # The provided `tests.yml` used sqlite memory.
+      # The E2E tests probably need a running backend.
+      
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 30

@@ -1,24 +1,35 @@
 # Database Session - Async SQLAlchemy engine и session для PostgreSQL
 
 import os
+import urllib.parse
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
+from backend.config.settings import settings
 
-# Database URL from environment
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "sqlite+aiosqlite:///./mambax.db"
-)
+
+# Database URL from settings (preferred) or environment
+DATABASE_URL = settings.DATABASE_URL
+
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite+aiosqlite:///./mambax.db"
+
+# Fix scheme for asyncpg (Vercel/Neon compatibility)
+if DATABASE_URL and DATABASE_URL.startswith("postgres"):
+    parsed = urllib.parse.urlparse(DATABASE_URL)
+    if parsed.scheme == "postgresql":
+        parsed = parsed._replace(scheme="postgresql+asyncpg")
+    DATABASE_URL = urllib.parse.urlunparse(parsed)
 
 # SQLite config requires connect_args check_same_thread=False
 connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 
 # Async Engine
+# Disable SQL echo in production to reduce log noise
 engine = create_async_engine(
     DATABASE_URL,
-    echo=True,  # Set to False in production
+    echo=not settings.is_production,  # Only log SQL queries in development
     future=True,
     # pool_size parameter is not supported by SQLite engine
     # pool_size=5,
@@ -61,10 +72,10 @@ async def init_db() -> None:
     Инициализация базы данных - создание таблиц.
     Вызывается при старте приложения.
     """
-    from db.base import Base
+    from backend.db.base import Base
     # Import all models to register them with Base
     # This ensures all tables are created
-    import models  # noqa: F401
+    from backend import models  # noqa: F401
     
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

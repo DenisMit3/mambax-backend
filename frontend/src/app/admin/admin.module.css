@@ -1,0 +1,549 @@
+/* Admin Shared Styles - Using CSS variables from admin-variables.css */
+/* Enhanced responsive design, animations, and glassmorphism theme */
+
+/* ===========================================
+   ADVANCED DASHBOARD CONTAINER
+   =========================================== */
+.advancedDashboard {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding-bottom: var(--space-10);
+}
+
+/* ===========================================
+   BREADCRUMB NAVIGATION
+   =========================================== */
+.breadcrumb {
+  margin-bottom: var(--space-6);
+}
+
+.breadcrumbList {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.breadcrumbItem {
+  display: flex;
+  align-items: center;
+}
+
+.breadcrumbLink {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  transition: var(--transition-all);
+  position: relative;
+}
+
+.breadcrumbLink:hover {
+  color: var(--text-primary);
+  background: var(--glass-bg-light);
+  transform: translateY(-1px);
+}
+
+.breadcrumbLink:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 2px;
+  color: var(--text-primary);
+}
+
+.breadcrumbSeparator {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  transition: var(--transition-all);
+}
+
+/* Animate separator on hover of parent list */
+.breadcrumbItem:hover+.breadcrumbSeparator,
+.breadcrumbSeparator:hover {
+  color: var(--text-secondary);
+}
+
+.breadcrumbCurrent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--neon-purple);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+/* ===========================================
+   HEADER SECTION
+   =========================================== */
+.headerSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: var(--space-10);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--glass-border);
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.headerContent {
+  flex: 1;
+  min-width: 200px;
+}
+
+.headerTitle {
+  /* Fluid typography with clamp */
+  font-size: clamp(24px, 4vw, 36px);
+  font-weight: var(--font-weight-black);
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 var(--space-2) 0;
+  letter-spacing: -0.02em;
+}
+
+.headerDescription {
+  font-size: var(--font-size-md);
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: 500px;
+}
+
+/* ===========================================
+   QUICK STATS
+   =========================================== */
+.quickStats {
+  display: flex;
+  gap: var(--space-6);
+}
+
+.miniStat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.miniStatLabel {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.miniStatValue {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+
+.miniStatValueSuccess {
+  color: var(--neon-green);
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.miniStatValueWarning {
+  color: var(--neon-orange);
+  text-shadow: 0 0 10px rgba(249, 115, 22, 0.3);
+}
+
+/* ===========================================
+   LOADING SKELETON - Enhanced Animation
+   =========================================== */
+.skeletonStat {
+  gap: 6px;
+}
+
+.skeletonLabel {
+  width: 60px;
+  height: 11px;
+  background: linear-gradient(90deg,
+      var(--glass-bg-light) 0%,
+      rgba(148, 163, 184, 0.15) 20%,
+      rgba(148, 163, 184, 0.25) 50%,
+      rgba(148, 163, 184, 0.15) 80%,
+      var(--glass-bg-light) 100%);
+  background-size: 400% 100%;
+  animation: skeletonShimmer var(--duration-shimmer) infinite ease-in-out;
+  border-radius: var(--radius-sm);
+  will-change: background-position;
+}
+
+.skeletonValue {
+  width: 40px;
+  height: 20px;
+  background: linear-gradient(90deg,
+      var(--glass-bg-light) 0%,
+      rgba(148, 163, 184, 0.15) 20%,
+      rgba(148, 163, 184, 0.25) 50%,
+      rgba(148, 163, 184, 0.15) 80%,
+      var(--glass-bg-light) 100%);
+  background-size: 400% 100%;
+  animation: skeletonShimmer var(--duration-shimmer) infinite ease-in-out;
+  border-radius: var(--radius-sm);
+  will-change: background-position;
+}
+
+/* Staggered animation delays for skeleton elements */
+.skeletonStat:nth-child(1) .skeletonLabel,
+.skeletonStat:nth-child(1) .skeletonValue {
+  animation-delay: 0s;
+}
+
+.skeletonStat:nth-child(2) .skeletonLabel,
+.skeletonStat:nth-child(2) .skeletonValue {
+  animation-delay: 0.1s;
+}
+
+.skeletonStat:nth-child(3) .skeletonLabel,
+.skeletonStat:nth-child(3) .skeletonValue {
+  animation-delay: 0.2s;
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+
+  .skeletonLabel,
+  .skeletonValue {
+    animation: none;
+    background: var(--glass-bg-light);
+  }
+}
+
+/* ===========================================
+   NAVIGATION GRID - Enhanced Responsive
+   =========================================== */
+.navGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-5);
+  transition: gap var(--transition-slow);
+}
+
+/* Large desktop (>1440px): 4 columns */
+@media (max-width: 1440px) {
+  .navGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-5);
+  }
+}
+
+/* Desktop/Tablet landscape (1024-1440px): 3 columns */
+@media (max-width: 1024px) {
+  .navGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+  }
+
+  .headerSection {
+    margin-bottom: var(--space-8);
+  }
+}
+
+/* Tablet (768-1024px): 2 columns */
+@media (max-width: 768px) {
+  .navGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+  }
+
+  .headerSection {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  .quickStats {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .miniStat {
+    align-items: center;
+  }
+}
+
+/* Mobile (<768px): 1 column */
+@media (max-width: 640px) {
+  .navGrid {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .headerTitle {
+    font-size: 24px;
+  }
+
+  .breadcrumbLink span,
+  .breadcrumbCurrent span {
+    display: none;
+  }
+
+  .breadcrumbLink,
+  .breadcrumbCurrent {
+    padding: var(--space-2);
+  }
+}
+
+/* Very small mobile (<480px): Vertical stats stack */
+@media (max-width: 480px) {
+  .quickStats {
+    flex-direction: column;
+    gap: var(--space-3);
+    align-items: stretch;
+  }
+
+  .miniStat {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-3);
+    background: var(--glass-bg-light);
+    border-radius: var(--radius-md);
+  }
+
+  .headerDescription {
+    font-size: var(--font-size-base);
+  }
+
+  .headerSection {
+    padding-bottom: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+}
+
+/* ===========================================
+   NAVIGATION CARDS - Enhanced Glassmorphism
+   =========================================== */
+.navCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  text-decoration: none;
+  transition: all var(--transition-medium) var(--ease-out-expo);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle gradient overlay on hover */
+.navCard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-card-hover);
+  opacity: 0;
+  transition: opacity var(--transition-medium);
+  pointer-events: none;
+}
+
+.navCard:hover {
+  border-color: rgba(168, 85, 247, 0.5);
+  box-shadow:
+    var(--glow-purple),
+    0 8px 32px rgba(0, 0, 0, 0.3);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(24px);
+}
+
+.navCard:hover::before {
+  opacity: 1;
+}
+
+.navCard:focus-visible {
+  outline: 2px solid var(--neon-purple);
+  outline-offset: 2px;
+  box-shadow: var(--glow-purple);
+}
+
+/* Icon Box with animated gradient on hover */
+.iconBox {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--neon-purple);
+  transition: all var(--transition-medium) var(--ease-out-expo);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.navCard:hover .iconBox {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.3) 0%, rgba(59, 130, 246, 0.3) 100%);
+  box-shadow:
+    0 0 24px rgba(168, 85, 247, 0.4),
+    inset 0 0 12px rgba(168, 85, 247, 0.1);
+  transform: scale(1.05);
+}
+
+.navInfo {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.navLabel {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--transition-base);
+}
+
+.navCard:hover .navLabel {
+  color: #fff;
+}
+
+.navDesc {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  transition: color var(--transition-base);
+}
+
+.navCard:hover .navDesc {
+  color: var(--text-secondary);
+}
+
+.arrow {
+  color: var(--text-muted);
+  transition: all var(--transition-medium) var(--ease-out-expo);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.navCard:hover .arrow {
+  transform: translateX(6px);
+  color: var(--neon-purple);
+}
+
+/* ===========================================
+   ERROR DISPLAY
+   =========================================== */
+.errorContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-10);
+  text-align: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  margin-top: var(--space-8);
+}
+
+.errorIcon {
+  color: var(--neon-red);
+  margin-bottom: var(--space-4);
+}
+
+.errorTitle {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.errorMessage {
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-6) 0;
+  max-width: 400px;
+}
+
+.retryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  background: var(--gradient-primary);
+  color: white;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  border: none;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: var(--transition-all);
+}
+
+.retryButton:hover {
+  box-shadow: var(--glow-purple);
+  transform: translateY(-2px);
+}
+
+.retryButton:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 2px;
+}
+
+.retryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ===========================================
+   ACCESSIBILITY - REDUCED MOTION
+   =========================================== */
+@media (prefers-reduced-motion: reduce) {
+
+  .navCard,
+  .iconBox,
+  .arrow,
+  .breadcrumbLink,
+  .retryButton {
+    transition: none;
+  }
+
+  .navCard:hover .iconBox {
+    transform: none;
+  }
+
+  .navCard:hover .arrow {
+    transform: none;
+  }
+
+  .breadcrumbLink:hover {
+    transform: none;
+  }
+
+  .retryButton:hover {
+    transform: none;
+  }
+}

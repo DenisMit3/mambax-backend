@@ -104,6 +104,18 @@ class ConnectionManager:
     def get_online_count(self) -> int:
         """Возвращает количество онлайн пользователей."""
         return len(self.active_connections)
+    
+    def is_user_online(self, user_id: str) -> bool:
+        """
+        Проверяет, онлайн ли пользователь (alias для is_online).
+        
+        Args:
+            user_id: ID пользователя
+        
+        Returns:
+            bool: True если онлайн
+        """
+        return self.is_online(user_id)
 
 
 # Глобальный экземпляр менеджера

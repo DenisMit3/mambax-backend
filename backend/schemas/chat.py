@@ -16,10 +16,11 @@ class MessageCreate(BaseModel):
 class MessageResponse(BaseModel):
     """Схема ответа с сообщением"""
     id: UUID
+    match_id: UUID
     sender_id: UUID
     receiver_id: UUID
     content: str
-    timestamp: datetime
+    created_at: datetime = Field(..., serialization_alias="timestamp")
     is_read: bool
     
     class Config:
@@ -38,6 +39,7 @@ class MessageOutgoing(BaseModel):
     """Исходящее сообщение через WebSocket"""
     type: str = "message"
     message_id: UUID
+    match_id: Optional[UUID] = None
     sender_id: UUID
     content: str
     timestamp: datetime

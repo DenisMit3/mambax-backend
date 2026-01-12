@@ -1,33 +1,46 @@
-# Используем официальный image Python
+# Backend Dockerfile - Python FastAPI
 FROM python:3.11-slim
 
-# Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Устанавливаем переменные окружения
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
-# Устанавливаем системные зависимости для сборки (нужны для asyncpg/psycopg2)
+# Install system dependencies
 RUN apt-get update \
-    && apt-get install -y postgresql-client build-essential libpq-dev netcat-openbsd \
-    && apt-get clean
+    && apt-get install -y \
+    postgresql-client \
+    build-essential \
+    libpq-dev \
+    curl \
+    netcat-openbsd \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Копируем requirements.txt
+# Copy requirements
 COPY requirements.txt .
 
-# Устанавливаем Python зависимости
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем скрипт запуска и делаем его исполняемым
+# Copy startup script
 COPY start.sh .
 RUN chmod +x start.sh
 
-# Копируем остальной код
+# Copy application code
 COPY . .
 
-# Открываем порт
-EXPOSE 8000
+# Create uploads directory
+RUN mkdir -p /app/static/uploads
 
-# Запускаем через скрипт
+# Expose port (changed to 8001)
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Run startup script
 CMD ["./start.sh"]

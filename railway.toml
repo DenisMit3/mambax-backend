@@ -1,0 +1,9 @@
+[build]
+builder = "NIXPACKS"
+# Note: Set root directory to "backend" in Railway project settings
+
+[deploy]
+# Start command assumes Railway root is set to backend folder
+startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 10

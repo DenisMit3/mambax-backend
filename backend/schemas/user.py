@@ -7,12 +7,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, EmailStr, Field
 
-
-class Gender(str, Enum):
-    """Пол пользователя"""
-    MALE = "male"
-    FEMALE = "female"
-    OTHER = "other"
+from backend.models.user import Gender, UserStatus, SubscriptionTier, UserRole
 
 
 class Location(BaseModel):
@@ -67,6 +62,11 @@ class UserResponse(UserBase):
     id: UUID
     created_at: datetime
     is_active: bool
+    status: UserStatus = UserStatus.ACTIVE
+    subscription_tier: SubscriptionTier = SubscriptionTier.FREE
+    role: UserRole = UserRole.USER
+    stars_balance: int = 0
+    gifts_received: Optional[int] = None
     
     class Config:
         from_attributes = True
