@@ -100,51 +100,77 @@ async def get_profiles_paginated(
         PaginatedResponse с профилями
     """
     # Базовый запрос
+    from uuid import UUID
+    u_id = UUID(current_user_id) if isinstance(current_user_id, str) else current_user_id
+
     query = select(models.User).where(
-        models.User.id != current_user_id,
+        models.User.id != u_id,
         models.User.is_complete == True,
         models.User.is_active == True
     )
     
-    # Исключаем уже просвайпанные
+    # Исключаем уже просвайпанные (и лайки, и дизлайки)
+    # FIX: Use subquery instead of materializing IDs in memory (scales to 100K+ swipes)
     if exclude_swiped:
-        # Получаем ID профилей, которые уже лайкнули/пропустили
-        swiped_query = select(models.Like.liked_id).where(
-            models.Like.liker_id == current_user_id
-        )
-        swiped_result = await db.execute(swiped_query)
-        swiped_ids = [str(lid) for lid in swiped_result.scalars().all()]
-        
-        if swiped_ids:
-            query = query.where(~models.User.id.in_(swiped_ids))
+        from backend.models.interaction import Swipe
+        swiped_subquery = select(Swipe.to_user_id).where(
+            Swipe.from_user_id == u_id
+        ).scalar_subquery()
+        query = query.where(~models.User.id.in_(swiped_subquery))
     
     # Применяем курсор
     if cursor:
         cursor_info = decode_cursor(cursor)
         if cursor_info:
+            # Парсим дату для корректного сравнения
+            from datetime import datetime
+            try:
+                cursor_date = datetime.fromisoformat(cursor_info.created_at)
+            except (ValueError, TypeError):
+                cursor_date = cursor_info.created_at
+
             # Получаем записи после курсора
             query = query.where(
-                (models.User.created_at < cursor_info.created_at) |
-                ((models.User.created_at == cursor_info.created_at) & (models.User.id < cursor_info.id))
+                (models.User.created_at < cursor_date) |
+                ((models.User.created_at == cursor_date) & (models.User.id < cursor_info.id))
             )
     
+    # Сортировка по дате создания (новые первые) и ID для стабильности
+
     # Сортировка по дате создания (новые первые) и ID для стабильности
     query = query.order_by(desc(models.User.created_at), desc(models.User.id))
     
     # Берём limit + 1 чтобы определить, есть ли следующая страница
     query = query.limit(limit + 1)
     
-    result = await db.execute(query)
-    profiles = result.scalars().all()
+    # FIX: Explicit loading to prevent async issues
+    from sqlalchemy.orm import selectinload
+    query = query.options(
+        selectinload(models.User.photos_rel),
+        selectinload(models.User.interests_rel)
+    )
+
+    try:
+        result = await db.execute(query)
+        profiles = result.scalars().all()
+    except Exception as e:
+        print(f"❌ Error in get_profiles_paginated: {e}")
+        import traceback
+        traceback.print_exc()
+        raise e
     
     # Определяем наличие следующей страницы
     has_more = len(profiles) > limit
     if has_more:
         profiles = profiles[:limit]  # Убираем лишний элемент
     
+    # Import chat manager to check online status
+    from backend.services.chat import manager
+    
     # Формируем ответ
     items = []
     for profile in profiles:
+        is_online = manager.is_online(str(profile.id))
         items.append({
             "id": str(profile.id),
             "name": profile.name,
@@ -156,6 +182,8 @@ async def get_profiles_paginated(
             "height": getattr(profile, 'height', None),
             "is_verified": getattr(profile, 'is_verified', False),
             "is_vip": profile.is_vip,
+            "is_online": is_online,
+            "last_seen": profile.last_seen.isoformat() if getattr(profile, 'last_seen', None) else None,
             "created_at": str(profile.created_at)
         })
     
@@ -205,12 +233,32 @@ async def get_matches_paginated(
     if has_more:
         matches = matches[:limit]
     
+    # FIX: Batch fetch all partner profiles in ONE query (N+1 -> 2 queries)
+    partner_ids = set()
+    for match in matches:
+        other_id = match.user2_id if str(match.user1_id) == user_id else match.user1_id
+        partner_ids.add(other_id)
+    
+    # Single query to fetch all partners
+    profiles_map = {}
+    if partner_ids:
+        from sqlalchemy import select as sa_select
+        profiles_result = await db.execute(
+            sa_select(models.User).where(models.User.id.in_(partner_ids))
+        )
+        for p in profiles_result.scalars().all():
+            profiles_map[p.id] = p
+    
+    # Import chat manager to check online status
+    from backend.services.chat import manager
+    
     items = []
     for match in matches:
         other_id = match.user2_id if str(match.user1_id) == user_id else match.user1_id
-        profile = await crud.get_user_profile(db, str(other_id))
+        profile = profiles_map.get(other_id)
         
         if profile:
+            is_online = manager.is_online(str(profile.id))
             items.append({
                 "id": str(match.id),
                 "created_at": str(match.created_at),
@@ -219,7 +267,9 @@ async def get_matches_paginated(
                     "name": profile.name,
                     "age": profile.age,
                     "photos": profile.photos or [],
-                    "is_verified": getattr(profile, 'is_verified', False)
+                    "is_verified": getattr(profile, 'is_verified', False),
+                    "is_online": is_online,
+                    "last_seen": profile.last_seen.isoformat() if getattr(profile, 'last_seen', None) else None
                 }
             })
     

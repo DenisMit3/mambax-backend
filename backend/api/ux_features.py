@@ -6,10 +6,14 @@ API эндпоинты для UX функций.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import update
 from pydantic import BaseModel
 from typing import Optional, Dict, List
+from backend.models.user import User
 
 from backend import database, auth, crud
+from backend.config.settings import settings as app_settings
+import uuid
 from backend.services.ux_features import (
     # Push Notifications
     register_fcm_token,
@@ -40,6 +44,8 @@ from backend.services.ux_features import (
     get_boost_status,
     is_boosted
 )
+from backend.services.features import feature_service
+from backend.services.features import feature_service
 
 router = APIRouter(prefix="/ux", tags=["UX Features"])
 
@@ -82,6 +88,9 @@ async def register_push_token(
     """
     📲 Зарегистрировать FCM токен для push-уведомлений
     """
+    if not await feature_service.is_enabled("notifications", current_user, default=True):
+        raise HTTPException(status_code=404, detail="Push notifications are currently disabled")
+
     result = register_fcm_token(current_user, req.token)
     return result
 
@@ -116,8 +125,9 @@ async def update_notifications_settings(
     """
     ⚙️ Обновить настройки уведомлений
     """
-    settings = req.dict(exclude_unset=True)
-    return update_notification_settings(current_user, settings)
+    # FIX: Pydantic v2 uses model_dump
+    settings_data = req.model_dump(exclude_unset=True)
+    return update_notification_settings(current_user, settings_data)
 
 
 # ============================================================================
@@ -137,6 +147,9 @@ async def enable_incognito_mode(
     - Виден только тем, кого вы лайкнули
     - Ваши лайки анонимны
     """
+    if not await feature_service.is_enabled("incognito_mode", current_user, default=True):
+        raise HTTPException(status_code=404, detail="Incognito mode is temporarily disabled")
+
     # Проверяем VIP статус
     user = await crud.get_user_profile(db, current_user)
     if not user or not user.is_vip:
@@ -182,6 +195,9 @@ async def undo_last_swipe_endpoint(
     
     Возвращает профиль для повторного просмотра.
     """
+    if not await feature_service.is_enabled("undo_swipe", current_user, default=True):
+        raise HTTPException(status_code=404, detail="Undo feature is temporarily disabled")
+
     # Проверяем VIP статус
     user = await crud.get_user_profile(db, current_user)
     is_vip = user.is_vip if user else False
@@ -279,8 +295,8 @@ async def update_visibility(
     - show_age: Показывать возраст
     - read_receipts: Показывать статус "прочитано"
     """
-    settings = req.dict(exclude_unset=True)
-    return update_visibility_settings(current_user, settings)
+    settings_data = req.model_dump(exclude_unset=True)
+    return update_visibility_settings(current_user, settings_data)
 
 
 # ============================================================================
@@ -298,7 +314,52 @@ async def activate_profile_boost(
     
     Ваш профиль будет показываться первым в ленте!
     """
-    # TODO: Проверить оплату или VIP статус
+    if not await feature_service.is_enabled("boost_profile", current_user, default=True):
+        raise HTTPException(status_code=404, detail="Boost feature is temporarily disabled")
+
+    # FIX: Use configured price
+    BOOST_PRICE = 50 
+    
+    # 1. Check Balance
+    user = await crud.get_user_profile(db, current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    current_balance = user.stars_balance or 0
+    if current_balance < BOOST_PRICE:
+        raise HTTPException(
+            status_code=402, 
+            detail=f"Insufficient stars. Need {BOOST_PRICE}, have {current_balance}"
+        )
+        
+    # 2. Atomic Deduction
+    # FIX: Ensure UUID cast for where clause
+    try:
+        u_uuid = uuid.UUID(current_user)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid User ID")
+
+    await db.execute(
+        update(User)
+        .where(User.id == u_uuid)
+        .values(stars_balance=User.stars_balance - BOOST_PRICE)
+    )
+    
+    # 3. Record Transaction
+    from backend.models.monetization import RevenueTransaction
+    import uuid
+    
+    transaction = RevenueTransaction(
+        user_id=current_user,
+        transaction_type="boost_purchase",
+        amount=BOOST_PRICE,
+        currency="XTR",
+        status="completed",
+        payment_gateway="internal_stars",
+        custom_metadata={"duration": duration_minutes}
+    )
+    db.add(transaction)
+    await db.commit()
     
     result = activate_boost(current_user, duration_minutes)
     return result

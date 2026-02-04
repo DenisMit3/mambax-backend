@@ -2,25 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { authService } from "@/services/api";
+import { authService, UserProfile } from "@/services/api";
 import { SendGiftModal } from "@/components/gifts";
 import { ArrowLeft, Gift, MapPin, Briefcase, GraduationCap } from "lucide-react";
 import { BottomNav } from "@/components/layout/BottomNav";
 
-interface UserProfile {
-    id: string;
-    name: string;
-    age: number;
-    gender: string;
-    bio: string;
-    photos: string[];
-    city?: string;
-    work?: string;
-    education?: string;
-    is_verified: boolean;
-    stars_balance: number;
-    gifts_received?: number;
-}
 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
     const { id } = params;

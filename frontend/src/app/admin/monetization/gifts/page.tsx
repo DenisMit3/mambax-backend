@@ -7,34 +7,7 @@ import {
     Sparkles, Crown, Image as ImageIcon, Loader2
 } from "lucide-react";
 import styles from "../../admin.module.css";
-
-interface GiftCategory {
-    id: string;
-    name: string;
-    description: string;
-    icon: string;
-    sort_order: number;
-    is_active: boolean;
-}
-
-interface VirtualGift {
-    id: string;
-    name: string;
-    description: string;
-    image_url: string;
-    animation_url?: string;
-    price: number;
-    currency: string;
-    is_animated: boolean;
-    is_premium: boolean;
-    is_limited: boolean;
-    is_active: boolean;
-    available_until?: string;
-    max_quantity?: number;
-    times_sent: number;
-    category_id?: string;
-    sort_order: number;
-}
+import { adminApi, GiftCategory, VirtualGift } from "@/services/adminApi";
 
 interface GiftFormData {
     name: string;
@@ -83,27 +56,10 @@ export default function GiftsAdminPage() {
     const loadData = useCallback(async () => {
         try {
             setLoading(true);
-            const token = localStorage.getItem("token");
-            const headers = { Authorization: `Bearer ${token}` };
-
-            // Load catalog (has both gifts and categories)
-            const catalogRes = await fetch("/api_proxy/gifts/catalog?include_premium=true", { headers });
-            if (catalogRes.ok) {
-                const catalog = await catalogRes.json();
-                setGifts(catalog.gifts || []);
-                setCategories(catalog.categories || []);
-            } else {
-                // Fallback mock data
-                setGifts([
-                    { id: "1", name: "Red Rose", description: "A beautiful rose", image_url: "/static/gifts/rose.png", price: 10, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, is_active: true, times_sent: 156, sort_order: 1 },
-                    { id: "2", name: "Heart Balloon", description: "Love in the air", image_url: "/static/gifts/balloon.png", price: 15, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, is_active: true, times_sent: 89, sort_order: 2 },
-                    { id: "3", name: "Diamond Ring", description: "Premium sparkle", image_url: "/static/gifts/ring.png", price: 100, currency: "XTR", is_animated: true, is_premium: true, is_limited: false, is_active: true, times_sent: 23, sort_order: 3 },
-                ]);
-                setCategories([
-                    { id: "cat1", name: "Romantic", description: "For your love", icon: "❤️", sort_order: 1, is_active: true },
-                    { id: "cat2", name: "Celebration", description: "Party time", icon: "🎉", sort_order: 2, is_active: true },
-                ]);
-            }
+            // Use adminApi to fetch catalog
+            const catalog = await adminApi.monetization.gifts.getCatalog(true);
+            setGifts(catalog.gifts || []);
+            setCategories(catalog.categories || []);
         } catch (err) {
             console.error("Failed to load gifts:", err);
             setError("Failed to load gifts data");
@@ -147,17 +103,8 @@ export default function GiftsAdminPage() {
         if (!confirm("Are you sure you want to delete this gift?")) return;
 
         try {
-            const token = localStorage.getItem("token");
-            const res = await fetch(`/api_proxy/admin/monetization/gifts/${giftId}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            if (res.ok) {
-                setGifts(prev => prev.filter(g => g.id !== giftId));
-            } else {
-                alert("Failed to delete gift");
-            }
+            await adminApi.monetization.gifts.delete(giftId);
+            setGifts(prev => prev.filter(g => g.id !== giftId));
         } catch (err) {
             console.error("Delete error:", err);
             alert("Failed to delete gift");
@@ -174,41 +121,27 @@ export default function GiftsAdminPage() {
         setError(null);
 
         try {
-            const token = localStorage.getItem("token");
-            const method = editingGift ? "PUT" : "POST";
-            const url = editingGift
-                ? `/api_proxy/admin/monetization/gifts/${editingGift.id}`
-                : "/api_proxy/admin/monetization/gifts";
+            // Prepare payload
+            const payload: any = {
+                ...formData,
+                max_quantity: formData.max_quantity || null,
+                available_until: formData.available_until || null,
+                category_id: formData.category_id || null
+            };
 
-            const res = await fetch(url, {
-                method,
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    ...formData,
-                    max_quantity: formData.max_quantity || null,
-                    available_until: formData.available_until || null,
-                    category_id: formData.category_id || null
-                })
-            });
+            let savedGift: VirtualGift;
 
-            if (res.ok) {
-                const savedGift = await res.json();
-                if (editingGift) {
-                    setGifts(prev => prev.map(g => g.id === editingGift.id ? savedGift : g));
-                } else {
-                    setGifts(prev => [...prev, savedGift]);
-                }
-                setShowModal(false);
+            if (editingGift) {
+                savedGift = await adminApi.monetization.gifts.update(editingGift.id, payload);
+                setGifts(prev => prev.map(g => g.id === editingGift.id ? savedGift : g));
             } else {
-                const err = await res.json();
-                setError(err.detail || "Failed to save gift");
+                savedGift = await adminApi.monetization.gifts.create(payload);
+                setGifts(prev => [...prev, savedGift]);
             }
+            setShowModal(false);
         } catch (err) {
             console.error("Save error:", err);
-            setError("Failed to save gift");
+            setError(err instanceof Error ? err.message : "Failed to save gift");
         } finally {
             setSaving(false);
         }
@@ -218,27 +151,12 @@ export default function GiftsAdminPage() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        const formDataUpload = new FormData();
-        formDataUpload.append("file", file);
-
         try {
-            const token = localStorage.getItem("token");
-            const res = await fetch("/api_proxy/admin/monetization/gifts/upload-image", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` },
-                body: formDataUpload
-            });
-
-            if (res.ok) {
-                const { url } = await res.json();
-                setFormData(prev => ({ ...prev, image_url: url }));
-            } else {
-                alert("Failed to upload image");
-            }
+            const { url } = await adminApi.monetization.gifts.uploadImage(file);
+            setFormData(prev => ({ ...prev, image_url: url }));
         } catch (err) {
             console.error("Upload error:", err);
-            // For local dev, just use a placeholder
-            setFormData(prev => ({ ...prev, image_url: `/static/gifts/${file.name}` }));
+            alert("Failed to upload image");
         }
     };
 

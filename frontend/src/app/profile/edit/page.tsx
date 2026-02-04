@@ -27,7 +27,7 @@ export default function EditProfilePage() {
             .then((data) => {
                 setName(data.name);
                 setBio(data.bio || "");
-                setGender(data.gender);
+                setGender(data.gender || "male"); // Default if missing
                 setInterests(data.interests || []);
                 setPhotos(data.photos || []);
             })

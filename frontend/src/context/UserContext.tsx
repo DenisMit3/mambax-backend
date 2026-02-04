@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { authService } from '@/services/api';
 import { wsService } from '@/services/websocket';
 
@@ -35,40 +36,44 @@ const UserContext = createContext<UserContextType>({
 export const useUser = () => useContext(UserContext);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const queryClient = useQueryClient();
 
-    const refreshUser = async () => {
-        try {
+    const { data: user = null, isLoading, refetch } = useQuery({
+        queryKey: ['user', 'me'],
+        queryFn: async () => {
             const token = localStorage.getItem("token");
             if (!token) {
-                setIsLoading(false);
-                return;
+                return null;
             }
-            const data = await authService.getMe();
-            if (data) {
-                // Ensure stars_balance is present
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const u = data as any;
-                if (typeof u.stars_balance === 'undefined') u.stars_balance = 0;
-                setUser(u);
+            try {
+                const data = await authService.getMe();
+                if (data) {
+                    // Ensure stars_balance is present
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const u = data as any;
+                    if (typeof u.stars_balance === 'undefined') u.stars_balance = 0;
+                    return u as User;
+                }
+                return null;
+            } catch (error) {
+                console.error("Failed to fetch user context", error);
+                return null;
             }
-        } catch (e) {
-            console.error("Failed to fetch user context", e);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+        },
+        retry: false,
+        staleTime: 5 * 60 * 1000, // 5 minutes
+    });
 
     useEffect(() => {
-        refreshUser();
-
         // Listen for real-time balance updates
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const handleBalanceUpdate = (data: any) => {
             console.log("Balance update received:", data);
             if (typeof data.balance === 'number') {
-                setUser(prev => prev ? { ...prev, stars_balance: data.balance } : null);
+                queryClient.setQueryData(['user', 'me'], (oldUser: User | null) => {
+                    if (!oldUser) return null;
+                    return { ...oldUser, stars_balance: data.balance };
+                });
             }
         };
 
@@ -77,12 +82,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         return () => {
             wsService.off("balance_update", handleBalanceUpdate);
         };
-    }, []);
+    }, [queryClient]);
 
     const updateBalance = (newBalance: number) => {
-        if (user) {
-            setUser({ ...user, stars_balance: newBalance });
-        }
+        queryClient.setQueryData(['user', 'me'], (oldUser: User | null) => {
+            if (!oldUser) return null;
+            return { ...oldUser, stars_balance: newBalance };
+        });
+    };
+
+    const refreshUser = async () => {
+        await refetch();
     };
 
     return (

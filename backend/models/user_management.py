@@ -48,8 +48,14 @@ class UserNote(Base):
     author_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False) # Admin who wrote the note
     
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    is_internal: Mapped[bool] = mapped_column(Boolean, default=True)  # Internal admin note
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    @property
+    def created_by(self):
+        """Alias for author_id for compatibility"""
+        return self.author_id
 
 class VerificationRequest(Base):
     """

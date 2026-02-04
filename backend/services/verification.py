@@ -23,7 +23,7 @@ from enum import Enum
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from backend import models
+from backend.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +127,7 @@ async def start_verification(db: AsyncSession, user_id: str) -> Dict[str, Any]:
     Генерирует случайный жест и создаёт сессию верификации.
     """
     # Проверить, не верифицирован ли уже
-    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalars().first()
     
     if not user:
@@ -206,58 +206,43 @@ async def submit_verification(
     session["submitted_at"] = datetime.utcnow().isoformat()
     
     # ========================================================
-    # MVP: Автоматическое подтверждение
-    # В продакшене здесь будет:
-    # 1. AI проверка лица (сравнение с фото профиля)
-    # 2. AI распознавание жеста
-    # 3. Liveness detection (проверка что это не фото фото)
-    # 4. Ручная модерация при сомнениях
+    # SECURITY UPDATE:
+    # Disable auto-verification. All verifications must go to Admin Review.
     # ========================================================
     
-    verification_passed = True  # MVP: всегда проходит
+    verification_passed = False # Auto-pass disabled for security
     
-    if verification_passed:
-        session["status"] = VerificationStatus.VERIFIED.value
+    # Always set to UNDER_REVIEW
+    session["status"] = VerificationStatus.UNDER_REVIEW.value
+    
+    # Update user in DB
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    
+    if user:
+        if hasattr(user, 'is_verified'):
+            user.is_verified = False # Explicitly Pending
         
-        # Обновляем пользователя в БД
-        result = await db.execute(select(models.User).where(models.User.id == user_id))
-        user = result.scalars().first()
+        if hasattr(user, 'verification_selfie'):
+            user.verification_selfie = selfie_url
         
-        if user:
-            # Добавляем флаг верификации если есть
-            if hasattr(user, 'is_verified'):
-                user.is_verified = True
-            
-            # Сохраняем URL селфи верификации
-            if hasattr(user, 'verification_selfie'):
-                user.verification_selfie = selfie_url
-            
-            await db.commit()
-        
-        logger.info(f"User {user_id} verified successfully")
-        
-        return {
-            "status": "verified",
-            "is_verified": True,
-            "message": "🎉 Поздравляем! Ваш профиль верифицирован!",
-            "badge_awarded": True
-        }
-    else:
-        session["status"] = VerificationStatus.REJECTED.value
-        
-        return {
-            "status": "rejected",
-            "is_verified": False,
-            "message": "Верификация не пройдена. Попробуйте снова.",
-            "badge_awarded": False
-        }
+        await db.commit()
+    
+    logger.info(f"User {user_id} verification submitted for review")
+    
+    return {
+        "status": "pending",
+        "is_verified": False,
+        "message": "📸 Фото получено. Ожидайте подтверждения администратора.",
+        "badge_awarded": False
+    }
 
 
 async def get_verification_status(db: AsyncSession, user_id: str) -> Dict[str, Any]:
     """
     Получить статус верификации пользователя.
     """
-    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalars().first()
     
     if not user:

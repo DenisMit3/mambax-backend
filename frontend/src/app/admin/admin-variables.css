@@ -1,19 +1,26 @@
 /* Admin CSS Variables - Dark Glassmorphism Theme 2.0 */
 /* Global design tokens for the admin panel */
 
-:root {
+.admin-layout {
+    /* ===========================================
+     LAYOUT DIMENSIONS
+     =========================================== */
+    --sidebar-width: 280px;
+    --sidebar-collapsed-width: 80px;
+    --topbar-height: 72px;
+
     /* ===========================================
      CORE COLORS
      =========================================== */
     --admin-bg: #0a0f1a;
     --admin-bg-secondary: #0f172a;
 
-    /* Glassmorphism backgrounds */
-    --glass-bg: rgba(15, 23, 42, 0.65);
-    --glass-bg-light: rgba(30, 41, 59, 0.5);
-    --glass-bg-hover: rgba(30, 41, 59, 0.7);
-    --glass-border: rgba(148, 163, 184, 0.2);
-    --glass-border-hover: rgba(148, 163, 184, 0.35);
+    /* Glassmorphism backgrounds - scoped to admin */
+    --admin-glass-bg: rgba(15, 23, 42, 0.65);
+    --admin-glass-bg-light: rgba(30, 41, 59, 0.5);
+    --admin-glass-bg-hover: rgba(30, 41, 59, 0.7);
+    --admin-glass-border: rgba(148, 163, 184, 0.2);
+    --admin-glass-border-hover: rgba(148, 163, 184, 0.35);
 
     /* Neon accent colors */
     --neon-blue: #3b82f6;
@@ -28,10 +35,10 @@
     /* ===========================================
      TEXT COLORS
      =========================================== */
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-    --text-disabled: #475569;
+    --admin-text-primary: #f1f5f9;
+    --admin-text-secondary: #94a3b8;
+    --admin-text-muted: #64748b;
+    --admin-text-disabled: #475569;
 
     /* ===========================================
      GLOW EFFECTS
@@ -46,13 +53,14 @@
     /* ===========================================
      GRADIENTS
      =========================================== */
-    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    --gradient-danger: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    --gradient-warning: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-    --gradient-info: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    --gradient-purple: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
-    --gradient-card-hover: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+    --admin-gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --admin-gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    --admin-gradient-danger: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    --admin-gradient-warning: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    --admin-gradient-info: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    --admin-gradient-purple: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    --admin-gradient-card-hover: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+
 
     /* ===========================================
      TYPOGRAPHY

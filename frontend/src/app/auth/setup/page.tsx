@@ -12,7 +12,7 @@ export default function SetupNamePage() {
         if (name.length < 2) return;
         // Save to context/localstorage in real app
         if (typeof window !== 'undefined') localStorage.setItem("setup_name", name);
-        router.push("/auth/setup/gender");
+        router.push("/auth/setup/age");
     };
 
     return (

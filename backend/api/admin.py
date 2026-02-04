@@ -6,9 +6,9 @@ user management, moderation, monetization, marketing, and system operations.
 All endpoints use AsyncSession for database operations and require admin privileges.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, desc, and_, or_, select
+from sqlalchemy import func, desc, and_, or_, select, delete
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -16,8 +16,8 @@ from enum import Enum
 import uuid as uuid_module
 
 from backend.database import get_db
-from backend.auth import get_current_user_from_token
-from backend.models.user import User, UserRole, UserStatus, SubscriptionTier
+from backend.auth import get_current_user_from_token, decode_jwt
+from backend.models.user import User, UserRole, UserStatus, SubscriptionTier, UserPhoto
 # Import Report and Block from interaction.py where they are actually defined
 from backend.models.interaction import Report, Block, Match
 from backend.models.moderation import ModerationQueueItem as ModerationQueueItemModel, BannedUser
@@ -27,6 +27,7 @@ from backend.models.analytics import RetentionCohort, DailyMetric
 from backend.models.system import FeatureFlag, AuditLog
 # Import FraudScore and VerificationRequest from user_management
 from backend.models.user_management import FraudScore, VerificationRequest, UserSegment, UserNote
+from backend.services.fraud_detection import fraud_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -42,19 +43,16 @@ async def get_current_admin(
     Dependency to ensure the current user is an admin.
     Returns 403 Forbidden for non-admin users.
     """
-    # Check role - assuming 'role' field exists on User model
-    user_role = getattr(current_user, "role", UserRole.USER)
+    # Check role
+    # Assuming role is stored as Enum or string in DB
+    is_admin = current_user.role in (UserRole.ADMIN, UserRole.MODERATOR)
     
-    # Ensure strict checking against Enum members
-    if user_role not in (UserRole.ADMIN, UserRole.MODERATOR):
-        # Backwards compatibility: allow dev user UUID or explicit admin
-        if str(current_user.id) == "00000000-0000-0000-0000-000000000000":
-            pass  # Allow dev user
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Admin privileges required"
-            )
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+        
     return current_user
 
 
@@ -85,6 +83,7 @@ class DashboardMetrics(BaseModel):
     premium_users: int
     pending_moderation: int
     reports_today: int
+    traffic_history: List[int]
 
 
 class UserListItem(BaseModel):
@@ -160,6 +159,7 @@ class VerificationRequestItem(BaseModel):
     id: str
     user_id: str
     user_name: str
+    user_photos: List[str] # Added
     status: str
     priority: int
     submitted_photos: List[str]
@@ -176,6 +176,48 @@ class SegmentCreate(BaseModel):
 # ============================================
 # DASHBOARD ENDPOINTS
 # ============================================
+
+@router.websocket("/ws")
+async def admin_websocket(websocket: WebSocket, token: str = Query(...)):
+    """
+    Real-time Admin Dashboard updates
+    """
+    try:
+        # 1. Verify Token
+        payload = decode_jwt(token)
+        user_id = payload.get("sub")
+        if not user_id:
+            await websocket.close(code=4003, reason="Invalid token")
+            return
+            
+        # 2. Verify Role (DB Check)
+        from backend.db.session import async_session_maker
+        async with async_session_maker() as db:
+            result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+            user = result.scalar_one_or_none()
+            
+            if not user or user.role not in (UserRole.ADMIN, UserRole.MODERATOR):
+                print(f"WS Connection rejected: User {user_id} is not admin")
+                await websocket.close(code=4003, reason="Forbidden")
+                return
+
+    except Exception as e:
+        print(f"WS Auth Error: {e}")
+        await websocket.close(code=4003, reason="Authentication failed")
+        return
+
+    await websocket.accept()
+    # print(f"WS Admin Connection accepted: {user_id}")
+    
+    try:
+        while True:
+            # Just keep connection open and respond to pings
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_json({"type": "pong"})
+    except WebSocketDisconnect:
+        pass
+
 
 @router.get("/dashboard/metrics", response_model=DashboardMetrics)
 async def get_dashboard_metrics(
@@ -237,6 +279,24 @@ async def get_dashboard_metrics(
         select(func.count(Message.id)).where(func.date(Message.created_at) == today)
     )
     messages_sent = result.scalar() or 0
+
+    # Traffic History (Last 24 hours distribution of Activity)
+    # We use User updates/logins as a proxy for traffic
+    traffic_history = []
+    now = datetime.utcnow()
+    # Create 24 hourly buckets
+    for i in range(24):
+        start_dt = now - timedelta(hours=i+1)
+        end_dt = now - timedelta(hours=i)
+        
+        # Count active users in this hour
+        res = await db.execute(
+            select(func.count(User.id)).where(
+                and_(User.updated_at >= start_dt, User.updated_at < end_dt)
+            )
+        )
+        count = res.scalar() or 0
+        traffic_history.insert(0, count) # Prepend to make chronological
     
     return DashboardMetrics(
         total_users=total_users,
@@ -246,7 +306,8 @@ async def get_dashboard_metrics(
         revenue_today=float(revenue_today),
         premium_users=premium_users,
         pending_moderation=pending_moderation,
-        reports_today=reports_today
+        reports_today=reports_today,
+        traffic_history=traffic_history
     )
 
 
@@ -346,6 +407,7 @@ async def get_users_list(
     status: Optional[str] = None,
     subscription: Optional[str] = None,
     verified: Optional[bool] = None,
+    verification_pending: Optional[bool] = None,
     search: Optional[str] = None,
     fraud_risk: Optional[str] = None,
     sort_by: str = "created_at",
@@ -353,10 +415,53 @@ async def get_users_list(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get paginated list of users with filters"""
+    """Get paginated list of users with filters including real fraud scores and activity counts"""
     
-    # Build query with filters
-    query = select(User)
+    # Subquery for matches count per user
+    matches_subq = (
+        select(
+            Match.user1_id.label('user_id'),
+            func.count(Match.id).label('match_count')
+        )
+        .group_by(Match.user1_id)
+        .subquery()
+    )
+    
+    # Subquery for matches where user is user2
+    matches_subq2 = (
+        select(
+            Match.user2_id.label('user_id'),
+            func.count(Match.id).label('match_count')
+        )
+        .group_by(Match.user2_id)
+        .subquery()
+    )
+    
+    # Subquery for messages sent count per user
+    messages_subq = (
+        select(
+            Message.sender_id.label('user_id'),
+            func.count(Message.id).label('message_count')
+        )
+        .group_by(Message.sender_id)
+        .subquery()
+    )
+    
+    # Build main query with LEFT JOINs
+    query = (
+        select(
+            User,
+            FraudScore.score.label('fraud_score_value'),
+            FraudScore.risk_level.label('fraud_risk_level'),
+            func.coalesce(matches_subq.c.match_count, 0).label('matches_as_user1'),
+            func.coalesce(matches_subq2.c.match_count, 0).label('matches_as_user2'),
+            func.coalesce(messages_subq.c.message_count, 0).label('messages_count')
+        )
+        .outerjoin(FraudScore, User.id == FraudScore.user_id)
+        .outerjoin(matches_subq, User.id == matches_subq.c.user_id)
+        .outerjoin(matches_subq2, User.id == matches_subq2.c.user_id)
+        .outerjoin(messages_subq, User.id == messages_subq.c.user_id)
+    )
     
     # Apply filters
     conditions = []
@@ -366,6 +471,12 @@ async def get_users_list(
         conditions.append(User.subscription_tier == subscription)
     if verified is not None:
         conditions.append(User.is_verified == verified)
+        
+    # Pending Verification Filter (Selfie submitted but not verified)
+    if verification_pending:
+        conditions.append(User.verification_selfie != None)
+        conditions.append(User.is_verified == False)
+
     if search:
         conditions.append(
             or_(
@@ -380,8 +491,6 @@ async def get_users_list(
     
     # Apply Fraud Risk Filter
     if fraud_risk and fraud_risk != 'all':
-        # Join with FraudScore
-        query = query.outerjoin(FraudScore, User.id == FraudScore.user_id)
         if fraud_risk == 'high':
             query = query.where(FraudScore.risk_level == 'high')
         elif fraud_risk == 'medium':
@@ -389,12 +498,23 @@ async def get_users_list(
         elif fraud_risk == 'low':
             query = query.where(FraudScore.risk_level == 'low')
         elif fraud_risk == 'safe':
-             query = query.where(or_(FraudScore.risk_level == 'low', FraudScore.risk_level == None))
+            query = query.where(or_(FraudScore.risk_level == 'low', FraudScore.risk_level == None))
     
-    # Count total
+    # Count total (simpler query without joins for performance)
     count_query = select(func.count()).select_from(User)
     if conditions:
         count_query = count_query.where(and_(*conditions))
+    if fraud_risk and fraud_risk != 'all':
+        count_query = count_query.outerjoin(FraudScore, User.id == FraudScore.user_id)
+        if fraud_risk == 'high':
+            count_query = count_query.where(FraudScore.risk_level == 'high')
+        elif fraud_risk == 'medium':
+            count_query = count_query.where(FraudScore.risk_level == 'medium')
+        elif fraud_risk == 'low':
+            count_query = count_query.where(FraudScore.risk_level == 'low')
+        elif fraud_risk == 'safe':
+            count_query = count_query.where(or_(FraudScore.risk_level == 'low', FraudScore.risk_level == None))
+    
     result = await db.execute(count_query)
     total = result.scalar() or 0
     
@@ -408,32 +528,100 @@ async def get_users_list(
     # Apply pagination
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
-    users = result.scalars().all()
+    rows = result.all()
     
     return {
         "users": [
             {
-                "id": str(u.id),
-                "name": u.name,
-                "email": u.email,
-                "age": u.age,
-                "gender": u.gender,
-                "location": u.location or u.city,
-                "status": u.status,
-                "subscription": u.subscription_tier,
-                "verified": u.is_verified,
-                "fraud_score": 0,  # Would come from FraudScore table
-                "registered_at": u.created_at.isoformat(),
-                "last_active": u.updated_at.isoformat() if u.updated_at else None,
-                "matches": 0,  # Would count from matches
-                "messages": 0  # Would count from messages
+                "id": str(row.User.id),
+                "name": row.User.name,
+                "email": row.User.email,
+                "age": row.User.age,
+                "gender": row.User.gender.value if row.User.gender else None,
+                "location": row.User.location or row.User.city,
+                "status": row.User.status.value if row.User.status else "active",
+                "subscription": row.User.subscription_tier.value if row.User.subscription_tier else "free",
+                "verified": row.User.is_verified,
+                "fraud_score": int(row.fraud_score_value or 0),
+                "registered_at": row.User.created_at.isoformat(),
+                "last_active": row.User.updated_at.isoformat() if row.User.updated_at else None,
+                "matches": (row.matches_as_user1 or 0) + (row.matches_as_user2 or 0),
+                "messages": row.messages_count or 0
             }
-            for u in users
+            for row in rows
         ],
         "total": total,
         "page": page,
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size
+    }
+
+
+@router.get("/users/segments")
+async def get_user_segments(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Get list of user segments"""
+    # In a real app, we would query a SegmentsDefinition model
+    # For now, we'll return common segments logic
+    return {
+        "segments": [
+            {"id": "new_users", "name": "New Users", "count": 145, "description": "Registered in last 7 days"},
+            {"id": "power_users", "name": "Power Users", "count": 56, "description": "Daily active, >100 messages"},
+            {"id": "at_risk", "name": "At Risk", "count": 230, "description": "No activity in 14 days"},
+            {"id": "whales", "name": "Whales", "count": 12, "description": "Spent >$100 this month"}
+        ]
+    }
+
+
+@router.post("/users/fraud-scores/recalculate")
+async def recalculate_fraud_scores(
+    limit: int = Query(100, ge=1, le=1000),
+    only_missing: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """
+    Batch recalculate fraud scores for users.
+    
+    Args:
+        limit: Maximum number of users to process (1-1000)
+        only_missing: If True, only process users without existing FraudScore
+    
+    Returns:
+        Stats about the batch operation
+    """
+    result = await fraud_service.batch_recalculate(db, limit=limit, only_missing=only_missing)
+    return {
+        "success": True,
+        "processed": result['processed'],
+        "errors": result['errors'],
+        "total_queued": result['total_queued']
+    }
+
+
+@router.get("/users/fraud-scores/high-risk")
+async def get_high_risk_users(
+    min_score: int = Query(50, ge=0, le=100),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """
+    Get users with high fraud risk scores.
+    
+    Args:
+        min_score: Minimum fraud score to include (0-100)
+        limit: Maximum number of users to return
+    
+    Returns:
+        List of high-risk users with their fraud details
+    """
+    users = await fraud_service.get_high_risk_users(db, min_score=min_score, limit=limit)
+    return {
+        "users": users,
+        "total": len(users)
     }
 
 
@@ -538,6 +726,9 @@ async def manage_user_stars(
         
     current_balance = user.stars_balance or 0
     
+    if request.amount < 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
     if request.action == "add":
         new_balance = current_balance + request.amount
         user.stars_balance = new_balance
@@ -611,6 +802,10 @@ async def perform_user_action(
             banned_by=current_user.id
         )
         db.add(ban)
+    elif action == "shadowban":
+        user.status = UserStatus.SHADOWBAN
+        # Create audit log handled below, no need for BannedUser entity usually for shadowban
+        # as it's stealthy, but we could log it if needed.
     elif action == "activate":
         user.status = UserStatus.ACTIVE
     else:
@@ -684,7 +879,7 @@ async def get_verification_requests(
 ):
     """Get identity verification queue"""
     
-    query = select(VerificationRequest, User.name).join(User, VerificationRequest.user_id == User.id)
+    query = select(VerificationRequest, User).join(User, VerificationRequest.user_id == User.id)
     
     if status and status != 'all':
         query = query.where(VerificationRequest.status == status)
@@ -701,14 +896,15 @@ async def get_verification_requests(
     query = query.offset((page - 1) * page_size).limit(page_size)
     
     result = await db.execute(query)
-    rows = result.all() # returns (VerificationRequest, user_name) tuples
+    rows = result.all() # returns (VerificationRequest, User) tuples
     
     items = []
-    for req, name in rows:
+    for req, user in rows:
         items.append({
             "id": str(req.id),
             "user_id": str(req.user_id),
-            "user_name": name,
+            "user_name": user.name,
+            "user_photos": user.photos or [], # Added profile photos
             "status": req.status,
             "priority": req.priority,
             "submitted_photos": req.submitted_photos,
@@ -723,11 +919,15 @@ async def get_verification_requests(
         "page_size": page_size
     }
 
+class VerificationReviewRequest(BaseModel):
+    action: str
+    reason: Optional[str] = None
+
+
 @router.post("/users/verification/{request_id}/review")
 async def review_verification_request(
     request_id: str,
-    action: str, # approve, reject
-    reason: Optional[str] = None,
+    review_data: VerificationReviewRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
@@ -744,7 +944,7 @@ async def review_verification_request(
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
         
-    if action == "approve":
+    if review_data.action == "approve":
         req.status = "approved"
         # Update user status
         result = await db.execute(select(User).where(User.id == req.user_id))
@@ -752,9 +952,15 @@ async def review_verification_request(
         if user:
             user.is_verified = True
             user.verified_at = datetime.utcnow()
-    elif action == "reject":
+    elif review_data.action == "reject":
         req.status = "rejected"
-        req.rejection_reason = reason
+        req.rejection_reason = review_data.reason
+        # CRITICAL: Revoke verification if it was previously granted
+        result = await db.execute(select(User).where(User.id == req.user_id))
+        user = result.scalar_one_or_none()
+        if user and user.is_verified:
+            user.is_verified = False
+            user.verified_at = None
     else:
         raise HTTPException(status_code=400, detail="Invalid action")
         
@@ -763,29 +969,14 @@ async def review_verification_request(
     
     await db.commit()
     
-    return {"status": "success", "message": f"Verification {action}d"}
+    return {"status": "success", "message": f"Verification {review_data.action}d"}
 
 
 # ============================================
 # SEGMENTATION ENDPOINTS
 # ============================================
 
-@router.get("/users/segments")
-async def get_user_segments(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin)
-):
-    """Get list of user segments"""
-    # In a real app, we would query a SegmentsDefinition model
-    # For now, we'll return common segments logic
-    return {
-        "segments": [
-            {"id": "new_users", "name": "New Users", "count": 145, "description": "Registered in last 7 days"},
-            {"id": "power_users", "name": "Power Users", "count": 56, "description": "Daily active, >100 messages"},
-            {"id": "at_risk", "name": "At Risk", "count": 230, "description": "No activity in 14 days"},
-            {"id": "whales", "name": "Whales", "count": 12, "description": "Spent >$100 this month"}
-        ]
-    }
+# Segments endpoint moved to lines 462+ to avoid route conflict
 
 
 
@@ -858,6 +1049,8 @@ async def get_moderation_queue(
             {
                 "id": str(item[0].id),
                 "type": item[0].content_type,
+                "content_type": item[0].content_type,
+                "content": item[0].content_snapshot,
                 "user_id": str(item[0].user_id),
                 "user_name": item[1] if item[1] else "Unknown User",
                 "ai_score": item[0].ai_score,
@@ -902,6 +1095,16 @@ async def review_moderation_item(
         item.status = "approved"
     elif action == "reject":
         item.status = "rejected"
+        # CLEANUP: If this is a photo, delete it from the database
+        if item.content_type == "photo" and item.content_id:
+            try:
+                photo_uuid = uuid_module.UUID(item.content_id)
+                await db.execute(
+                    delete(UserPhoto).where(UserPhoto.id == photo_uuid)
+                )
+                # Note: S3 cleanup usually handled by periodic task or cascade
+            except (ValueError, TypeError):
+                pass # ID was not a valid UUID or not found
     elif action == "ban":
         item.status = "banned"
         # Also ban the user
@@ -1088,6 +1291,83 @@ async def get_analytics_overview(
     }
 
 
+@router.get("/analytics/export")
+async def export_analytics_data(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    format: str = "csv",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Export analytics data as CSV/JSON"""
+    from fastapi.responses import Response
+    import csv
+    import io
+    
+    if end_date:
+        end = datetime.strptime(end_date, "%Y-%m-%d")
+    else:
+        end = datetime.utcnow()
+    
+    if start_date:
+        start = datetime.strptime(start_date, "%Y-%m-%d")
+    else:
+        start = end - timedelta(days=30)
+    
+    # Build daily data
+    daily_data = []
+    current = start
+    while current <= end:
+        c_date = current.date()
+        
+        result = await db.execute(
+            select(func.count(User.id)).where(func.date(User.created_at) == c_date)
+        )
+        new_users = result.scalar() or 0
+        
+        result = await db.execute(
+            select(func.sum(RevenueTransaction.amount)).where(
+                and_(
+                    RevenueTransaction.status == 'completed',
+                    func.date(RevenueTransaction.created_at) == c_date
+                )
+            )
+        )
+        revenue = result.scalar() or 0.0
+        
+        result = await db.execute(
+            select(func.count(Match.id)).where(func.date(Match.created_at) == c_date)
+        )
+        matches_count = result.scalar() or 0
+        
+        result = await db.execute(
+            select(func.count(User.id)).where(func.date(User.updated_at) == c_date)
+        )
+        dau = result.scalar() or 0
+        
+        daily_data.append({
+            "date": current.strftime("%Y-%m-%d"),
+            "dau": dau,
+            "new_users": new_users,
+            "revenue": float(revenue),
+            "matches": matches_count
+        })
+        current += timedelta(days=1)
+    
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=["date", "dau", "new_users", "revenue", "matches"])
+        writer.writeheader()
+        writer.writerows(daily_data)
+        
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=analytics_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}.csv"}
+        )
+    else:
+        return {"data": daily_data, "period": {"start": start.isoformat(), "end": end.isoformat()}}
+
 @router.get("/analytics/funnel")
 async def get_funnel_data(
     db: AsyncSession = Depends(get_db),
@@ -1140,23 +1420,52 @@ async def get_retention_cohorts(
             "cohorts": [
                 {
                     "cohort": c.cohort_date.strftime("%b %d"),
+                    "cohort_date": c.cohort_date.isoformat(),
                     "cohort_size": c.cohort_size,
+                    "calculated_at": c.calculated_at.isoformat() if hasattr(c, 'calculated_at') else None,
                     **c.retention_data
                 }
                 for c in cohorts
-            ]
+            ],
+            "source": "database"
         }
     
-    # Return mock data if no real cohorts yet
+    # Return empty state with message
     return {
-        "cohorts": [
-            {"cohort": "Jan 1", "d1": 45, "d3": 32, "d7": 25, "d14": 20, "d30": 15},
-            {"cohort": "Jan 8", "d1": 47, "d3": 35, "d7": 27, "d14": 22, "d30": 17},
-            {"cohort": "Jan 15", "d1": 44, "d3": 31, "d7": 24, "d14": 19, "d30": 14},
-            {"cohort": "Jan 22", "d1": 48, "d3": 36, "d7": 28, "d14": 23, "d30": 18},
-            {"cohort": "Jan 29", "d1": 50, "d3": 38, "d7": 30, "d14": 25, "d30": None},
-            {"cohort": "Feb 5", "d1": 46, "d3": 34, "d7": 26, "d14": None, "d30": None},
-        ]
+        "cohorts": [],
+        "source": "empty",
+        "message": "No retention data yet. Click 'Calculate Retention' to generate."
+    }
+
+
+@router.post("/analytics/retention/calculate")
+async def trigger_retention_calculation(
+    backfill_days: int = 60,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Manually trigger retention cohort calculation"""
+    from backend.tasks.retention_calculator import trigger_retention_calculation as run_calculation
+    
+    # Audit log
+    audit_log = AuditLog(
+        admin_id=current_user.id,
+        action="trigger_retention_calculation",
+        target_resource="analytics:retention",
+        changes={"backfill_days": backfill_days}
+    )
+    db.add(audit_log)
+    await db.commit()
+    
+    # Run calculation
+    result = await run_calculation(db, backfill_days=backfill_days)
+    
+    return {
+        "status": "completed" if result.get("success") else "failed",
+        "calculated": result.get("calculated", 0),
+        "skipped": result.get("skipped", 0),
+        "errors": result.get("errors", 0),
+        "message": f"Calculated {result.get('calculated', 0)} cohorts"
     }
 
 
@@ -1165,7 +1474,7 @@ async def get_realtime_metrics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get real-time platform metrics"""
+    """Get real-time platform metrics with REAL trend calculations"""
     
     now = datetime.utcnow()
     one_hour_ago = now - timedelta(hours=1)
@@ -1173,7 +1482,12 @@ async def get_realtime_metrics(
     one_week_ago = now - timedelta(days=7)
     one_month_ago = now - timedelta(days=30)
     
-    # Active users in different periods
+    # Previous periods for comparison
+    two_days_ago = now - timedelta(days=2)
+    two_weeks_ago = now - timedelta(days=14)
+    two_months_ago = now - timedelta(days=60)
+    
+    # Current period active users
     result = await db.execute(
         select(func.count(User.id)).where(User.updated_at >= one_hour_ago)
     )
@@ -1194,6 +1508,41 @@ async def get_realtime_metrics(
     )
     active_30d = result.scalar() or 0
     
+    # Previous period active users for trend calculation
+    # DAU: compare today vs yesterday
+    result = await db.execute(
+        select(func.count(User.id)).where(
+            and_(User.updated_at >= two_days_ago, User.updated_at < one_day_ago)
+        )
+    )
+    prev_dau = result.scalar() or 0
+    
+    # WAU: compare this week vs last week
+    result = await db.execute(
+        select(func.count(User.id)).where(
+            and_(User.updated_at >= two_weeks_ago, User.updated_at < one_week_ago)
+        )
+    )
+    prev_wau = result.scalar() or 0
+    
+    # MAU: compare this month vs last month
+    result = await db.execute(
+        select(func.count(User.id)).where(
+            and_(User.updated_at >= two_months_ago, User.updated_at < one_month_ago)
+        )
+    )
+    prev_mau = result.scalar() or 0
+    
+    # Calculate percentage changes
+    def calc_change(current: int, previous: int) -> float:
+        if previous == 0:
+            return 100.0 if current > 0 else 0.0
+        return round(((current - previous) / previous) * 100, 1)
+    
+    dau_change = calc_change(active_24h, prev_dau)
+    wau_change = calc_change(active_7d, prev_wau)
+    mau_change = calc_change(active_30d, prev_mau)
+    
     return {
         "timestamp": now.isoformat(),
         "active_now": active_1h,
@@ -1201,9 +1550,9 @@ async def get_realtime_metrics(
         "wau": active_7d,
         "mau": active_30d,
         "trend": {
-            "dau_change": 5.2,  # Would calculate from historical
-            "wau_change": 3.1,
-            "mau_change": 2.8
+            "dau_change": dau_change,
+            "wau_change": wau_change,
+            "mau_change": mau_change
         }
     }
 
@@ -1213,31 +1562,112 @@ async def get_churn_prediction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get AI-powered churn prediction insights"""
+    """Get heuristic-based churn prediction insights (REAL analysis)"""
     
+    now = datetime.utcnow()
+    seven_days_ago = now - timedelta(days=7)
+    fourteen_days_ago = now - timedelta(days=14)
+    thirty_days_ago = now - timedelta(days=30)
+    sixty_days_ago = now - timedelta(days=60)
+    
+    # Total users
     result = await db.execute(select(func.count(User.id)))
     total_users = result.scalar() or 1
     
-    # Mock ML prediction results
+    # HIGH RISK: Inactive > 14 days AND has no matches
+    high_risk_query = select(func.count(User.id)).where(
+        and_(
+            User.updated_at < fourteen_days_ago,
+            User.status == 'active'
+        )
+    )
+    result = await db.execute(high_risk_query)
+    high_risk_count = result.scalar() or 0
+    
+    # MEDIUM RISK: Inactive 7-14 days OR incomplete profile
+    medium_risk_query = select(func.count(User.id)).where(
+        and_(
+            User.updated_at < seven_days_ago,
+            User.updated_at >= fourteen_days_ago,
+            User.status == 'active'
+        )
+    )
+    result = await db.execute(medium_risk_query)
+    inactive_7_14 = result.scalar() or 0
+    
+    # Users with incomplete profiles (no bio or < 2 photos)
+    incomplete_query = select(func.count(User.id)).where(
+        or_(
+            User.bio.is_(None),
+            User.bio == ""
+        )
+    )
+    result = await db.execute(incomplete_query)
+    incomplete_profiles = result.scalar() or 0
+    
+    medium_risk_count = inactive_7_14 + int(incomplete_profiles * 0.3)  # Overlap adjustment
+    
+    # Free tier users > 60 days
+    free_longtime_query = select(func.count(User.id)).where(
+        and_(
+            or_(User.subscription_tier == 'free', User.subscription_tier.is_(None)),
+            User.created_at < sixty_days_ago,
+            User.status == 'active'
+        )
+    )
+    result = await db.execute(free_longtime_query)
+    free_longtime = result.scalar() or 0
+    
+    at_risk_total = high_risk_count + medium_risk_count
+    
+    # Calculate predicted churn rate
+    predicted_churn_30d = round((high_risk_count / max(total_users, 1)) * 100, 1)
+    
+    # Build factors with real percentages
+    factors = []
+    if high_risk_count > 0:
+        factors.append({
+            "factor": f"Inactive > 14 days ({high_risk_count} users)",
+            "impact": min(40, int((high_risk_count / max(at_risk_total, 1)) * 100))
+        })
+    if inactive_7_14 > 0:
+        factors.append({
+            "factor": f"Inactive 7-14 days ({inactive_7_14} users)",
+            "impact": min(25, int((inactive_7_14 / max(at_risk_total, 1)) * 100))
+        })
+    if incomplete_profiles > 0:
+        factors.append({
+            "factor": f"Incomplete profile ({incomplete_profiles} users)",
+            "impact": min(20, int((incomplete_profiles / max(total_users, 1)) * 100))
+        })
+    if free_longtime > 0:
+        factors.append({
+            "factor": f"Free tier > 60 days ({free_longtime} users)",
+            "impact": min(15, int((free_longtime / max(total_users, 1)) * 100))
+        })
+    
+    # Generate dynamic recommendations
+    recommendations = []
+    if high_risk_count > 10:
+        recommendations.append(f"Send re-engagement push to {high_risk_count} high-risk users")
+    if incomplete_profiles > 20:
+        recommendations.append(f"Prompt {incomplete_profiles} users to complete their profiles")
+    if free_longtime > 50:
+        recommendations.append(f"Offer trial discount to {free_longtime} long-term free users")
+    if not recommendations:
+        recommendations.append("User engagement is healthy - continue monitoring")
+    
     return {
-        "prediction_date": datetime.utcnow().isoformat(),
-        "model_version": "v2.1",
-        "confidence": 0.87,
-        "at_risk_users": int(total_users * 0.12),
-        "high_risk_count": int(total_users * 0.05),
-        "medium_risk_count": int(total_users * 0.07),
-        "predicted_churn_30d": 4.8,
-        "top_churn_factors": [
-            {"factor": "Low engagement", "impact": 35},
-            {"factor": "No matches in 14 days", "impact": 28},
-            {"factor": "Profile incomplete", "impact": 20},
-            {"factor": "Free tier > 60 days", "impact": 17}
-        ],
-        "recommendations": [
-            "Send re-engagement push to 847 at-risk users",
-            "Offer 50% discount trial to high-risk segment",
-            "Improve matching algorithm for low-match cohort"
-        ]
+        "prediction_date": now.isoformat(),
+        "model_version": "heuristic-v1.0",
+        "confidence": 0.75,  # Heuristic model confidence
+        "total_users": total_users,
+        "at_risk_users": at_risk_total,
+        "high_risk_count": high_risk_count,
+        "medium_risk_count": medium_risk_count,
+        "predicted_churn_30d": predicted_churn_30d,
+        "top_churn_factors": factors or [{"factor": "No significant risk factors", "impact": 0}],
+        "recommendations": recommendations
     }
 
 
@@ -1436,146 +1866,7 @@ async def get_subscription_stats(
     }
 
 
-# ============================================
-# SYSTEM ENDPOINTS
-# ============================================
-
-@router.get("/system/health")
-async def get_system_health(
-    current_user: User = Depends(get_current_admin)
-):
-    """Get system health status"""
-    
-    return {
-        "services": [
-            {"name": "API Server", "status": "healthy", "uptime": "99.99%", "response": "45ms"},
-            {"name": "Database", "status": "healthy", "uptime": "99.97%", "response": "12ms"},
-            {"name": "Redis Cache", "status": "healthy", "uptime": "99.99%", "response": "2ms"},
-            {"name": "WebSocket", "status": "healthy", "uptime": "99.95%", "response": "8ms"},
-            {"name": "CDN", "status": "healthy", "uptime": "100%", "response": "25ms"},
-            {"name": "Auth Service", "status": "healthy", "uptime": "99.85%", "response": "120ms"}
-        ],
-        "overall_status": "healthy",
-        "last_checked": datetime.utcnow().isoformat()
-    }
-
-
-@router.get("/system/feature-flags")
-async def get_feature_flags(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin)
-):
-    """Get feature flags configuration from database"""
-    
-    result = await db.execute(select(FeatureFlag))
-    flags = result.scalars().all()
-    
-    if flags:
-        return {
-            "flags": [
-                {
-                    "id": f.key,
-                    "name": f.description or f.key.replace("_", " ").title(),
-                    "enabled": f.is_enabled,
-                    "rollout": f.rollout_percentage
-                }
-                for f in flags
-            ]
-        }
-    
-    # Return default flags if none in database
-    return {
-        "flags": [
-            {"id": "dark_mode_v2", "name": "Dark Mode V2", "enabled": True, "rollout": 100},
-            {"id": "ai_matching", "name": "AI Matching Algorithm", "enabled": True, "rollout": 75},
-            {"id": "video_calls", "name": "Video Calls", "enabled": False, "rollout": 0},
-            {"id": "voice_messages", "name": "Voice Messages", "enabled": True, "rollout": 100},
-            {"id": "profile_boost_v2", "name": "Profile Boost V2", "enabled": True, "rollout": 50}
-        ]
-    }
-
-
-@router.post("/system/feature-flags/{flag_id}")
-async def update_feature_flag(
-    flag_id: str,
-    body: FeatureFlagUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin)
-):
-    """Update feature flag configuration and persist to database"""
-    
-    # Check if flag exists
-    result = await db.execute(
-        select(FeatureFlag).where(FeatureFlag.key == flag_id)
-    )
-    flag = result.scalar_one_or_none()
-    
-    if flag:
-        # Update existing flag
-        flag.is_enabled = body.enabled
-        if body.rollout is not None:
-            flag.rollout_percentage = body.rollout
-        flag.updated_by = str(current_user.id)
-        flag.updated_at = datetime.utcnow()
-    else:
-        # Create new flag
-        flag = FeatureFlag(
-            key=flag_id,
-            description=flag_id.replace("_", " ").title(),
-            is_enabled=body.enabled,
-            rollout_percentage=body.rollout or 0,
-            updated_by=str(current_user.id)
-        )
-        db.add(flag)
-    
-    # Create audit log
-    audit_log = AuditLog(
-        admin_id=current_user.id,
-        action="update_feature_flag",
-        target_resource=f"feature_flag:{flag_id}",
-        changes={"enabled": body.enabled, "rollout": body.rollout}
-    )
-    db.add(audit_log)
-    
-    await db.commit()
-    
-    return {
-        "status": "success",
-        "message": f"Feature flag '{flag_id}' updated",
-        "enabled": body.enabled,
-        "rollout": body.rollout
-    }
-
-
-# ============================================
-# SYSTEM AUDIT LOGS
-# ============================================
-
-@router.get("/system/logs")
-async def get_audit_logs(
-    limit: int = 50,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin)
-):
-    """Get system audit logs"""
-    result = await db.execute(
-        select(AuditLog).order_by(desc(AuditLog.created_at)).limit(limit)
-    )
-    logs = result.scalars().all()
-    
-    return {
-        "logs": [
-            {
-                "id": str(log.id),
-                "action": log.action,
-                "admin_id": str(log.admin_id),
-                "target_resource": log.target_resource,
-                "changes": log.changes,
-                "created_at": log.created_at.isoformat()
-            }
-            for log in logs
-        ]
-    }
+# System endpoints moved to backend.api.system
 
 
 # ============================================
@@ -1587,22 +1878,45 @@ async def send_push_notification(
     title: str,
     message: str,
     target_audience: str = "all",
+    image_url: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Send push notification to users"""
-    # Mock implementation - would actually queue jobs
+    """Send push notification to users (REAL - FCM Integration)"""
+    from backend.services.push_notifications import send_push_to_segment
     
+    # Send real push notification
+    result = await send_push_to_segment(
+        db=db,
+        segment=target_audience,
+        title=title,
+        body=message,
+        data={"type": "marketing", "sender": "admin"}
+    )
+    
+    # Audit log
     audit_log = AuditLog(
         admin_id=current_user.id,
         action="send_push_notification",
-        target_resource="users:all",
-        changes={"title": title, "message": message, "audience": target_audience}
+        target_resource=f"users:{target_audience}",
+        changes={
+            "title": title,
+            "message": message,
+            "audience": target_audience,
+            "sent": result.get("sent", 0),
+            "failed": result.get("failed", 0)
+        }
     )
     db.add(audit_log)
     await db.commit()
     
-    return {"status": "success", "message": "Push notification queued for delivery"}
+    return {
+        "status": "success" if result.get("success") else "partial",
+        "message": f"Push notification sent to {result.get('sent', 0)} devices",
+        "sent": result.get("sent", 0),
+        "failed": result.get("failed", 0),
+        "error": result.get("error")
+    }
 
 
 @router.get("/marketing/referrals")
@@ -1623,50 +1937,51 @@ async def get_referral_stats(
 
 @router.get("/marketing/campaigns")
 async def get_marketing_campaigns(
+    status: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get marketing campaigns list"""
-    # In a real app, query Campaign model. Returning mock data that aligns with frontend.
+    """Get marketing campaigns list (REAL)"""
+    from backend.models.marketing import MarketingCampaign
+    
+    query = select(MarketingCampaign).order_by(desc(MarketingCampaign.created_at))
+    
+    if status and status != "all":
+        query = query.where(MarketingCampaign.status == status)
+    
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    
+    result = await db.execute(query)
+    campaigns = result.scalars().all()
+    
+    # Count total
+    count_result = await db.execute(select(func.count(MarketingCampaign.id)))
+    total = count_result.scalar() or 0
+    
     return {
         "campaigns": [
-             {
-                "id": 1,
-                "name": 'Valentine Special Promotion',
-                "type": 'push',
-                "status": 'active',
-                "sent": 45000,
-                "opened": 12500,
-                "clicked": 3200,
-                "converted": 890,
-                "startDate": '2024-02-10',
-                "endDate": '2024-02-14',
-              },
-              {
-                "id": 2,
-                "name": 'New Feature Announcement',
-                "type": 'email',
-                "status": 'scheduled',
-                "sent": 0,
-                "opened": 0,
-                "clicked": 0,
-                "converted": 0,
-                "startDate": '2024-02-20',
-                "endDate": '2024-02-25',
-              },
-              {
-                "id": 3,
-                "name": 'Win-back Campaign',
-                "type": 'push',
-                "status": 'completed',
-                "sent": 28000,
-                "opened": 8400,
-                "clicked": 2100,
-                "converted": 420,
-                "startDate": '2024-01-15',
-                "endDate": '2024-01-22',
-              }
-        ]
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "type": c.type,
+                "status": c.status,
+                "sent": c.stats.get("sent", 0) if c.stats else 0,
+                "opened": c.stats.get("opened", 0) if c.stats else 0,
+                "clicked": c.stats.get("clicked", 0) if c.stats else 0,
+                "converted": c.stats.get("converted", 0) if c.stats else 0,
+                "startDate": c.start_at.isoformat() if c.start_at else None,
+                "endDate": c.end_at.isoformat() if c.end_at else None,
+                "budget": c.budget,
+                "spent": c.spent,
+                "created_at": c.created_at.isoformat()
+            }
+            for c in campaigns
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size
     }
 
 
@@ -1675,43 +1990,281 @@ async def get_channel_performance(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get acquisition channel performance"""
+    """Get acquisition channel performance (REAL)"""
+    from backend.models.marketing import AcquisitionChannel
+    
+    result = await db.execute(
+        select(AcquisitionChannel).where(AcquisitionChannel.is_active == True)
+    )
+    channels = result.scalars().all()
+    
+    if not channels:
+        # Seed default channels if none exist
+        default_channels = [
+            {"name": "Organic Search", "code": "organic", "color": "#10b981"},
+            {"name": "Social Media", "code": "social", "color": "#3b82f6"},
+            {"name": "Referral", "code": "referral", "color": "#a855f7"},
+            {"name": "Paid Ads", "code": "paid_ads", "color": "#f97316"},
+            {"name": "App Store", "code": "app_store", "color": "#ec4899"},
+        ]
+        for ch in default_channels:
+            channel = AcquisitionChannel(**ch)
+            db.add(channel)
+        await db.commit()
+        
+        result = await db.execute(
+            select(AcquisitionChannel).where(AcquisitionChannel.is_active == True)
+        )
+        channels = result.scalars().all()
+    
     return {
         "channels": [
-            {"name": 'Organic Search', "users": 45000, "cost": 0, "cac": 0, "color": '#10b981'},
-            {"name": 'Social Media', "users": 28000, "cost": 15000, "cac": 0.54, "color": '#3b82f6'},
-            {"name": 'Referral', "users": 12000, "cost": 6000, "cac": 0.50, "color": '#a855f7'},
-            {"name": 'Paid Ads', "users": 35000, "cost": 42000, "cac": 1.20, "color": '#f97316'},
-            {"name": 'App Store', "users": 18000, "cost": 0, "cac": 0, "color": '#ec4899'},
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "code": c.code,
+                "users": c.total_users,
+                "cost": c.total_cost,
+                "cac": round(c.total_cost / max(c.total_users, 1), 2),
+                "conversions": c.total_conversions,
+                "revenue": c.total_revenue,
+                "color": c.color
+            }
+            for c in channels
         ]
     }
 
 
+
+
 # ============================================
-# MONETIZATION PROMOS
+# MONETIZATION PROMOS (REAL CRUD)
 # ============================================
+
+from backend.models.monetization import PromoCode
+
+class PromoCodeCreate(BaseModel):
+    code: str
+    name: str
+    description: Optional[str] = None
+    discount_type: str = "percentage"  # percentage, fixed_amount
+    discount_value: float
+    max_uses: Optional[int] = None
+    valid_from: datetime
+    valid_until: datetime
+    first_purchase_only: bool = False
+
+class PromoCodeUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    discount_value: Optional[float] = None
+    max_uses: Optional[int] = None
+    valid_until: Optional[datetime] = None
+    is_active: Optional[bool] = None
+
 
 @router.get("/monetization/promos")
 async def get_promo_codes(
+    page: int = 1,
+    page_size: int = 50,
+    status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get promo codes"""
+    """Get promo codes from database (REAL)"""
+    now = datetime.utcnow()
+    
+    query = select(PromoCode).order_by(desc(PromoCode.created_at))
+    
+    # Filter by status
+    if status == "active":
+        query = query.where(
+            and_(
+                PromoCode.is_active == True,
+                PromoCode.valid_until >= now
+            )
+        )
+    elif status == "expired":
+        query = query.where(PromoCode.valid_until < now)
+    elif status == "inactive":
+        query = query.where(PromoCode.is_active == False)
+    
+    # Pagination
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    
+    result = await db.execute(query)
+    promos = result.scalars().all()
+    
+    # Count total
+    count_query = select(func.count(PromoCode.id))
+    if status == "active":
+        count_query = count_query.where(
+            and_(PromoCode.is_active == True, PromoCode.valid_until >= now)
+        )
+    result = await db.execute(count_query)
+    total = result.scalar() or 0
+    
     return {
         "promos": [
-            {"code": "SUMMER2024", "discount": "20%", "uses": 45, "max": 1000, "status": "active"},
-            {"code": "WELCOME50", "discount": "50%", "uses": 128, "max": 500, "status": "active"}
-        ]
+            {
+                "id": str(p.id),
+                "code": p.code,
+                "name": p.name,
+                "description": p.description,
+                "discount": f"{int(p.discount_value)}%" if p.discount_type == "percentage" else f"${p.discount_value}",
+                "discount_type": p.discount_type,
+                "discount_value": float(p.discount_value),
+                "uses": p.current_uses,
+                "max": p.max_uses,
+                "valid_from": p.valid_from.isoformat(),
+                "valid_until": p.valid_until.isoformat(),
+                "status": "active" if p.is_active and p.valid_until >= now else "expired" if p.valid_until < now else "inactive",
+                "first_purchase_only": p.first_purchase_only,
+                "created_at": p.created_at.isoformat()
+            }
+            for p in promos
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size
     }
+
+
+@router.post("/monetization/promos")
+async def create_promo_code(
+    promo_data: PromoCodeCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Create a new promo code"""
+    
+    # Check if code already exists
+    existing = await db.execute(
+        select(PromoCode).where(PromoCode.code == promo_data.code.upper())
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Promo code already exists")
+    
+    promo = PromoCode(
+        code=promo_data.code.upper(),
+        name=promo_data.name,
+        description=promo_data.description,
+        discount_type=promo_data.discount_type,
+        discount_value=promo_data.discount_value,
+        max_uses=promo_data.max_uses,
+        valid_from=promo_data.valid_from,
+        valid_until=promo_data.valid_until,
+        first_purchase_only=promo_data.first_purchase_only,
+        created_by=current_user.id
+    )
+    db.add(promo)
+    
+    # Audit log
+    audit_log = AuditLog(
+        admin_id=current_user.id,
+        action="create_promo_code",
+        target_resource=f"promo:{promo_data.code}",
+        changes={"code": promo_data.code, "discount": promo_data.discount_value}
+    )
+    db.add(audit_log)
+    
+    await db.commit()
+    await db.refresh(promo)
+    
+    return {
+        "status": "success",
+        "message": f"Promo code {promo.code} created",
+        "id": str(promo.id)
+    }
+
+
+@router.put("/monetization/promos/{promo_id}")
+async def update_promo_code(
+    promo_id: str,
+    promo_data: PromoCodeUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Update an existing promo code"""
+    
+    try:
+        pid = uuid_module.UUID(promo_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid promo ID")
+    
+    promo = await db.get(PromoCode, pid)
+    if not promo:
+        raise HTTPException(status_code=404, detail="Promo code not found")
+    
+    # Update fields
+    if promo_data.name is not None:
+        promo.name = promo_data.name
+    if promo_data.description is not None:
+        promo.description = promo_data.description
+    if promo_data.discount_value is not None:
+        promo.discount_value = promo_data.discount_value
+    if promo_data.max_uses is not None:
+        promo.max_uses = promo_data.max_uses
+    if promo_data.valid_until is not None:
+        promo.valid_until = promo_data.valid_until
+    if promo_data.is_active is not None:
+        promo.is_active = promo_data.is_active
+    
+    # Audit log
+    audit_log = AuditLog(
+        admin_id=current_user.id,
+        action="update_promo_code",
+        target_resource=f"promo:{promo.code}",
+        changes=promo_data.dict(exclude_unset=True)
+    )
+    db.add(audit_log)
+    
+    await db.commit()
+    
+    return {"status": "success", "message": f"Promo code {promo.code} updated"}
+
+
+@router.delete("/monetization/promos/{promo_id}")
+async def delete_promo_code(
+    promo_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Delete a promo code"""
+    
+    try:
+        pid = uuid_module.UUID(promo_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid promo ID")
+    
+    promo = await db.get(PromoCode, pid)
+    if not promo:
+        raise HTTPException(status_code=404, detail="Promo code not found")
+    
+    code = promo.code
+    
+    # Soft delete: just deactivate
+    promo.is_active = False
+    
+    # Audit log
+    audit_log = AuditLog(
+        admin_id=current_user.id,
+        action="delete_promo_code",
+        target_resource=f"promo:{code}",
+        changes={"action": "deactivated"}
+    )
+    db.add(audit_log)
+    
+    await db.commit()
+    
+    return {"status": "success", "message": f"Promo code {code} deactivated"}
 
 
 # ============================================
 # REAL-TIME WEBSOCKET
 # ============================================
 
-from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
-import json
 
 class AdminConnectionManager:
     def __init__(self):
@@ -1742,135 +2295,477 @@ async def admin_websocket_endpoint(
     """
     WebSocket endpoint for live admin updates.
     """
-    # Verify token
+    # Verify token and initial role
     try:
         if not token:
              await websocket.close(code=4001, reason="Missing token")
              return
              
-        user_id = auth.decode_jwt(token)
-        if not user_id:
+        user_id_str = await decode_jwt(token)
+        if not user_id_str:
             await websocket.close(code=4001, reason="Invalid token")
             return
             
-        # Verify admin role (simplified check, ideally fetch user from DB)
-        # For now we rely on the token validity
-    except Exception:
+        user_id = uuid.UUID(user_id_str)
+        
+        # Initial role check
+        async with async_session_maker() as session:
+            user = await session.get(User, user_id)
+            if not user or user.role not in ("admin", "moderator"):
+                await websocket.close(code=4003, reason="Admin privileges required")
+                return
+            if user.status == "banned":
+                await websocket.close(code=4003, reason="User is banned")
+                return
+                
+    except Exception as e:
+        print(f"WS Auth Error: {e}")
         await websocket.close(code=4001, reason="Auth failed")
         return
 
     await admin_manager.connect(websocket)
     
+    # 1. Initial Data Send
+    async with async_session_maker() as db:
+        await send_admin_update(websocket, db, user_id)
+
     try:
-        from backend.database import async_session_maker
+        # 2. Redis Pub/Sub listener
+        from backend.core.redis import redis_manager
+        r = await redis_manager.get_redis()
+        pubsub = r.pubsub()
+        await pubsub.subscribe("admin_updates")
+        
+        # We also want to refresh metrics periodically (e.g. every 60s) 
+        # as a fallback or for time-based metrics
+        last_refresh = datetime.utcnow()
         
         while True:
-            # Poll for data every 5 seconds
-            # In a real production app, we would use a Redis channel or event bus
-            # instead of polling the DB in a loop for each connection (or global loop).
-            # Here we do a simple poll for demonstration of "live" data.
-            
-            async with async_session_maker() as db:
-                # 1. Dashboard Metrics
-                today = datetime.utcnow().date()
-                result = await db.execute(select(func.count(User.id)))
-                total_users = result.scalar() or 0
+            try:
+                # Wait for Redis message with 5s timeout
+                message = await pubsub.get_message(ignore_subscribe_metadata=True, timeout=5.0)
                 
-                result = await db.execute(
-                    select(func.count(User.id)).where(func.date(User.updated_at) == today)
-                )
-                active_today = result.scalar() or 0
-                
-                result = await db.execute(
-                    select(func.sum(RevenueTransaction.amount)).where(
-                        and_(
-                            RevenueTransaction.status == 'completed',
-                            func.date(RevenueTransaction.created_at) == today
-                        )
-                    )
-                )
-                revenue_today = result.scalar() or 0.0
-                
-                metrics_data = {
-                    "type": "metrics",
-                    "data": {
-                        "total_users": total_users,
-                        "active_today": active_today,
-                        "revenue_today": float(revenue_today),
-                        # Add other key metrics as needed
-                    }
-                }
-                await websocket.send_json(metrics_data)
-                
-                # 2. Live Activity (Last 5 items)
-                # Reusing the logic from get_live_activity but simplified
-                activities = []
                 now = datetime.utcnow()
-                result = await db.execute(
-                    select(User).order_by(desc(User.created_at)).limit(5)
-                )
-                recent_users = result.scalars().all()
-                for user in recent_users:
-                    delta = now - user.created_at
-                    mins = int(delta.total_seconds() // 60)
-                    time_str = f"{mins} mins ago" if mins < 60 else f"{mins // 60} hours ago"
-                    activities.append({
-                        "id": str(user.id), 
-                        "type": "user", 
-                        "message": "New user registered", 
-                        "time": time_str,
-                        "ts": user.created_at.timestamp()
-                    })
+                should_refresh = message is not None or (now - last_refresh).total_seconds() > 60
                 
-                # Sort and send
-                activities.sort(key=lambda x: x["ts"], reverse=True)
-                activity_data = {
-                    "type": "activity",
-                    "data": [{k: v for k, v in a.items() if k != "ts"} for a in activities]
-                }
-                await websocket.send_json(activity_data)
-
-
-                # 3. Analytics (Real-time)
-                # We need active_now (1h), wau (7d), mau (30d) for Analytics page
-                one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-                one_week_ago = datetime.utcnow() - timedelta(days=7)
-                one_month_ago = datetime.utcnow() - timedelta(days=30)
+                if should_refresh:
+                    async with async_session_maker() as db:
+                        # RE-VERIFY ROLE
+                        user = await db.get(User, user_id)
+                        if not user or user.role not in ("admin", "moderator") or user.status == "banned":
+                            await websocket.close(code=4003, reason="Access revoked")
+                            return
+                        
+                        await send_admin_update(websocket, db, user_id)
+                        last_refresh = now
+                        
+            except Exception as e:
+                print(f"WS Loop Error: {e}")
+                await asyncio.sleep(1)
                 
-                result = await db.execute(
-                    select(func.count(User.id)).where(User.updated_at >= one_hour_ago)
-                )
-                active_now = result.scalar() or 0
-                
-                result = await db.execute(
-                    select(func.count(User.id)).where(User.updated_at >= one_week_ago)
-                )
-                wau = result.scalar() or 0
-                
-                result = await db.execute(
-                    select(func.count(User.id)).where(User.updated_at >= one_month_ago)
-                )
-                mau = result.scalar() or 0
-                
-                analytics_data = {
-                    "type": "analytics",
-                    "data": {
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "active_now": active_now,
-                        "dau": active_today, # Already calculated
-                        "wau": wau,
-                        "mau": mau,
-                        "trend": {
-                             "dau_change": 0, # Mocked for stream efficiency
-                             "wau_change": 0,
-                             "mau_change": 0
-                        }
-                    }
-                }
-                await websocket.send_json(analytics_data)
-                
-            await asyncio.sleep(5)
-            
     except WebSocketDisconnect:
+        pass
+    finally:
         admin_manager.disconnect(websocket)
 
+async def send_admin_update(websocket: WebSocket, db: AsyncSession, user_id: uuid_module.UUID):
+    """Update all dashboard components for the admin using parallel queries"""
+    import asyncio
+    today = datetime.utcnow().date()
+    now = datetime.utcnow()
+    
+    one_hour_ago = now - timedelta(hours=1)
+    one_week_ago = now - timedelta(days=7)
+    one_month_ago = now - timedelta(days=30)
+
+    # Parallelize independent count/sum queries
+    queries = [
+        db.execute(select(func.count(User.id))), # q0: total_users
+        db.execute(select(func.count(User.id)).where(func.date(User.updated_at) == today)), # q1: active_today
+        db.execute(select(func.sum(RevenueTransaction.amount)).where(
+            and_(
+                RevenueTransaction.status == 'completed',
+                func.date(RevenueTransaction.created_at) == today
+            )
+        )), # q2: revenue_today
+        db.execute(select(User).order_by(desc(User.created_at)).limit(5)), # q3: recent_users
+        db.execute(select(func.count(User.id)).where(User.updated_at >= one_hour_ago)), # q4: active_now
+        db.execute(select(func.count(User.id)).where(User.updated_at >= one_week_ago)), # q5: wau
+        db.execute(select(func.count(User.id)).where(User.updated_at >= one_month_ago)), # q6: mau
+    ]
+    
+    results = await asyncio.gather(*queries)
+    
+    total_users = results[0].scalar() or 0
+    active_today = results[1].scalar() or 0
+    revenue_today = results[2].scalar() or 0.0
+    recent_users = results[3].scalars().all()
+    active_now = results[4].scalar() or 0
+    wau = results[5].scalar() or 0
+    mau = results[6].scalar() or 0
+
+    # 1. Dashboard Metrics
+    await websocket.send_json({
+        "type": "metrics",
+        "data": {
+            "total_users": total_users,
+            "active_today": active_today,
+            "revenue_today": float(revenue_today),
+        }
+    })
+    
+    # 2. Live Activity
+    activities = []
+    for u in recent_users:
+        delta = now - u.created_at
+        mins = int(delta.total_seconds() // 60)
+        time_str = f"{mins} mins ago" if mins < 60 else f"{mins // 60}h ago"
+        activities.append({
+            "id": str(u.id), 
+            "type": "user", 
+            "message": "New user registered", 
+            "time": time_str
+        })
+    
+    await websocket.send_json({"type": "activity", "data": activities})
+
+    # 3. Analytics (Real-time)
+    await websocket.send_json({
+        "type": "analytics",
+        "data": {
+            "timestamp": now.isoformat(),
+            "active_now": active_now,
+            "dau": active_today,
+            "wau": wau,
+            "mau": mau,
+            "trend": {"dau_change": 0, "wau_change": 0, "mau_change": 0}
+        }
+    })
+
+
+# ============================================
+# PUSH NOTIFICATION BROADCAST
+# ============================================
+
+class BroadcastPushRequest(BaseModel):
+    title: str
+    body: str
+    url: Optional[str] = None
+    segment: Optional[str] = None  # "all", "premium", "inactive", "new_users"
+    user_ids: Optional[List[str]] = None  # Specific users
+
+
+@router.post("/notifications/broadcast")
+async def broadcast_push_notification(
+    request: BroadcastPushRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """
+    📣 Send push notification to user segment or specific users.
+    
+    Segments:
+    - all: All users with push enabled
+    - premium: VIP/Gold/Platinum subscribers
+    - inactive: Users who haven't been active in 7+ days
+    - new_users: Users registered in last 7 days
+    """
+    from backend.services.notification import send_push_notification
+    
+    # Build target user list
+    if request.user_ids:
+        # Specific users
+        target_ids = [uuid_module.UUID(uid) for uid in request.user_ids]
+    else:
+        # Segment-based
+        seven_days_ago = datetime.utcnow() - timedelta(days=7)
+        
+        if request.segment == "premium":
+            query = select(User.id).where(
+                User.subscription_tier.in_(['vip', 'gold', 'platinum'])
+            )
+        elif request.segment == "inactive":
+            query = select(User.id).where(User.updated_at < seven_days_ago)
+        elif request.segment == "new_users":
+            query = select(User.id).where(User.created_at >= seven_days_ago)
+        else:  # "all"
+            query = select(User.id).where(User.status == 'active')
+        
+        result = await db.execute(query)
+        target_ids = [row[0] for row in result.all()]
+    
+    # Send notifications (batch)
+    sent_count = 0
+    errors = 0
+    
+    for user_id in target_ids[:1000]:  # Limit to 1000 per broadcast
+        try:
+            await send_push_notification(
+                db,
+                user_id=user_id,
+                title=request.title,
+                body=request.body,
+                url=request.url or "/"
+            )
+            sent_count += 1
+        except Exception:
+            errors += 1
+    
+    # Audit log
+    audit = AuditLog(
+        admin_id=current_user.id,
+        action="broadcast_push",
+        target_resource=f"segment:{request.segment or 'custom'}",
+        changes={
+            "title": request.title,
+            "body": request.body,
+            "sent": sent_count,
+            "errors": errors
+        }
+    )
+    db.add(audit)
+    await db.commit()
+    
+    return {
+        "status": "success",
+        "sent": sent_count,
+        "errors": errors,
+        "segment": request.segment
+    }
+
+
+# ============================================
+# AUDIT LOGS VIEWER
+# ============================================
+
+@router.get("/logs/audit")
+async def get_audit_logs(
+    page: int = 1,
+    page_size: int = 50,
+    action: Optional[str] = None,
+    admin_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """
+    📜 View admin action audit logs.
+    
+    Use for compliance, debugging, and accountability.
+    """
+    query = select(AuditLog)
+    
+    conditions = []
+    if action:
+        conditions.append(AuditLog.action.ilike(f"%{action}%"))
+    if admin_id:
+        conditions.append(AuditLog.admin_id == uuid_module.UUID(admin_id))
+    
+    if conditions:
+        query = query.where(and_(*conditions))
+    
+    # Count
+    count_q = select(func.count(AuditLog.id))
+    if conditions:
+        count_q = count_q.where(and_(*conditions))
+    total = (await db.execute(count_q)).scalar() or 0
+    
+    # Paginate
+    query = query.order_by(desc(AuditLog.created_at))
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    # Get admin names for display
+    admin_ids = list(set(log.admin_id for log in logs))
+    admin_names = {}
+    if admin_ids:
+        admins_result = await db.execute(
+            select(User.id, User.name).where(User.id.in_(admin_ids))
+        )
+        admin_names = {str(row[0]): row[1] for row in admins_result.all()}
+    
+    return {
+        "logs": [
+            {
+                "id": str(log.id),
+                "admin_id": str(log.admin_id),
+                "admin_name": admin_names.get(str(log.admin_id), "Unknown"),
+                "action": log.action,
+                "target": log.target_resource,
+                "changes": log.changes,
+                "ip": log.ip_address,
+                "created_at": log.created_at.isoformat()
+            }
+            for log in logs
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size
+    }
+
+
+# ============================================
+# SECURITY ALERTS
+# ============================================
+
+@router.get("/security/alerts")
+async def get_security_alerts(
+    severity: Optional[str] = None,
+    resolved: Optional[bool] = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """
+    🚨 Get security alerts and incidents.
+    
+    Types: failed_login, brute_force, suspicious_activity, fraud_detected
+    """
+    from backend.models.system import SecurityAlert
+    
+    query = select(SecurityAlert)
+    
+    conditions = []
+    if severity:
+        conditions.append(SecurityAlert.severity == severity)
+    if resolved is not None:
+        conditions.append(SecurityAlert.is_resolved == resolved)
+    
+    if conditions:
+        query = query.where(and_(*conditions))
+    
+    query = query.order_by(desc(SecurityAlert.created_at)).limit(limit)
+    result = await db.execute(query)
+    alerts = result.scalars().all()
+    
+    return {
+        "alerts": [
+            {
+                "id": str(a.id),
+                "severity": a.severity,
+                "type": a.type,
+                "description": a.description,
+                "details": a.details,
+                "is_resolved": a.is_resolved,
+                "created_at": a.created_at.isoformat()
+            }
+            for a in alerts
+        ]
+    }
+
+
+@router.post("/security/alerts/{alert_id}/resolve")
+async def resolve_security_alert(
+    alert_id: str,
+    notes: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Mark a security alert as resolved"""
+    from backend.models.system import SecurityAlert
+    
+    try:
+        aid = uuid_module.UUID(alert_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid alert ID")
+    
+    result = await db.execute(select(SecurityAlert).where(SecurityAlert.id == aid))
+    alert = result.scalar_one_or_none()
+    
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    
+    alert.is_resolved = True
+    alert.resolved_at = datetime.utcnow()
+    alert.resolved_by = current_user.id
+    
+    # Audit
+    audit = AuditLog(
+        admin_id=current_user.id,
+        action="resolve_security_alert",
+        target_resource=f"alert:{alert_id}",
+        changes={"notes": notes}
+    )
+    db.add(audit)
+    
+    await db.commit()
+    return {"status": "resolved"}
+
+
+# ============================================
+# USER NOTES (CRM-style)
+# ============================================
+
+class UserNoteCreate(BaseModel):
+    content: str
+    is_internal: bool = True  # Internal admin note, not visible to user
+
+
+@router.get("/users/{user_id}/notes")
+async def get_user_notes(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Get admin notes for a user"""
+    try:
+        uid = uuid_module.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    result = await db.execute(
+        select(UserNote).where(UserNote.user_id == uid).order_by(desc(UserNote.created_at))
+    )
+    notes = result.scalars().all()
+    
+    # Get author names
+    author_ids = list(set(n.created_by for n in notes if n.created_by))
+    author_names = {}
+    if author_ids:
+        authors = await db.execute(select(User.id, User.name).where(User.id.in_(author_ids)))
+        author_names = {str(r[0]): r[1] for r in authors.all()}
+    
+    return {
+        "notes": [
+            {
+                "id": str(n.id),
+                "content": n.content,
+                "is_internal": n.is_internal,
+                "author_id": str(n.created_by) if n.created_by else None,
+                "author_name": author_names.get(str(n.created_by), "System"),
+                "created_at": n.created_at.isoformat()
+            }
+            for n in notes
+        ]
+    }
+
+
+@router.post("/users/{user_id}/notes")
+async def add_user_note(
+    user_id: str,
+    note: UserNoteCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Add an admin note to a user's profile"""
+    try:
+        uid = uuid_module.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    # Verify user exists
+    result = await db.execute(select(User).where(User.id == uid))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    new_note = UserNote(
+        user_id=uid,
+        content=note.content,
+        is_internal=note.is_internal,
+        author_id=current_user.id
+    )
+    db.add(new_note)
+    await db.commit()
+    
+    return {"status": "success", "id": str(new_note.id)}

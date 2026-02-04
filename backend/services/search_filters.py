@@ -23,6 +23,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from math import radians, cos, sin, asin, sqrt
 from backend import models
+import logging
+from backend.services.geo import geo_service
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # SCHEMAS
@@ -168,9 +172,16 @@ async def get_filtered_profiles(
     Returns:
         {"profiles": [...], "total": int, "filters_applied": [...]}
     """
+    # CAST ID TO UUID
+    from uuid import UUID
+    try:
+        u_id = UUID(current_user_id) if isinstance(current_user_id, str) else current_user_id
+    except ValueError:
+        return {"profiles": [], "total": 0, "error": "Invalid User ID"}
+
     # Получаем текущего пользователя для определения его геолокации
     current_user = await db.execute(
-        select(models.User).where(models.User.id == current_user_id)
+        select(models.User).where(models.User.id == u_id)
     )
     current_user = current_user.scalars().first()
     
@@ -179,9 +190,19 @@ async def get_filtered_profiles(
     
     # Начинаем запрос
     query = select(models.User).where(
-        models.User.id != current_user_id,
+        models.User.id != u_id,
         models.User.is_complete == True,
         models.User.is_active == True
+    )
+
+    # EXCLUDE ALREADY SEEN (Swipes & Blocks)
+    # Critical for dating apps: don't show same person twice
+    swiped_subq = select(models.Swipe.to_user_id).where(models.Swipe.from_user_id == u_id)
+    blocked_subq = select(models.Block.blocked_user_id).where(models.Block.blocker_id == u_id)
+    
+    query = query.where(
+        models.User.id.not_in(swiped_subq),
+        models.User.id.not_in(blocked_subq)
     )
     
     filters_applied = []
@@ -191,7 +212,6 @@ async def get_filtered_profiles(
     # ========================================
     if filters.distance_km and current_user.latitude and current_user.longitude:
         try:
-            from backend.services.geo import geo_service
             # Search larger radius candidates to allow for other filter narrowing
             nearby_users = await geo_service.search_nearby_users(
                 current_user.latitude, 
@@ -201,7 +221,7 @@ async def get_filtered_profiles(
             )
             
             if nearby_users:
-                nearby_ids = [u['user_id'] for u in nearby_users if u['user_id'] != str(current_user_id)]
+                nearby_ids = [u['user_id'] for u in nearby_users if str(u['user_id']) != str(current_user_id)]
                 
                 if nearby_ids:
                     # Filter SQL query to only include these users
@@ -215,8 +235,8 @@ async def get_filtered_profiles(
                  return {"profiles": [], "total": 0, "filters_applied": ["distance (0 found)"]}
                  
         except Exception as e:
-            print(f"Redis Geo Skip: {e}")
-            # Fallback to standard SQL fetch + Python filtering (lines below)
+            logger.error(f"Redis Geo Search Failed: {e}. Falling back to Python-based filtering.")
+            # Fallback will occur naturally in post-processing loop below
             pass
 
     # ========================================
@@ -287,6 +307,12 @@ async def get_filtered_profiles(
         query = query.where(models.User.is_verified == True)
         filters_applied.append("verified_only")
     
+    # SORTING strategy: VIPs first, then Newest members
+    query = query.order_by(
+        models.User.is_vip.desc().nullslast(),
+        models.User.created_at.desc()
+    )
+
     # Выполняем запрос
     result = await db.execute(query.offset(skip).limit(limit * 2))  # Берём больше для пост-фильтрации
     profiles_raw = result.scalars().all()
@@ -298,6 +324,11 @@ async def get_filtered_profiles(
     profiles = []
     
     for profile in profiles_raw:
+        # Skip shadowbanned users
+        from backend.services.security import is_shadowbanned
+        if await is_shadowbanned(str(profile.id)):
+            continue
+
         # Фильтр по дистанции
         if filters.distance_km and current_user.latitude and current_user.longitude:
             if profile.latitude and profile.longitude:

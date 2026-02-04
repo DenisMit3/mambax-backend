@@ -49,8 +49,10 @@ export default function SetupPhotosPage() {
         try {
             const name = typeof window !== 'undefined' ? localStorage.getItem("setup_name") || "User" : "User";
             const gender = typeof window !== 'undefined' ? localStorage.getItem("setup_gender") || "More" : "More";
+            const ageStr = typeof window !== 'undefined' ? localStorage.getItem("setup_age") || "18" : "18";
+            const age = parseInt(ageStr);
 
-            await authService.createProfile({ name, gender, photos });
+            await authService.createProfile({ name, age, gender, photos, interests: [] });
             router.push("/discover");
         } catch (e) {
             console.error("Failed to create profile", e);

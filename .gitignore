@@ -9,6 +9,27 @@ venv/
 *.sqlite
 backend/static/uploads/
 
+# Security & Private Keys
+*.pem
+*.key
+*.bak
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# Logs
+*.log
+frontend_logs.txt
+gemini_test_output.txt
+
+# Temp / OS
+.DS_Store
+Thumbs.db
+.env*.local
+frontend/.env.local
+tmp/
+
 # Node
 node_modules/
 .next/
@@ -16,9 +37,3 @@ dist/
 build/
 .vercel
 npm-debug.log*
-
-# OS
-.DS_Store
-Thumbs.db
-.env*.local
-frontend/.env.local

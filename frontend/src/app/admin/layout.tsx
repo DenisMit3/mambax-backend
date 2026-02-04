@@ -20,6 +20,10 @@ import {
   Sun,
   LogOut,
   Sparkles,
+  Menu,
+  X,
+  User,
+  HelpCircle,
 } from 'lucide-react';
 
 // Import global admin styles
@@ -106,51 +110,54 @@ const menuItems = [
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [isDark, setIsDark] = useState(true);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
   const pathname = usePathname();
 
-  // Auto-expand active menu
+  // Auto-expand active menu and close mobile sidebar on navigation
   useEffect(() => {
     const activeMenu = menuItems.find(
       (item) =>
         item.submenu?.some((sub) => pathname === sub.href) ||
         pathname === item.href
     );
-    if (activeMenu?.submenu) {
-      setExpandedMenu(activeMenu.title);
-    }
+    setExpandedMenu(activeMenu && activeMenu.submenu ? activeMenu.title : null);
+    setMobileOpen(false);
   }, [pathname]);
 
   const toggleMenu = (title: string) => {
-    setExpandedMenu(expandedMenu === title ? null : title);
+    if (collapsed) {
+      setCollapsed(false);
+      setExpandedMenu(title);
+    } else {
+      setExpandedMenu(expandedMenu === title ? null : title);
+    }
   };
 
   return (
-    <div className="admin-layout">
+    <div className={`admin-layout ${isDark ? 'dark-mode' : 'light-mode'}`}>
+      {/* Sidebar Overlay for Mobile */}
+      <div
+        className={`sidebar-overlay ${mobileOpen ? 'show' : ''}`}
+        onClick={() => setMobileOpen(false)}
+      />
+
       {/* Sidebar */}
-      <motion.aside
-        className={`admin-sidebar ${collapsed ? 'collapsed' : ''}`}
-        animate={{ width: collapsed ? 80 : 280 }}
-        transition={{ duration: 0.3, ease: 'easeInOut' }}
+      <aside
+        className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
       >
         {/* Logo */}
         <div className="sidebar-header">
-          <motion.div
-            className="logo"
-            animate={{ opacity: collapsed ? 0 : 1 }}
-          >
-            {!collapsed && (
-              <>
-                <span className="logo-icon">💘</span>
-                <span className="logo-text">MambaX Admin</span>
-              </>
-            )}
-            {collapsed && <span className="logo-icon">💘</span>}
-          </motion.div>
+          <div className="logo">
+            <span className="logo-icon">💘</span>
+            <span className="logo-text">MambaX Admin</span>
+          </div>
           <button
             className="collapse-btn"
             onClick={() => setCollapsed(!collapsed)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
@@ -174,33 +181,28 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                       onClick={() => toggleMenu(item.title)}
                     >
                       <Icon size={20} />
-                      {!collapsed && (
-                        <>
-                          <span className="nav-label">{item.title}</span>
-                          <motion.span
-                            className="nav-arrow"
-                            animate={{ rotate: isExpanded ? 180 : 0 }}
-                          >
-                            <ChevronRight size={16} />
-                          </motion.span>
-                        </>
-                      )}
+                      <span className="nav-label">{item.title}</span>
+                      <span
+                        className="nav-arrow"
+                        style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                      >
+                        <ChevronRight size={16} />
+                      </span>
                     </button>
-                    <AnimatePresence>
+                    <AnimatePresence initial={false}>
                       {isExpanded && !collapsed && (
                         <motion.div
                           className="submenu"
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.2 }}
+                          transition={{ duration: 0.2, ease: "easeInOut" }}
                         >
                           {item.submenu.map((sub) => (
                             <Link
                               key={sub.href}
                               href={sub.href}
-                              className={`submenu-item ${pathname === sub.href ? 'active' : ''
-                                }`}
+                              className={`submenu-item ${pathname === sub.href ? 'active' : ''}`}
                             >
                               {sub.title}
                             </Link>
@@ -215,9 +217,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                     className={`nav-item ${isActive ? 'active' : ''}`}
                   >
                     <Icon size={20} />
-                    {!collapsed && (
-                      <span className="nav-label">{item.title}</span>
-                    )}
+                    <span className="nav-label">{item.title}</span>
                   </Link>
                 )}
               </div>
@@ -229,42 +229,79 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <div className="sidebar-footer">
           <button className="theme-toggle" onClick={() => setIsDark(!isDark)}>
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
-            {!collapsed && <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>}
+            <span className="nav-label">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
           </button>
           <button className="logout-btn">
             <LogOut size={18} />
-            {!collapsed && <span>Logout</span>}
+            <span className="nav-label">Logout</span>
           </button>
         </div>
-      </motion.aside>
+      </aside>
 
       {/* Main Content */}
       <div className="admin-main">
         {/* Top Bar */}
         <header className="admin-topbar">
           <div className="topbar-left">
+            <button
+              className="mobile-toggle"
+              onClick={() => {
+                setMobileOpen(true);
+                setCollapsed(false);
+              }}
+              aria-label="Open menu"
+            >
+              <Menu size={24} />
+            </button>
             <div className="search-box">
               <Search size={18} />
-              <input type="text" placeholder="Search..." />
+              <input type="text" placeholder="Search insights, users, reports..." />
             </div>
           </div>
+
           <div className="topbar-right">
-            <button className="topbar-btn notification-btn">
+            <button className="topbar-btn notification-btn" aria-label="Notifications">
               <Bell size={20} />
               <span className="notification-badge">3</span>
             </button>
-            <div className="admin-profile">
-              <div className="admin-avatar">A</div>
-              <div className="admin-info">
-                <span className="admin-name">Admin</span>
-                <span className="admin-role">Super Admin</span>
+
+            <div className="admin-profile-wrapper">
+              <div
+                className="admin-profile"
+                onClick={() => setProfileOpen(!profileOpen)}
+              >
+                <div className="admin-avatar">A</div>
+                <div className="admin-info">
+                  <span className="admin-name">Admin User</span>
+                  <span className="admin-role">Super Admin</span>
+                </div>
+              </div>
+
+              <div className={`profile-dropdown ${profileOpen ? 'show' : ''}`}>
+                <button className="dropdown-item">
+                  <User size={16} />
+                  <span>My Profile</span>
+                </button>
+                <button className="dropdown-item">
+                  <Settings size={16} />
+                  <span>Settings</span>
+                </button>
+                <button className="dropdown-item">
+                  <HelpCircle size={16} />
+                  <span>Support</span>
+                </button>
+                <div style={{ height: '1px', background: 'var(--admin-glass-border)', margin: '8px 0' }} />
+                <button className="dropdown-item" style={{ color: 'var(--neon-red)' }}>
+                  <LogOut size={16} />
+                  <span>Logout</span>
+                </button>
               </div>
             </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="admin-content">
+        <main className="admin-content" onClick={() => setProfileOpen(false)}>
           <AnimatePresence mode="wait">
             <motion.div
               key={pathname}
@@ -278,8 +315,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </AnimatePresence>
         </main>
       </div>
-
-      {/* Styles loaded from admin-variables.css and admin-layout.css */}
     </div>
   );
 }
+

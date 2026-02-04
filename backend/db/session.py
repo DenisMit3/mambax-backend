@@ -25,17 +25,21 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres"):
 # SQLite config requires connect_args check_same_thread=False
 connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 
+# Engine configuration
+engine_kwargs = {
+    "echo": not settings.is_production,  # Only log SQL queries in development
+    "future": True,
+    "connect_args": connect_args,
+}
+
+# FIX: Add connection pooling for PostgreSQL (critical for production load)
+if "postgresql" in DATABASE_URL:
+    engine_kwargs["pool_size"] = 5
+    engine_kwargs["max_overflow"] = 10
+    engine_kwargs["pool_pre_ping"] = True  # Detect stale connections
+
 # Async Engine
-# Disable SQL echo in production to reduce log noise
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=not settings.is_production,  # Only log SQL queries in development
-    future=True,
-    # pool_size parameter is not supported by SQLite engine
-    # pool_size=5,
-    # max_overflow=10,
-    connect_args=connect_args,
-)
+engine = create_async_engine(DATABASE_URL, **engine_kwargs)
 
 # Async Session Factory
 async_session_maker = async_sessionmaker(

@@ -223,7 +223,7 @@ export default function AdvancedPage() {
         ) : stats.error && stats.aiModels === 0 && stats.perfScore === 0 && stats.partners === 0 ? (
           // Show inline error only if ALL stats failed
           <div className={styles.quickStats}>
-            <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+            <span className="text-[13px] text-[var(--admin-text-muted)]">
               Stats unavailable
             </span>
           </div>

@@ -119,6 +119,10 @@ async def clear_logs():
 @router.get("/init-db")
 async def init_database():
     """Manually initialize database - call this once after deployment"""
+    # Security check: Only allow in dev or if explicitly enabled via secret header (omitted for now)
+    if settings.ENVIRONMENT == "production":
+         return {"status": "error", "message": "Manual DB init disabled in production. Use Alembic."}
+
     try:
         # Create tables
         async with database.engine.begin() as conn:
@@ -199,6 +203,9 @@ async def init_test_users():
 @router.get("/migrate")
 async def migrate_database():
     """Add missing columns to database tables"""
+    if settings.ENVIRONMENT == "production":
+         return {"status": "error", "message": "Manual migration disabled in production. Use Alembic."}
+
     added_columns = []
     try:
         async with database.engine.begin() as conn:

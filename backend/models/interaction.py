@@ -3,7 +3,8 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Uuid
+from typing import Optional, List
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Uuid, JSON, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base
@@ -23,6 +24,11 @@ class Swipe(Base):
         timestamp: Время свайпа
     """
     __tablename__ = "swipes"
+    __table_args__ = (
+        UniqueConstraint("from_user_id", "to_user_id", name="uq_swipe_from_to"),
+        # FIX: Composite index for get_likes_received query
+        Index("idx_swipes_to_action", "to_user_id", "action"),
+    )
     
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
@@ -58,15 +64,6 @@ class Swipe(Base):
 class Match(Base):
     """
     ORM модель матча (взаимный лайк).
-    
-    Таблица: matches
-    
-    Атрибуты:
-        id: Уникальный идентификатор
-        user1_id: ID первого пользователя
-        user2_id: ID второго пользователя
-        created_at: Время создания матча
-        is_active: Активен ли матч (False если кто-то отменил)
     """
     __tablename__ = "matches"
     
@@ -97,6 +94,10 @@ class Match(Base):
         default=True,
         nullable=False,
     )
+
+    # Relationships for N+1 optimization
+    user1 = relationship("User", foreign_keys=[user1_id], lazy="selectin")
+    user2 = relationship("User", foreign_keys=[user2_id], lazy="selectin")
     
     def __repr__(self) -> str:
         return f"<Match {self.user1_id} <-> {self.user2_id}>"
@@ -133,7 +134,13 @@ class Report(Base):
     reported_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     reason: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=True)
+    evidence_urls: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     status: Mapped[str] = mapped_column(String, default="pending", nullable=False) # pending, resolved, dismissed
+    
+    admin_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("users.id"), nullable=True)
+    resolution: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     
     def __repr__(self) -> str:

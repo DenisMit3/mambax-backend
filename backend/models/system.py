@@ -68,10 +68,17 @@ class BackupStatus(Base):
     __tablename__ = "backup_status"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    status: Mapped[str] = mapped_column(String(20)) # running, success, failed
+    status: Mapped[str] = mapped_column(String(20)) # pending, in_progress, completed, failed
+    backup_type: Mapped[str] = mapped_column(String(20), default="full")  # full, incremental, schema_only
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
-    location: Mapped[str] = mapped_column(String(255), nullable=True)
+    file_size: Mapped[int] = mapped_column(Integer, default=0)  # Alias for compatibility
+    location: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # S3 path
+    checksum: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # SHA-256
+    
+    triggered_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)  # Admin who triggered
     
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+

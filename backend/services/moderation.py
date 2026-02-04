@@ -69,12 +69,24 @@ class ModerationService:
                 API_URL = "https://api-inference.huggingface.co/models/Falconsai/nsfw_image_detection"
                 headers = {"Authorization": f"Bearer {settings.HUGGINGFACE_API_KEY}"}
 
-                # Download image first (HF API expects bytes mostly for consistent results avoid CORS/Access issues)
-                async with httpx.AsyncClient() as client:
-                    img_resp = await client.get(image_url, timeout=10)
-                    if img_resp.status_code != 200:
-                        return True, 0.0, "image_download_failed"
-                    image_bytes = img_resp.content
+                # Download image if external OR read directly if local
+                if "static/" in image_url:
+                    # LOCAL FILE ACCESS (No network request to self!)
+                    from pathlib import Path
+                    # Convert URL to local path (assuming /static/ maps to static/ folder)
+                    local_path = Path("static") / image_url.split("static/")[-1]
+                    if local_path.exists():
+                        with open(local_path, "rb") as f:
+                            image_bytes = f.read()
+                    else:
+                        return True, 0.0, "local_file_not_found"
+                else:
+                    # External URL
+                    async with httpx.AsyncClient() as client:
+                        img_resp = await client.get(image_url, timeout=10)
+                        if img_resp.status_code != 200:
+                            return True, 0.0, "image_download_failed"
+                        image_bytes = img_resp.content
 
                 async with httpx.AsyncClient() as client:
                     response = await client.post(API_URL, headers=headers, content=image_bytes, timeout=15)
@@ -105,9 +117,6 @@ class ModerationService:
         # 2. Simulation / Fallback Mode
         if "unsafe" in image_url.lower():
             return False, 0.99, "detected_unsafe_keyword"
-            
-        if random.random() < 0.05:
-            return False, 0.75, "simulation_random_flag"
             
         return True, 0.99, "clean"
 
@@ -147,6 +156,6 @@ class ModerationService:
             details=reason
         )
         db.add(log_entry)
-        await db.commit()
+        await db.flush() # Only flush here, let the controller commit
         
         return is_safe

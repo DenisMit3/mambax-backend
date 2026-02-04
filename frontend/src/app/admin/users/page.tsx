@@ -15,14 +15,11 @@ import {
   Ban,
   Eye,
   Edit,
-  Mail,
   Shield,
   Crown,
   AlertTriangle,
   CheckCircle,
   Clock,
-  Download,
-  Upload,
   Trash2,
   Star,
   MapPin,
@@ -46,6 +43,9 @@ interface FilterState {
   search: string;
 }
 
+import { GlassCard } from '@/components/ui/GlassCard';
+import styles from '../admin.module.css';
+
 function UserCard({ user, onAction }: { user: UserListItem; onAction: (action: string, user: UserListItem) => void }) {
   const router = useRouter();
   const statusColors: Record<string, { bg: string; color: string }> = {
@@ -62,45 +62,44 @@ function UserCard({ user, onAction }: { user: UserListItem; onAction: (action: s
   };
 
   const fraudLevel = user.fraud_score < 30 ? 'low' : user.fraud_score < 70 ? 'medium' : 'high';
-  const fraudColors = {
+  const fraudColors: Record<string, string> = {
     low: '#10b981',
     medium: '#f97316',
     high: '#ef4444',
   };
 
   return (
-    <motion.div
-      className="user-card"
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      whileHover={{ y: -4 }}
-    >
-      <div className="user-header">
-        <div className="user-avatar">
+    <GlassCard className="p-5 flex flex-col h-full bg-[var(--admin-glass-bg)] hover:bg-[var(--admin-glass-bg-hover)] border-[var(--admin-glass-border)]">
+      <div className="flex items-start gap-4 mb-4">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-semibold text-white relative shrink-0 bg-gradient-to-br from-neon-blue to-neon-purple">
           {user.name?.charAt(0) || 'U'}
           {user.verified && (
-            <div className="verified-badge">
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 border-2 border-[var(--admin-bg)] rounded-full flex items-center justify-center text-white">
               <CheckCircle size={12} />
             </div>
           )}
         </div>
-        <div className="user-info">
-          <div className="user-name-row">
-            <h4>{user.name}, {user.age || '?'}</h4>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <h4 className="text-[15px] font-semibold text-[var(--admin-text-primary)] truncate">{user.name}, {user.age || '?'}</h4>
             <span
-              className="user-status"
+              className="px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide"
               style={statusColors[user.status] || statusColors.pending}
             >
               {user.status}
             </span>
           </div>
-          <div className="user-meta">
-            <span><MapPin size={12} /> {user.location || 'Unknown'}</span>
-            <span><Calendar size={12} /> {new Date(user.registered_at).toLocaleDateString()}</span>
+          <div className="flex gap-3">
+            <span className="flex items-center gap-1 text-xs text-[var(--admin-text-muted)]">
+              <MapPin size={12} /> {user.location || 'Unknown'}
+            </span>
+            <span className="flex items-center gap-1 text-xs text-[var(--admin-text-muted)]">
+              <Calendar size={12} /> {new Date(user.registered_at).toLocaleDateString()}
+            </span>
           </div>
         </div>
         <div
-          className="subscription-badge"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase whitespace-nowrap"
           style={subscriptionColors[user.subscription] || subscriptionColors.free}
         >
           {user.subscription === 'platinum' && <Crown size={12} />}
@@ -108,214 +107,42 @@ function UserCard({ user, onAction }: { user: UserListItem; onAction: (action: s
         </div>
       </div>
 
-      <div className="user-stats">
-        <div className="stat">
-          <Heart size={14} style={{ color: '#ec4899' }} />
+      <div className="flex gap-4 py-3 border-y border-[var(--admin-glass-border)] mb-3">
+        <div className="flex items-center gap-1.5 text-[13px] text-[var(--admin-text-muted)]">
+          <Heart size={14} className="text-pink-500" />
           <span>{user.matches}</span>
         </div>
-        <div className="stat">
-          <MessageCircle size={14} style={{ color: '#3b82f6' }} />
+        <div className="flex items-center gap-1.5 text-[13px] text-[var(--admin-text-muted)]">
+          <MessageCircle size={14} className="text-blue-500" />
           <span>{user.messages}</span>
         </div>
-        <div className="stat fraud-score" style={{ color: fraudColors[fraudLevel] }}>
+        <div className="ml-auto flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: fraudColors[fraudLevel] }}>
           <Shield size={14} />
           <span>{user.fraud_score}%</span>
         </div>
       </div>
 
-      <div className="user-actions">
-        <button className="action-btn" onClick={() => router.push(`/admin/users/${user.id}`)}>
+      <div className="flex gap-2 mt-auto">
+        <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-blue-500/20 hover:text-blue-500 hover:border-blue-500/30 transition-all" onClick={() => router.push(`/admin/users/${user.id}`)}>
           <Eye size={16} />
         </button>
-        <button className="action-btn" onClick={() => onAction('edit', user)}>
+        <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-blue-500/20 hover:text-blue-500 hover:border-blue-500/30 transition-all" onClick={() => onAction('edit', user)}>
           <Edit size={16} />
         </button>
-        <button className="action-btn" onClick={() => onAction('mail', user)}>
-          <Mail size={16} />
-        </button>
         {user.status === 'active' ? (
-          <button className="action-btn warning" onClick={() => onAction('suspend', user)}>
+          <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-orange-500/20 hover:text-orange-500 hover:border-orange-500/30 transition-all" onClick={() => onAction('suspend', user)}>
             <UserX size={16} />
           </button>
         ) : (
-          <button className="action-btn success" onClick={() => onAction('activate', user)}>
+          <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-emerald-500/20 hover:text-emerald-500 hover:border-emerald-500/30 transition-all" onClick={() => onAction('activate', user)}>
             <UserCheck size={16} />
           </button>
         )}
-        <button className="action-btn danger" onClick={() => onAction('ban', user)}>
+        <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition-all" onClick={() => onAction('ban', user)}>
           <Ban size={16} />
         </button>
       </div>
-
-      <style jsx>{`
-        .user-card {
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 16px;
-          padding: 20px;
-          transition: all 0.3s ease;
-        }
-        
-        .user-card:hover {
-          border-color: rgba(59, 130, 246, 0.3);
-          box-shadow: 0 0 30px rgba(59, 130, 246, 0.15);
-        }
-        
-        .user-header {
-          display: flex;
-          align-items: flex-start;
-          gap: 14px;
-          margin-bottom: 16px;
-        }
-        
-        .user-avatar {
-          width: 48px;
-          height: 48px;
-          background: linear-gradient(135deg, #667eea, #764ba2);
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 18px;
-          font-weight: 600;
-          color: white;
-          position: relative;
-          flex-shrink: 0;
-        }
-        
-        .verified-badge {
-          position: absolute;
-          bottom: -4px;
-          right: -4px;
-          width: 20px;
-          height: 20px;
-          background: #10b981;
-          border: 2px solid rgba(15, 23, 42, 1);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-        }
-        
-        .user-info {
-          flex: 1;
-          min-width: 0;
-        }
-        
-        .user-name-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 4px;
-        }
-        
-        .user-name-row h4 {
-          font-size: 15px;
-          font-weight: 600;
-          color: #f1f5f9;
-          margin: 0;
-        }
-        
-        .user-status {
-          font-size: 11px;
-          font-weight: 600;
-          padding: 2px 8px;
-          border-radius: 12px;
-          text-transform: uppercase;
-        }
-        
-        .user-meta {
-          display: flex;
-          gap: 12px;
-        }
-        
-        .user-meta span {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 12px;
-          color: #64748b;
-        }
-        
-        .subscription-badge {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 11px;
-          font-weight: 600;
-          padding: 4px 10px;
-          border-radius: 20px;
-          text-transform: uppercase;
-        }
-        
-        .user-stats {
-          display: flex;
-          gap: 16px;
-          padding: 12px 0;
-          border-top: 1px solid rgba(148, 163, 184, 0.1);
-          border-bottom: 1px solid rgba(148, 163, 184, 0.1);
-          margin-bottom: 12px;
-        }
-        
-        .stat {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 13px;
-          color: #94a3b8;
-        }
-        
-        .fraud-score {
-          margin-left: auto;
-          font-weight: 600;
-        }
-        
-        .user-actions {
-          display: flex;
-          gap: 8px;
-        }
-        
-        .action-btn {
-          flex: 1;
-          padding: 10px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #94a3b8;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .action-btn:hover {
-          background: rgba(59, 130, 246, 0.2);
-          color: #3b82f6;
-          border-color: rgba(59, 130, 246, 0.3);
-        }
-        
-        .action-btn.warning:hover {
-          background: rgba(249, 115, 22, 0.2);
-          color: #f97316;
-          border-color: rgba(249, 115, 22, 0.3);
-        }
-        
-        .action-btn.success:hover {
-          background: rgba(16, 185, 129, 0.2);
-          color: #10b981;
-          border-color: rgba(16, 185, 129, 0.3);
-        }
-        
-        .action-btn.danger:hover {
-          background: rgba(239, 68, 68, 0.2);
-          color: #ef4444;
-          border-color: rgba(239, 68, 68, 0.3);
-        }
-      `}</style>
-    </motion.div>
+    </GlassCard>
   );
 }
 
@@ -335,24 +162,25 @@ function UserTable({ users, onAction, selectedUsers, onSelectUser, onSelectAll }
   };
 
   return (
-    <div className="user-table-container">
-      <table className="user-table">
+    <GlassCard className="overflow-hidden border-[var(--admin-glass-border)]">
+      <table className="w-full border-collapse">
         <thead>
-          <tr>
-            <th className="checkbox-col">
+          <tr className="text-left border-b border-[var(--admin-glass-border)]">
+            <th className="p-4 w-10 bg-slate-800/50">
               <input
                 type="checkbox"
                 onChange={onSelectAll}
                 checked={selectedUsers.size === users.length && users.length > 0}
+                className="w-4 h-4 cursor-pointer accent-blue-500 rounded bg-slate-700 border-slate-600"
               />
             </th>
-            <th>User</th>
-            <th>Status</th>
-            <th>Subscription</th>
-            <th>Location</th>
-            <th>Fraud Score</th>
-            <th>Last Active</th>
-            <th>Actions</th>
+            <th className="p-4 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider bg-slate-800/50">User</th>
+            <th className="p-4 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider bg-slate-800/50">Status</th>
+            <th className="p-4 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider bg-slate-800/50">Subscription</th>
+            <th className="p-4 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider bg-slate-800/50">Location</th>
+            <th className="p-4 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider bg-slate-800/50">Fraud Score</th>
+            <th className="p-4 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider bg-slate-800/50">Last Active</th>
+            <th className="p-4 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider bg-slate-800/50">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -361,251 +189,71 @@ function UserTable({ users, onAction, selectedUsers, onSelectUser, onSelectAll }
               key={user.id}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className={selectedUsers.has(user.id) ? 'selected' : ''}
+              className={`hover:bg-slate-800/30 border-b border-[var(--admin-glass-border)] last:border-0 ${selectedUsers.has(user.id) ? 'bg-blue-500/10' : ''}`}
             >
-              <td className="checkbox-col">
+              <td className="p-4">
                 <input
                   type="checkbox"
                   checked={selectedUsers.has(user.id)}
                   onChange={() => onSelectUser(user.id)}
+                  className="w-4 h-4 cursor-pointer accent-blue-500 rounded bg-slate-700 border-slate-600"
                 />
               </td>
-              <td>
-                <div className="user-cell">
-                  <div className="user-avatar-sm">
+              <td className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold text-white relative shrink-0 bg-gradient-to-br from-neon-blue to-neon-purple">
                     {user.name?.charAt(0) || 'U'}
                     {user.verified && (
-                      <span className="verified-dot" />
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-[var(--admin-bg)] rounded-full" />
                     )}
                   </div>
-                  <div className="user-details">
-                    <span className="user-name">{user.name}, {user.age || '?'}</span>
-                    <span className="user-email">{user.email || 'No email'}</span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-[var(--admin-text-primary)]">{user.name}, {user.age || '?'}</span>
+                    <span className="text-xs text-[var(--admin-text-muted)]">{user.email || 'No email'}</span>
                   </div>
                 </div>
               </td>
-              <td>
+              <td className="p-4">
                 <span
-                  className="status-badge"
+                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold capitalize"
                   style={statusColors[user.status] || statusColors.pending}
                 >
                   {user.status}
                 </span>
               </td>
-              <td>
-                <span className={`sub-badge ${user.subscription}`}>
+              <td className="p-4">
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold capitalize ${user.subscription === 'free' ? 'bg-slate-500/15 text-slate-400' :
+                  user.subscription === 'gold' ? 'bg-orange-500/15 text-orange-500' :
+                    'bg-purple-500/15 text-purple-500'
+                  }`}>
                   {user.subscription}
                 </span>
               </td>
-              <td>{user.location || 'Unknown'}</td>
-              <td>
-                <div className={`fraud-bar ${user.fraud_score < 30 ? 'low' : user.fraud_score < 70 ? 'medium' : 'high'}`}>
-                  <div className="fraud-fill" style={{ width: `${user.fraud_score}%` }} />
-                  <span>{user.fraud_score}%</span>
+              <td className="p-4 text-sm text-[var(--admin-text-secondary)]">{user.location || 'Unknown'}</td>
+              <td className="p-4">
+                <div className="flex items-center gap-2 w-[100px]">
+                  <div className="h-1.5 flex-1 rounded-full bg-slate-700 overflow-hidden">
+                    <div className="h-full rounded-full" style={{
+                      width: `${user.fraud_score}%`,
+                      background: user.fraud_score < 30 ? '#10b981' : user.fraud_score < 70 ? '#f97316' : '#ef4444'
+                    }} />
+                  </div>
+                  <span className="text-xs text-[var(--admin-text-muted)] w-8 text-right">{user.fraud_score}%</span>
                 </div>
               </td>
-              <td>{user.last_active ? new Date(user.last_active).toLocaleDateString() : 'Never'}</td>
-              <td>
-                <div className="table-actions">
-                  <button onClick={() => router.push(`/admin/users/${user.id}`)}><Eye size={14} /></button>
-                  <button onClick={() => onAction('edit', user)}><Edit size={14} /></button>
-                  <button className="danger" onClick={() => onAction('ban', user)}><Ban size={14} /></button>
+              <td className="p-4 text-sm text-[var(--admin-text-secondary)]">{user.last_active ? new Date(user.last_active).toLocaleDateString() : 'Never'}</td>
+              <td className="p-4">
+                <div className="flex gap-1.5">
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-blue-500/20 hover:text-blue-500 transition-colors" onClick={() => router.push(`/admin/users/${user.id}`)}><Eye size={14} /></button>
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-blue-500/20 hover:text-blue-500 transition-colors" onClick={() => onAction('edit', user)}><Edit size={14} /></button>
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 transition-colors" onClick={() => onAction('ban', user)}><Ban size={14} /></button>
                 </div>
               </td>
             </motion.tr>
           ))}
         </tbody>
       </table>
-
-      <style jsx>{`
-        .user-table-container {
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 16px;
-          overflow: hidden;
-        }
-        
-        .user-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        
-        .user-table th,
-        .user-table td {
-          padding: 14px 16px;
-          text-align: left;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.1);
-        }
-        
-        .user-table th {
-          background: rgba(30, 41, 59, 0.5);
-          font-size: 12px;
-          font-weight: 600;
-          color: #94a3b8;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        
-        .user-table tr:hover {
-          background: rgba(30, 41, 59, 0.3);
-        }
-        
-        .user-table tr.selected {
-          background: rgba(59, 130, 246, 0.1);
-        }
-        
-        .checkbox-col {
-          width: 40px;
-        }
-        
-        .checkbox-col input {
-          width: 16px;
-          height: 16px;
-          cursor: pointer;
-        }
-        
-        .user-cell {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        
-        .user-avatar-sm {
-          width: 36px;
-          height: 36px;
-          background: linear-gradient(135deg, #667eea, #764ba2);
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 14px;
-          font-weight: 600;
-          color: white;
-          position: relative;
-        }
-        
-        .verified-dot {
-          position: absolute;
-          bottom: -2px;
-          right: -2px;
-          width: 10px;
-          height: 10px;
-          background: #10b981;
-          border: 2px solid rgba(15, 23, 42, 1);
-          border-radius: 50%;
-        }
-        
-        .user-details {
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .user-name {
-          font-size: 14px;
-          font-weight: 500;
-          color: #f1f5f9;
-        }
-        
-        .user-email {
-          font-size: 12px;
-          color: #64748b;
-        }
-        
-        .status-badge {
-          display: inline-block;
-          font-size: 11px;
-          font-weight: 600;
-          padding: 4px 10px;
-          border-radius: 20px;
-          text-transform: capitalize;
-        }
-        
-        .sub-badge {
-          display: inline-block;
-          font-size: 11px;
-          font-weight: 600;
-          padding: 4px 10px;
-          border-radius: 20px;
-          text-transform: capitalize;
-        }
-        
-        .sub-badge.free {
-          background: rgba(148, 163, 184, 0.15);
-          color: #94a3b8;
-        }
-        
-        .sub-badge.gold {
-          background: rgba(249, 115, 22, 0.15);
-          color: #f97316;
-        }
-        
-        .sub-badge.platinum {
-          background: rgba(168, 85, 247, 0.15);
-          color: #a855f7;
-        }
-        
-        .fraud-bar {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          width: 100px;
-        }
-        
-        .fraud-fill {
-          height: 6px;
-          border-radius: 3px;
-          flex: 1;
-        }
-        
-        .fraud-bar.low .fraud-fill {
-          background: #10b981;
-        }
-        
-        .fraud-bar.medium .fraud-fill {
-          background: #f97316;
-        }
-        
-        .fraud-bar.high .fraud-fill {
-          background: #ef4444;
-        }
-        
-        .fraud-bar span {
-          font-size: 12px;
-          color: #94a3b8;
-          min-width: 35px;
-        }
-        
-        .table-actions {
-          display: flex;
-          gap: 6px;
-        }
-        
-        .table-actions button {
-          width: 30px;
-          height: 30px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 8px;
-          color: #94a3b8;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .table-actions button:hover {
-          background: rgba(59, 130, 246, 0.2);
-          color: #3b82f6;
-        }
-        
-        .table-actions button.danger:hover {
-          background: rgba(239, 68, 68, 0.2);
-          color: #ef4444;
-        }
-      `}</style>
-    </div>
+    </GlassCard>
   );
 }
 
@@ -732,159 +380,151 @@ export default function UsersPage() {
     }
   };
 
+
   return (
-    <div className="users-page">
+    <div className={styles.pageContainer}>
       {/* Header */}
-      <div className="page-header">
-        <div>
-          <h1>User Management</h1>
-          <p>{totalUsers.toLocaleString()} users total</p>
+      <div className={styles.headerSection}>
+        <div className={styles.headerContent}>
+          <h1 className={styles.headerTitle}>User Management</h1>
+          <p className={styles.headerDescription}>{totalUsers.toLocaleString()} users total</p>
         </div>
-        <div className="header-actions">
-          <button className="btn-secondary" onClick={fetchUsers}>
+        <div className="flex gap-3">
+          <button className={styles.secondaryButton} onClick={fetchUsers}>
             <RefreshCw size={16} />
             Refresh
-          </button>
-          <button className="btn-secondary">
-            <Download size={16} />
-            Export
-          </button>
-          <button className="btn-secondary">
-            <Upload size={16} />
-            Import
           </button>
         </div>
       </div>
 
       {/* Filters & Search */}
-      <div className="filters-bar">
-        <div className="search-box">
-          <Search size={18} />
-          <input
-            type="text"
-            placeholder="Search by name or email..."
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-          />
-          {filters.search && (
-            <button className="clear-search" onClick={() => setFilters({ ...filters, search: '' })}>
-              <X size={16} />
-            </button>
-          )}
+      <GlassCard className="p-4 mb-6 sticky top-[80px] z-20 bg-[var(--admin-glass-bg)] backdrop-blur-xl border border-[var(--admin-glass-border)] rounded-2xl">
+        <div className="flex flex-wrap gap-4 items-center justify-between">
+          <div className="relative flex-1 min-w-[300px]">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--admin-text-secondary)]" />
+            <input
+              type="text"
+              placeholder="Search by name or email..."
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              className="w-full pl-10 pr-10 py-2.5 bg-[var(--admin-glass-bg-light)] border border-[var(--admin-glass-border)] rounded-xl text-[var(--admin-text-primary)] placeholder-[var(--admin-text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-sans text-sm"
+            />
+            {filters.search && (
+              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--admin-text-secondary)] hover:text-[var(--admin-text-primary)]" onClick={() => setFilters({ ...filters, search: '' })}>
+                <X size={16} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 overflow-x-auto pb-1 no-scrollbar">
+            <select
+              value={filters.status}
+              onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(1); }}
+              className="px-3 py-2.5 bg-[var(--admin-glass-bg-light)] border border-[var(--admin-glass-border)] rounded-xl text-sm text-[var(--admin-text-primary)] outline-none min-w-[120px]"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+              <option value="banned">Banned</option>
+              <option value="pending">Pending</option>
+            </select>
+
+            <select
+              value={filters.subscription}
+              onChange={(e) => { setFilters({ ...filters, subscription: e.target.value }); setCurrentPage(1); }}
+              className="px-3 py-2.5 bg-[var(--admin-glass-bg-light)] border border-[var(--admin-glass-border)] rounded-xl text-sm text-[var(--admin-text-primary)] outline-none min-w-[120px]"
+            >
+              <option value="all">All Plans</option>
+              <option value="free">Free</option>
+              <option value="gold">Gold</option>
+              <option value="platinum">Platinum</option>
+            </select>
+
+            <select
+              value={filters.verified}
+              onChange={(e) => { setFilters({ ...filters, verified: e.target.value }); setCurrentPage(1); }}
+              className="px-3 py-2.5 bg-[var(--admin-glass-bg-light)] border border-[var(--admin-glass-border)] rounded-xl text-sm text-[var(--admin-text-primary)] outline-none min-w-[120px]"
+            >
+              <option value="all">All Verification</option>
+              <option value="verified">Verified</option>
+              <option value="unverified">Unverified</option>
+            </select>
+
+            <div className="h-8 w-px bg-[var(--admin-glass-border)] mx-1" />
+
+            <div className="flex bg-[var(--admin-glass-bg-light)] rounded-lg p-1 border border-[var(--admin-glass-border)]">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-2 rounded-md transition-all ${viewMode === 'table' ? 'bg-[var(--admin-glass-bg-hover)] text-[var(--admin-text-primary)] shadow-sm' : 'text-[var(--admin-text-muted)] hover:text-[var(--admin-text-primary)]'}`}
+              >
+                <MoreVertical size={18} className="rotate-90" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-[var(--admin-glass-bg-hover)] text-[var(--admin-text-primary)] shadow-sm' : 'text-[var(--admin-text-muted)] hover:text-[var(--admin-text-primary)]'}`}
+              >
+                <Users size={18} />
+              </button>
+            </div>
+          </div>
         </div>
+      </GlassCard>
 
-        <div className="filter-group">
-          <select
-            value={filters.status}
-            onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(1); }}
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="suspended">Suspended</option>
-            <option value="banned">Banned</option>
-            <option value="pending">Pending</option>
-          </select>
-
-          <select
-            value={filters.subscription}
-            onChange={(e) => { setFilters({ ...filters, subscription: e.target.value }); setCurrentPage(1); }}
-          >
-            <option value="all">All Plans</option>
-            <option value="free">Free</option>
-            <option value="gold">Gold</option>
-            <option value="platinum">Platinum</option>
-          </select>
-
-          <select
-            value={filters.verified}
-            onChange={(e) => { setFilters({ ...filters, verified: e.target.value }); setCurrentPage(1); }}
-          >
-            <option value="all">All Users</option>
-            <option value="verified">Verified</option>
-            <option value="unverified">Unverified</option>
-          </select>
-
-          <select
-            value={filters.fraudRisk}
-            onChange={(e) => { setFilters({ ...filters, fraudRisk: e.target.value }); setCurrentPage(1); }}
-          >
-            <option value="all">All Risk</option>
-            <option value="low">Low Risk</option>
-            <option value="medium">Medium Risk</option>
-            <option value="high">High Risk</option>
-          </select>
-        </div>
-
-        <div className="view-toggle">
-          <button
-            className={viewMode === 'grid' ? 'active' : ''}
-            onClick={() => setViewMode('grid')}
-          >
-            Grid
-          </button>
-          <button
-            className={viewMode === 'table' ? 'active' : ''}
-            onClick={() => setViewMode('table')}
-          >
-            Table
-          </button>
-        </div>
-      </div>
-
-      {/* Bulk Actions */}
+      {/* Bulk Actions Bar */}
       <AnimatePresence>
         {selectedUsers.size > 0 && (
           <motion.div
-            className="bulk-actions"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
+            className="mb-6 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center justify-between backdrop-blur-md"
           >
-            <span>{selectedUsers.size} users selected</span>
-            <div className="bulk-buttons">
-              <button onClick={() => handleBulkAction('verify')}>
-                <UserCheck size={16} /> Verify
+            <div className="flex items-center gap-3 px-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold">
+                {selectedUsers.size}
+              </span>
+              <span className="text-sm font-medium text-blue-200">User{selectedUsers.size > 1 ? 's' : ''} selected</span>
+            </div>
+            <div className="flex gap-2">
+              <button className="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs font-semibold transition-colors" onClick={() => handleBulkAction('activate')}>
+                Activate
               </button>
-              <button onClick={() => handleBulkAction('suspend')}>
-                <UserX size={16} /> Suspend
+              <button className="px-3 py-1.5 rounded-lg bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 text-xs font-semibold transition-colors" onClick={() => handleBulkAction('suspend')}>
+                Suspend
               </button>
-              <button className="danger" onClick={() => handleBulkAction('ban')}>
-                <Ban size={16} /> Ban
-              </button>
-              <button onClick={() => setSelectedUsers(new Set())}>
-                <X size={16} /> Clear
+              <button className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs font-semibold transition-colors" onClick={() => handleBulkAction('ban')}>
+                Ban
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Loading / Error State */}
-      {loading && (
-        <div className="loading-state">
-          <Loader2 className="spinner" size={32} />
-          <span>Loading users...</span>
+      {/* Content */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 text-[var(--admin-text-muted)]">
+          <Loader2 size={40} className="animate-spin mb-4 text-[var(--neon-blue)]" />
+          <p>Loading users...</p>
         </div>
-      )}
-
-      {error && (
-        <div className="error-state">
-          <AlertTriangle size={24} />
-          <span>{error}</span>
-          <button onClick={fetchUsers}>Retry</button>
-        </div>
-      )}
-
-      {/* Users List */}
-      {!loading && !error && (
+      ) : error ? (
+        <GlassCard className="p-8 text-center border-red-500/30">
+          <AlertTriangle size={32} className="mx-auto text-red-500 mb-4" />
+          <h3 className="text-lg font-bold text-white mb-2">Failed to load users</h3>
+          <p className="text-[var(--admin-text-secondary)] mb-6">{error}</p>
+          <button className={styles.primaryButton} onClick={fetchUsers}>
+            <RefreshCw size={16} />
+            Try Again
+          </button>
+        </GlassCard>
+      ) : users.length === 0 ? (
+        <GlassCard className="p-12 text-center border-dashed border-[var(--admin-glass-border)]">
+          <Users size={48} className="mx-auto text-[var(--admin-text-muted)] mb-4 opacity-50" />
+          <h3 className="text-lg font-bold text-white mb-2">No users found</h3>
+          <p className="text-[var(--admin-text-secondary)]">Try adjusting your filters or search terms</p>
+        </GlassCard>
+      ) : (
         <>
-          {viewMode === 'grid' ? (
-            <div className="users-grid">
-              {users.map((user) => (
-                <UserCard key={user.id} user={user} onAction={handleAction} />
-              ))}
-            </div>
-          ) : (
+          {viewMode === 'table' ? (
             <UserTable
               users={users}
               onAction={handleAction}
@@ -892,328 +532,59 @@ export default function UsersPage() {
               onSelectUser={handleSelectUser}
               onSelectAll={handleSelectAll}
             />
-          )}
-
-          {users.length === 0 && (
-            <div className="empty-state">
-              <Users size={48} />
-              <p>No users found matching your criteria</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {users.map((user) => (
+                <UserCard key={user.id} user={user} onAction={handleAction} />
+              ))}
             </div>
           )}
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between mt-8">
+            <span className="text-sm text-[var(--admin-text-secondary)]">
+              Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalUsers)} of {totalUsers}
+            </span>
+            <div className="flex gap-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                className="p-2 rounded-lg bg-[var(--admin-glass-bg-light)] border border-[var(--admin-glass-border)] text-[var(--admin-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--admin-glass-bg-hover)] transition-colors"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum = i + 1;
+                if (totalPages > 5 && currentPage > 3) {
+                  pageNum = currentPage - 3 + i;
+                  if (pageNum > totalPages) pageNum -= (pageNum - totalPages);
+                }
+                if (pageNum <= 0) pageNum = i + 1; // Fallback
+
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-9 h-9 rounded-lg border text-sm font-medium transition-colors ${currentPage === pageNum
+                      ? 'bg-[var(--admin-gradient-primary)] text-white border-transparent'
+                      : 'bg-[var(--admin-glass-bg-light)] border-[var(--admin-glass-border)] text-[var(--admin-text-secondary)] hover:bg-[var(--admin-glass-bg-hover)]'
+                      }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                className="p-2 rounded-lg bg-[var(--admin-glass-bg-light)] border border-[var(--admin-glass-border)] text-[var(--admin-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--admin-glass-bg-hover)] transition-colors"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
         </>
       )}
-
-      {/* Pagination */}
-      {!loading && totalPages > 1 && (
-        <div className="pagination">
-          <button
-            className="page-btn"
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-          >
-            <ChevronLeft size={18} />
-          </button>
-
-          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-            let pageNum = i + 1;
-            if (totalPages > 5) {
-              if (currentPage > 3) {
-                pageNum = currentPage - 2 + i;
-              }
-              if (currentPage > totalPages - 3) {
-                pageNum = totalPages - 4 + i;
-              }
-            }
-            return pageNum;
-          }).filter(p => p >= 1 && p <= totalPages).map((pageNum) => (
-            <button
-              key={pageNum}
-              className={`page-btn ${currentPage === pageNum ? 'active' : ''}`}
-              onClick={() => setCurrentPage(pageNum)}
-            >
-              {pageNum}
-            </button>
-          ))}
-
-          <button
-            className="page-btn"
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-          >
-            <ChevronRight size={18} />
-          </button>
-
-          <span className="page-info">
-            Page {currentPage} of {totalPages}
-          </span>
-        </div>
-      )}
-
-      <style jsx>{`
-        .users-page {
-          max-width: 1600px;
-          margin: 0 auto;
-        }
-        
-        .page-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 24px;
-        }
-        
-        .page-header h1 {
-          font-size: 28px;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin-bottom: 4px;
-        }
-        
-        .page-header p {
-          font-size: 15px;
-          color: #94a3b8;
-        }
-        
-        .header-actions {
-          display: flex;
-          gap: 12px;
-        }
-        
-        .btn-secondary {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #f1f5f9;
-          font-size: 14px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .btn-secondary:hover {
-          background: rgba(30, 41, 59, 0.8);
-          border-color: rgba(148, 163, 184, 0.4);
-        }
-        
-        .filters-bar {
-          display: flex;
-          gap: 16px;
-          align-items: center;
-          margin-bottom: 24px;
-          flex-wrap: wrap;
-        }
-        
-        .search-box {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 10px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 12px;
-          min-width: 300px;
-          flex: 1;
-        }
-        
-        .search-box input {
-          background: transparent;
-          border: none;
-          outline: none;
-          color: #f1f5f9;
-          font-size: 14px;
-          width: 100%;
-        }
-        
-        .search-box input::placeholder {
-          color: #64748b;
-        }
-        
-        .search-box svg {
-          color: #64748b;
-        }
-        
-        .clear-search {
-          background: transparent;
-          border: none;
-          color: #64748b;
-          cursor: pointer;
-          padding: 4px;
-          display: flex;
-        }
-        
-        .filter-group {
-          display: flex;
-          gap: 12px;
-        }
-        
-        .filter-group select {
-          padding: 10px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #f1f5f9;
-          font-size: 14px;
-          cursor: pointer;
-          outline: none;
-        }
-        
-        .view-toggle {
-          display: flex;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          overflow: hidden;
-        }
-        
-        .view-toggle button {
-          padding: 10px 16px;
-          background: transparent;
-          border: none;
-          color: #94a3b8;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .view-toggle button.active {
-          background: rgba(59, 130, 246, 0.2);
-          color: #3b82f6;
-        }
-        
-        .bulk-actions {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 16px 20px;
-          background: rgba(59, 130, 246, 0.1);
-          border: 1px solid rgba(59, 130, 246, 0.3);
-          border-radius: 12px;
-          margin-bottom: 24px;
-        }
-        
-        .bulk-actions span {
-          font-size: 14px;
-          font-weight: 500;
-          color: #3b82f6;
-        }
-        
-        .bulk-buttons {
-          display: flex;
-          gap: 10px;
-        }
-        
-        .bulk-buttons button {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 8px 14px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 8px;
-          color: #f1f5f9;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .bulk-buttons button:hover {
-          background: rgba(59, 130, 246, 0.2);
-        }
-        
-        .bulk-buttons button.danger:hover {
-          background: rgba(239, 68, 68, 0.2);
-          color: #ef4444;
-        }
-        
-        .loading-state,
-        .error-state,
-        .empty-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 60px 20px;
-          color: #94a3b8;
-          gap: 16px;
-        }
-        
-        .spinner {
-          animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        
-        .error-state {
-          color: #ef4444;
-        }
-        
-        .error-state button {
-          padding: 8px 16px;
-          background: rgba(239, 68, 68, 0.2);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          border-radius: 8px;
-          color: #ef4444;
-          cursor: pointer;
-        }
-        
-        .users-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-          gap: 20px;
-          margin-bottom: 24px;
-        }
-        
-        .pagination {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          margin-top: 24px;
-        }
-        
-        .page-btn {
-          width: 40px;
-          height: 40px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #94a3b8;
-          font-size: 14px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .page-btn:hover:not(:disabled) {
-          background: rgba(59, 130, 246, 0.2);
-          color: #3b82f6;
-        }
-        
-        .page-btn.active {
-          background: linear-gradient(135deg, #667eea, #764ba2);
-          color: white;
-          border-color: transparent;
-        }
-        
-        .page-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        .page-info {
-          margin-left: 16px;
-          font-size: 14px;
-          color: #64748b;
-        }
-      `}</style>
     </div>
   );
 }

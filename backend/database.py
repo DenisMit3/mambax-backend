@@ -1,7 +1,9 @@
-from backend.db.session import engine, async_session_maker, get_db
-from backend.db.base import Base
+from backend.db import engine, async_session_maker, get_db, Base
 
-# Wrapper to match the interface expected by main.py
+# Алиасы для совместимости с основным приложением
 async_session = async_session_maker
 AsyncSessionLocal = async_session_maker
+engine = engine
+Base = Base
+get_db = get_db
 

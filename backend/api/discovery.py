@@ -9,22 +9,14 @@ from backend import crud, schemas, auth, database, models
 from backend.services.moderation import ModerationService
 from backend.services.search_filters import SearchFilters, get_filtered_profiles, get_all_filter_options
 from backend.services.pagination import get_matches_paginated, get_messages_paginated
+from backend.services.geo import geo_service
+from backend.services.storage import storage_service
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Discovery & Profiles"])
 
-# In-memory mock store for local development (Moved from main.py)
-MOCK_USER_STORE = {
-    "00000000-0000-0000-0000-000000000000": {
-        "id": "00000000-0000-0000-0000-000000000000",
-        "user_id": "00000000-0000-0000-0000-000000000000",
-        "name": "Local Demo User",
-        "age": 25,
-        "gender": "robot",
-        "photos": [],
-        "interests": ["Coding", "Debugging"],
-        "bio": "I am a local simulation."
-    }
-}
 
 @router.post("/profile", response_model=schemas.ProfileResponse)
 async def create_profile(
@@ -55,31 +47,26 @@ async def discover_profiles(
     distance_km: int = 50,
     height_min: int = None,
     height_max: int = None,
-    interests: str = None,  # comma-separated
-    smoking: str = None,  # comma-separated
-    drinking: str = None,  # comma-separated
-    education: str = None,  # comma-separated
-    looking_for: str = None,  # comma-separated
-    children: str = None,  # comma-separated
     verified_only: bool = False,
     with_photos_only: bool = True,
+    # Use standard FastAPI List[str] Query handling
+    interests: Optional[List[str]] = Query(None),
+    smoking: Optional[List[str]] = Query(None),
+    drinking: Optional[List[str]] = Query(None),
+    education: Optional[List[str]] = Query(None),
+    looking_for: Optional[List[str]] = Query(None),
+    children: Optional[List[str]] = Query(None),
+    
     current_user: str = Depends(auth.get_current_user),
     db: AsyncSession = Depends(database.get_db)
 ):
     """
     🔍 Поиск профилей с расширенными фильтрами
-    
-    Базовые фильтры (бесплатно): возраст, пол, дистанция
-    Расширенные фильтры (Premium): рост, интересы, привычки, образование
     """
     
     # Получаем VIP статус
     user = await crud.get_user_profile(db, current_user)
     is_vip = user.is_vip if user else False
-    
-    # Парсим списки из comma-separated строк
-    def parse_list(s):
-        return [x.strip() for x in s.split(",")] if s else None
     
     filters = SearchFilters(
         age_min=age_min,
@@ -88,12 +75,12 @@ async def discover_profiles(
         distance_km=distance_km,
         height_min=height_min,
         height_max=height_max,
-        interests=parse_list(interests),
-        smoking=parse_list(smoking),
-        drinking=parse_list(drinking),
-        education=parse_list(education),
-        looking_for=parse_list(looking_for),
-        children=parse_list(children),
+        interests=interests,
+        smoking=smoking,
+        drinking=drinking,
+        education=education,
+        looking_for=looking_for,
+        children=children,
         verified_only=verified_only,
         with_photos_only=with_photos_only
     )
@@ -106,6 +93,35 @@ async def discover_profiles(
         limit=limit,
         is_vip=is_vip
     )
+
+
+@router.get("/discover/prefetch")
+async def prefetch_profiles(
+    limit: int = 10,
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db)
+):
+    """
+    🚀 Prefetch следующих профилей для оптимизации UX.
+    Возвращает до 10 профилей с минимальными данными.
+    """
+    from backend.crud.interaction import get_user_feed
+    from uuid import UUID
+    
+    profiles = await get_user_feed(db, UUID(current_user), limit=limit)
+    
+    # Минимальный набор данных для prefetch
+    return [
+        {
+            "id": str(p.id),
+            "name": p.name,
+            "age": p.age,
+            "photos": p.photos[:1] if p.photos else [],  # Только первое фото
+            "distance": getattr(p, 'distance_km', 0),
+            "is_verified": p.is_verified
+        }
+        for p in profiles
+    ]
 
 
 @router.get("/filters/options")
@@ -167,9 +183,6 @@ async def get_my_profile(
     current_user: str = Depends(auth.get_current_user),
     db: AsyncSession = Depends(database.get_db)
 ):
-    if current_user == "00000000-0000-0000-0000-000000000000":
-        return schemas.ProfileResponse(**MOCK_USER_STORE[current_user])
-
     profile = await crud.get_user_profile(db, current_user)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -181,21 +194,6 @@ async def update_profile(
     current_user: str = Depends(auth.get_current_user),
     db: AsyncSession = Depends(database.get_db)
 ):
-    if current_user == "00000000-0000-0000-0000-000000000000":
-        data = MOCK_USER_STORE[current_user]
-        if profile_update.name: 
-            if not ModerationService.check_text(profile_update.name):
-                raise HTTPException(status_code=400, detail="Name contains inappropriate content")
-            data["name"] = profile_update.name
-        if profile_update.bio:
-            data["bio"] = ModerationService.sanitize_text(profile_update.bio)
-        if profile_update.gender: data["gender"] = profile_update.gender
-        if profile_update.interests: data["interests"] = profile_update.interests
-        if profile_update.photos: data["photos"] = profile_update.photos
-        if profile_update.age: data["age"] = profile_update.age
-        
-        return schemas.ProfileResponse(**data)
-
     # Moderate content
     if profile_update.name and not ModerationService.check_text(profile_update.name):
         raise HTTPException(status_code=400, detail="Name contains inappropriate content")
@@ -210,6 +208,19 @@ async def update_profile(
     updated_profile = await crud.update_profile(db, current_user, profile_update)
     if not updated_profile:
         raise HTTPException(status_code=404, detail="Profile not found")
+        
+    # Sync metadata to Redis if user has location
+    if updated_profile.latitude and updated_profile.longitude:
+        try:
+             await geo_service.update_location(
+                str(updated_profile.id), 
+                updated_profile.latitude, 
+                updated_profile.longitude,
+                metadata={"name": updated_profile.name or "", "age": updated_profile.age or 0}
+            )
+        except Exception as e:
+            logger.error(f"Failed to sync metadata to Redis for user {current_user}: {e}")
+
     return updated_profile
 
 @router.post("/location")
@@ -218,6 +229,15 @@ async def update_location(
     current_user: str = Depends(auth.get_current_user),
     db: AsyncSession = Depends(database.get_db)
 ):
+    # Rate Limit: max 1 request per 10 seconds per user
+    from backend.core.redis import redis_manager
+    is_allowed = await redis_manager.rate_limit(f"loc_update:{current_user}", limit=1, period=10)
+    if not is_allowed:
+        raise HTTPException(
+            status_code=429, 
+            detail="Location updates are too frequent. Please wait a few seconds."
+        )
+
     profile = await crud.get_user_profile(db, current_user)
     if profile:
         profile.latitude = loc.get("lat")
@@ -226,7 +246,6 @@ async def update_location(
         
         # Sync to High-Performance Redis Geo Index
         try:
-            from backend.services.geo import geo_service
             await geo_service.update_location(
                 current_user, 
                 profile.latitude, 
@@ -234,58 +253,47 @@ async def update_location(
                 metadata={"name": profile.name or "", "age": profile.age or 0}
             )
         except Exception as e:
-            print(f"Redis Sync Error: {e}")
+            logger.error(f"Failed to sync location to Redis for user {current_user}: {e}")
             
     return {"status": "ok"}
 
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    db: AsyncSession = Depends(database.get_db),
     current_user: str = Depends(auth.get_current_user)
 ):
-    """Upload file to Vercel Blob Storage with mock fallback for local development"""
+    """
+    Unified Secure Upload for Discovery/Profile.
+    Uses StorageService for cross-platform consistency.
+    """
+    # 1. Save file via unified storage service
+    file_url = await storage_service.save_user_photo(file)
     
-    # Read file content
-    content = await file.read()
-    
-    # Moderate image (Placeholder)
-    # In real world, send bytes to external service
-    if not ModerationService.check_image("placeholder_url"):
-         raise HTTPException(status_code=400, detail="Image contains inappropriate content")
-         
-    filename = f"{uuid.uuid4()}-{file.filename}"
-    
-    # Get Vercel Blob token from environment
-    blob_token = os.environ.get("BLOB_READ_WRITE_TOKEN")
-    
-    if not blob_token:
-        # Mock fallback for local development when BLOB_READ_WRITE_TOKEN not configured
-        print("BLOB_READ_WRITE_TOKEN not configured. Using mock avatar.")
-        mock_id = str(uuid.uuid4())[:8]
-        return {"url": f"https://api.dicebear.com/7.x/avataaars/svg?seed={mock_id}"}
-    
+    # 2. Real Moderation Check on the actual file content
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.put(
-                f"https://blob.vercel-storage.com/{filename}",
-                content=content,
-                headers={
-                    "Authorization": f"Bearer {blob_token}",
-                    "x-api-version": "7",
-                    "Content-Type": file.content_type or "application/octet-stream"
-                },
-                timeout=30.0
+        is_safe = await ModerationService.check_content(
+            db, 
+            user_id=uuid.UUID(current_user), 
+            content=file_url, 
+            content_type="image"
+        )
+        
+        if not is_safe:
+            # DELETE the bad file immediately to save space and prevent abuse
+            storage_service.delete_file(file_url)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Image failed moderation policy"
             )
             
-            if response.status_code != 200:
-                raise Exception(f"Blob upload failed: {response.text}")
-            
-            result = response.json()
-            return {"url": result.get("url")}
-            
+    except HTTPException:
+        raise
     except Exception as e:
-        # Fallback to mock avatar on any upload failure
-        print(f"Upload failed: {e}. Returning mock avatar.")
-        mock_id = str(uuid.uuid4())[:8]
-        return {"url": f"https://api.dicebear.com/7.x/avataaars/svg?seed={mock_id}"}
+        logger.error(f"Moderation CRITICAL error for {file_url}: {e}")
+        # FAIL-CLOSE: Delete the file if we can't verify its safety
+        storage_service.delete_file(file_url)
+        raise HTTPException(status_code=500, detail="Moderation temporary unavailable. Please try later.")
+
+    return {"url": file_url}
 

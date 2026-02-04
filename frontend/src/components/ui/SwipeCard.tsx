@@ -2,7 +2,8 @@
 "use client";
 
 import { motion, useMotionValue, useTransform, useAnimation, PanInfo } from "framer-motion";
-import { Gift } from "lucide-react";
+import { Gift, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SwipeCardProps {
     name: string;
@@ -11,9 +12,10 @@ interface SwipeCardProps {
     image: string;
     onSwipe: (direction: "left" | "right") => void;
     onGiftClick?: () => void;
+    onProfileClick?: () => void;
 }
 
-export function SwipeCard({ name, age, bio, image, onSwipe, onGiftClick, onProfileClick }: SwipeCardProps & { onProfileClick?: () => void }) {
+export function SwipeCard({ name, age, bio, image, onSwipe, onGiftClick, onProfileClick }: SwipeCardProps) {
     const x = useMotionValue(0);
     const controls = useAnimation();
 
@@ -41,52 +43,39 @@ export function SwipeCard({ name, age, bio, image, onSwipe, onGiftClick, onProfi
 
     return (
         <motion.div
-            style={{
-                x,
-                rotate,
-                position: 'absolute',
-                top: 0,
-                width: '100%',
-                height: '100%',
-                maxWidth: '480px', // Match mobile constraint
-                maxHeight: '100%',
-                cursor: 'grab',
-                background: 'var(--surface)',
-                borderRadius: 'var(--radius-lg)',
-                overflow: 'hidden',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-            }}
+            className={cn(
+                "absolute top-0 w-full h-full max-w-[480px] max-h-full cursor-grab active:cursor-grabbing rounded-3xl overflow-hidden shadow-2xl",
+                "glass-panel neon-glow"
+            )}
+            style={{ x, rotate }}
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             animate={controls}
             onDragEnd={handleDragEnd}
-            whileTap={{ cursor: 'grabbing' }}
         >
             {/* Background Image */}
-            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <div className="relative w-full h-full">
                 <img
                     src={image}
                     alt={name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                    className="w-full h-full object-cover pointer-events-none"
                 />
 
                 {/* Gradient Overlay */}
-                <div style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: '50%',
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%)',
-                    pointerEvents: 'none'
-                }} />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent pointer-events-none" />
 
                 {/* Stamps */}
-                <motion.div style={{ opacity: opacityLike, position: 'absolute', top: 40, left: 40, border: '4px solid #4CAF50', color: '#4CAF50', padding: '5px 20px', borderRadius: '8px', fontSize: '32px', fontWeight: 900, transform: 'rotate(-20deg)' }}>
+                <motion.div
+                    style={{ opacity: opacityLike }}
+                    className="absolute top-10 left-10 border-4 border-emerald-500 text-emerald-500 px-5 py-1 rounded-xl text-3xl font-black rotate-[-20deg] pointer-events-none z-20"
+                >
                     LIKE
                 </motion.div>
 
-                <motion.div style={{ opacity: opacityNope, position: 'absolute', top: 40, right: 40, border: '4px solid #FF4D6D', color: '#FF4D6D', padding: '5px 20px', borderRadius: '8px', fontSize: '32px', fontWeight: 900, transform: 'rotate(20deg)' }}>
+                <motion.div
+                    style={{ opacity: opacityNope }}
+                    className="absolute top-10 right-10 border-4 border-rose-500 text-rose-500 px-5 py-1 rounded-xl text-3xl font-black rotate-[20deg] pointer-events-none z-20"
+                >
                     NOPE
                 </motion.div>
 
@@ -98,24 +87,9 @@ export function SwipeCard({ name, age, bio, image, onSwipe, onGiftClick, onProfi
                             e.stopPropagation();
                             onGiftClick();
                         }}
-                        style={{
-                            position: 'absolute',
-                            top: '20px',
-                            right: '20px',
-                            width: '48px',
-                            height: '48px',
-                            borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #ec4899, #a855f7)',
-                            boxShadow: '0 4px 12px rgba(236, 72, 153, 0.4)',
-                            border: 'none',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            zIndex: 10
-                        }}
+                        className="absolute top-5 right-5 w-12 h-12 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 shadow-lg shadow-pink-500/40 border-none flex items-center justify-center cursor-pointer z-30 transition-transform active:scale-90"
                     >
-                        <Gift size={24} color="white" />
+                        <Gift size={24} className="text-white" />
                     </button>
                 )}
 
@@ -126,31 +100,24 @@ export function SwipeCard({ name, age, bio, image, onSwipe, onGiftClick, onProfi
                         e.stopPropagation();
                         if (onProfileClick) onProfileClick();
                     }}
-                    style={{
-                        position: 'absolute',
-                        bottom: 30,
-                        left: 20,
-                        right: 20,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        zIndex: 5
-                    }}
+                    className="absolute bottom-0 left-0 right-0 p-6 pt-10 text-left cursor-pointer z-10 bg-gradient-to-t from-slate-900 via-slate-900/80 to-transparent"
                 >
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-                        <h2 style={{ fontSize: '32px', fontWeight: 800, textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+                    <div className="flex items-center gap-2 mb-2">
+                        <h2 className="text-3xl font-bold text-white drop-shadow-md">
                             {name}, {age}
                         </h2>
-                        {/* Verified Badge */}
-                        <span style={{ background: '#3b82f6', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>✓</span>
+                        <div className="bg-blue-500 rounded-full p-0.5 flex items-center justify-center">
+                            <Check size={12} className="text-white font-bold" strokeWidth={4} />
+                        </div>
                     </div>
 
-                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {/* Tags removed for MVP simplicity or can be passed as prop later */}
-                    </div>
-
-                    <p style={{ marginTop: '15px', fontSize: '16px', lineHeight: '1.4', fontWeight: 400 }}>
+                    <p className="text-slate-300 text-sm line-clamp-2 drop-shadow-sm font-medium">
                         {bio}
                     </p>
+
+                    <div className="mt-4 flex gap-2">
+                        {/* Optional tags can go here */}
+                    </div>
                 </div>
             </div>
         </motion.div>

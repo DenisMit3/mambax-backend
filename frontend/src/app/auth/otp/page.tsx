@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, Suspense, useRef } from "react";
+import { useState, Suspense, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authService } from "@/services/api";
-
+import { ShieldCheck, ArrowLeft } from "lucide-react";
 
 function OtpContent() {
     const searchParams = useSearchParams();
@@ -14,8 +14,18 @@ function OtpContent() {
     const [loading, setLoading] = useState(false);
     const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
+    useEffect(() => {
+        // Auto-focus first input
+        inputs.current[0]?.focus();
+    }, []);
+
     const handleChange = (index: number, value: string) => {
-        if (value.length > 1) return;
+        if (!/^\d*$/.test(value)) return; // Numbers only
+        if (value.length > 1) {
+            // Handle paste somewhat properly if getting huge string, but basics first
+            return;
+        }
+
         const newOtp = [...otp];
         newOtp[index] = value;
         setOtp(newOtp);
@@ -38,85 +48,91 @@ function OtpContent() {
     };
 
     const handleComplete = async (code: string) => {
+        setLoading(true);
         try {
             if (!phone) return;
             const data = await authService.login(phone, code);
+
+            // Redirect based on profile existence
             if (data.has_profile) {
-                router.push("/discover");
+                router.push("/");
             } else {
                 router.push("/onboarding");
             }
         } catch (error) {
-            alert("Invalid Code (Try 0000)");
+            // Dev hint
+            alert("Код неверный (Попробуйте 0000)");
             setOtp(["", "", "", ""]);
+            setLoading(false);
             inputs.current[0]?.focus();
         }
     };
 
     return (
-        <div className="container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ width: '100%', maxWidth: '320px', textAlign: 'center' }}>
-                <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '10px' }}>Enter Code</h1>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>
-                    We sent it to {phone || "your number"}.
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+            {/* Background Effects */}
+            <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-purple-900/10 to-transparent pointer-events-none" />
+            <div className="absolute right-0 top-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="w-full max-w-sm relative z-10 flex flex-col items-center">
+                <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mb-8 border border-white/10 shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                    <ShieldCheck className="w-8 h-8 text-cyan-400" />
+                </div>
+
+                <h1 className="text-2xl font-black text-white tracking-wide uppercase mb-2">Код доступа</h1>
+                <p className="text-slate-400 text-center text-sm mb-10 max-w-[250px]">
+                    Мы отправили цифровой ключ на номер <span className="text-white font-mono">{phone}</span>
                 </p>
 
-                <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginBottom: '30px' }}>
+                <div className="flex gap-4 mb-10">
                     {otp.map((digit, i) => (
                         <input
                             key={i}
-                            ref={(el) => { inputs.current[i] = el; }} // TypeScript can infer, or cast as HTMLInputElement | null
+                            ref={(el) => { inputs.current[i] = el; }}
                             type="text"
                             inputMode="numeric"
                             maxLength={1}
                             value={digit}
                             onChange={(e) => handleChange(i, e.target.value)}
                             onKeyDown={(e) => handleKeyDown(i, e)}
-                            onFocus={(e) => {
-                                e.currentTarget.style.transform = 'scale(1.05)';
-                            }}
-                            onBlur={(e) => {
-                                e.currentTarget.style.transform = 'scale(1)';
-                            }}
                             onPaste={(e) => {
                                 e.preventDefault();
                                 const pastedData = e.clipboardData.getData('text').slice(0, 4).split('');
-                                if (pastedData.length === 4) {
+                                if (pastedData.length === 4 && pastedData.every(c => /\d/.test(c))) {
                                     setOtp(pastedData as [string, string, string, string]);
-                                    // Focus last input or submit
-                                    setTimeout(() => handleComplete(pastedData.join("")), 100);
+                                    // FIX: Call directly instead of setTimeout
+                                    handleComplete(pastedData.join(""));
                                 }
                             }}
-                            style={{
-                                width: '60px',
-                                height: '70px',
-                                background: 'var(--surface)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '12px',
-                                fontSize: '32px',
-                                textAlign: 'center',
-                                color: 'white',
-                                outline: 'none',
-                                fontWeight: 700,
-                                transition: 'transform 0.2s ease-in-out'
-                            }}
+                            className={`w-14 h-16 bg-white/5 border rounded-2xl text-center text-3xl font-mono text-white outline-none transition-all duration-300
+                                ${digit
+                                    ? 'border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)] scale-105'
+                                    : 'border-white/10 focus:border-white/30 focus:bg-white/10'
+                                }
+                                ${loading ? 'opacity-50 cursor-wait' : ''}
+                            `}
                         />
                     ))}
                 </div>
 
-                <div style={{ textAlign: 'center', marginTop: '20px' }}>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-                        Didn&apos;t receive code? <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Resend</span>
-                    </p>
-                </div>
+                {loading && (
+                    <div className="mb-6 flex items-center gap-2 text-cyan-400 text-sm font-bold uppercase tracking-widest animate-pulse">
+                        <span className="w-2 h-2 bg-cyan-400 rounded-full" />
+                        Проверка ключа...
+                    </div>
+                )}
 
                 <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: '14px' }}
-                    onClick={() => alert("Verification code is 0000")}
+                    onClick={() => router.back()}
+                    className="flex items-center gap-2 text-slate-500 hover:text-white transition-colors text-sm font-medium"
                 >
-                    I didn&apos;t receive a code
+                    <ArrowLeft size={16} />
+                    Изменить номер
                 </button>
+
+                <p className="mt-8 text-xs text-slate-600 font-mono">
+                    DEV HINT: Используйте код <span className="text-slate-400">0000</span>
+                </p>
             </div>
         </div>
     );
@@ -124,7 +140,7 @@ function OtpContent() {
 
 export default function OtpPage() {
     return (
-        <Suspense fallback={<div className="container center" style={{ color: 'var(--text-secondary)' }}>Loading...</div>}>
+        <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">Загрузка нейросети...</div>}>
             <OtpContent />
         </Suspense>
     );

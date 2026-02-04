@@ -28,11 +28,12 @@ class RetentionCohort(Base):
     __tablename__ = "retention_cohorts"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    cohort_date: Mapped[datetime] = mapped_column(Date, index=True)
+    cohort_date: Mapped[datetime] = mapped_column(Date, index=True, unique=True)
     cohort_size: Mapped[int] = mapped_column(Integer)
-    retention_data: Mapped[Dict[str, float]] = mapped_column(JSON, default=dict) # {"D1": 0.5, "D7": 0.2 ...}
+    retention_data: Mapped[Dict[str, float]] = mapped_column(JSON, default=dict) # {"d1": 45.5, "d7": 25.0 ...}
     
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    calculated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class AnalyticsEvent(Base):
     """

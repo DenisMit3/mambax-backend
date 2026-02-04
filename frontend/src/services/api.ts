@@ -1,346 +1,319 @@
-import { getApiUrl } from "@/utils/env";
-import * as Sentry from "@sentry/nextjs";
-
 /**
- * Handles API errors by logging in development or capturing in Sentry in production.
- * Always throws the error to be handled by the caller.
- * Fallbacks should be handled in e2e tests, not here.
+ * API Service
+ * 
+ * TODO (TYPES): Replace `any` return types with proper interfaces:
+ * - SwipeResponse, MessageResponse, etc.
+ * - This will enable compile-time error checking and better IDE support
  */
-const handleApiError = (error: any) => {
-    if (process.env.NODE_ENV === 'development') {
-        console.error('Backend error', error);
-    } else {
-        Sentry.captureException(error);
-    }
-    throw error;
-};
 
-const API_URL = getApiUrl();
+import { httpClient } from "@/lib/http-client";
+
+interface AuthResponse {
+    access_token: string;
+    token_type: string;
+    has_profile: boolean;
+    is_new_user: boolean;
+    user?: UserProfile;
+}
+
+interface PhotoUploadResponse {
+    photos: string[];
+}
+
+export interface Match {
+    id: string;
+    user: any; // Ideally typed
+    last_message?: any;
+    current_user_id?: string;
+    user1_id?: string;
+    user2_id?: string;
+    created_at?: string;
+}
+
+interface MatchesResponse {
+    matches: Match[];
+}
+
+interface GiftListResponse {
+    gifts: any[]; // Ideally typed with VirtualGift structure
+    total: number;
+    page?: number;
+    pages?: number;
+    unread_count?: number;
+    total_spent?: number;
+}
+
+export type UserRole = 'user' | 'moderator' | 'admin';
+export type SubscriptionTier = 'free' | 'plus' | 'premium' | 'vip';
+export type Gender = 'male' | 'female';
+
+export interface UserLocation {
+    lat: number;
+    lon: number;
+}
+
+export interface UserProfile {
+    id: string;
+    telegram_id?: string;
+    username?: string;
+    name: string;
+    age: number;
+    gender: Gender;
+    bio?: string;
+    photos: string[];
+    interests: string[];
+    location?: UserLocation;
+    city?: string;
+
+    // Status flags
+    is_verified: boolean;
+    is_active: boolean;
+    is_complete?: boolean;
+    verification_selfie?: string;
+    online_status?: 'online' | 'offline';
+    last_seen?: string;
+
+    // Meta
+    role: UserRole;
+    subscription_tier: SubscriptionTier;
+    stars_balance: number;
+    created_at: string;
+
+    // Feed specific
+    distance_km?: number;
+    compatibility_score?: number;
+
+    // Extended profile info
+    work?: string;
+    education?: string;
+    gifts_received?: number;
+}
+
+export interface GiftCategory {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    sort_order: number;
+    is_active: boolean;
+}
+
+export interface VirtualGift {
+    id: string;
+    name: string;
+    description: string;
+    image_url: string;
+    animation_url: string | null;
+    price: number;
+    currency: string;
+    is_animated: boolean;
+    is_premium: boolean;
+    is_limited: boolean;
+    is_active: boolean;
+    available_until: string | null;
+    max_quantity: number | null;
+    times_sent: number;
+    category_id: string | null;
+    sort_order: number;
+}
+
+export interface CatalogResponse {
+    categories: GiftCategory[];
+    gifts: VirtualGift[];
+}
+
+export interface GiftPurchaseResponse {
+    status: string;
+    transaction_id: string;
+    invoice_link?: string;
+    payment_id?: string;
+}
+
+export interface VapidKeyResponse {
+    publicKey: string;
+}
+
+export interface PaginatedResponse<T> {
+    items: T[];
+    total: number;
+    page: number;
+    size: number;
+    pages: number;
+    has_more: boolean;
+    next_cursor?: string;
+}
 
 export const authService = {
     async login(phone: string, otp: string) {
-        try {
-            const response = await fetch(`${API_URL}/auth/login`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ identifier: phone, otp }),
-            });
-
-            if (!response.ok) {
-                throw new Error("Login failed");
-            }
-
-            const data = await response.json();
-            // Save token
-            if (typeof window !== 'undefined') {
-                localStorage.setItem("token", data.access_token);
-            }
-            return data;
-        } catch (error) {
-            handleApiError(error);
+        const data = await httpClient.post<AuthResponse>("/auth/login", { identifier: phone, otp }, { skipAuth: true });
+        if (typeof window !== 'undefined') {
+            httpClient.setToken(data.access_token);
         }
+        return data;
+    },
+
+    /**
+     * Admin login with email and password
+     * Used by the admin panel gatekeeper
+     */
+    async adminLogin(email: string, password: string) {
+        const data = await httpClient.post<AuthResponse>("/auth/login/email", { email, password }, { skipAuth: true });
+        if (typeof window !== 'undefined') {
+            httpClient.setToken(data.access_token);
+        }
+        return data;
     },
 
     async requestOtp(phone: string) {
-        try {
-            const response = await fetch(`${API_URL}/auth/request-otp`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ identifier: phone }),
-            });
-            if (!response.ok) throw new Error("Failed to request OTP");
-            return await response.json();
-        } catch (error) {
-            handleApiError(error);
-        }
+        return httpClient.post("/auth/request-otp", { identifier: phone }, { skipAuth: true });
     },
 
     async telegramLogin(initData: string) {
-        try {
-            const response = await fetch(`${API_URL}/auth/telegram`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ init_data: initData }),
-            });
-
-            if (!response.ok) throw new Error("Telegram Login Failed");
-
-            const data = await response.json();
-            if (typeof window !== 'undefined') localStorage.setItem("token", data.access_token);
-            return data;
-        } catch (error) {
-            handleApiError(error);
+        const data = await httpClient.post<AuthResponse>("/auth/telegram", { init_data: initData }, { skipAuth: true });
+        if (typeof window !== 'undefined') {
+            httpClient.setToken(data.access_token);
         }
+        return data;
     },
 
-    async createProfile(data: { name: string; gender: string; photos: string[] }) {
-        try {
-            const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-            const response = await fetch(`${API_URL}/profile`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({ ...data, age: 25, interests: [] }), // Default age for MVP
-            });
-            if (!response.ok) throw new Error("Failed to create profile");
-            return response.json();
-        } catch (error) {
-            handleApiError(error);
-        }
+    async createProfile(data: { name: string; age: number; gender: string; photos?: string[]; interests: string[] }) {
+        // Use PUT /users/me to update/complete the profile since user is already created at auth
+        return httpClient.put("/users/me", data);
     },
 
-    async updateProfile(data: { name?: string; bio?: string; gender?: string; interests?: string[]; photos?: string[] }) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/profile`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify(data),
-        });
-        if (!response.ok) throw new Error("Failed to update profile");
-        return response.json();
+    async updateProfile(data: { name?: string; age?: number; bio?: string; gender?: string; interests?: string[]; photos?: string[] }) {
+        return httpClient.put("/users/me", data);
     },
 
-    async getProfiles() {
-        try {
-            const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-            // CHANGE: Use /feed
-            const response = await fetch(`${API_URL}/feed?limit=10`, {
-                headers: {
-                    "Authorization": `Bearer ${token}`
-                }
-            });
-            if (!response.ok) throw new Error("Failed to fetch profiles");
-            return response.json();
-        } catch (error) {
-            handleApiError(error);
-        }
+
+
+    async getProfiles(params?: { lat?: number; lon?: number; limit?: number }) {
+        const query = new URLSearchParams();
+        if (params?.limit) query.append('limit', String(params.limit));
+        else query.append('limit', '10');
+
+        if (params?.lat !== undefined) query.append('lat', String(params.lat));
+        if (params?.lon !== undefined) query.append('lon', String(params.lon));
+
+        // Backend currently returns PaginatedResponse, but we support array fallback in clients just in case
+        return httpClient.get<PaginatedResponse<UserProfile>>(`/feed?${query.toString()}`);
     },
 
     async getMe() {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/users/me`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error("Failed to get profile");
-        return response.json();
+        return httpClient.get<UserProfile>("/users/me");
     },
 
     async deleteAccount() {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/users/me`, {
-            method: "DELETE",
-            headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error("Failed to delete account");
-        return true;
+        return httpClient.delete("/users/me");
     },
 
     async exportData() {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/users/me/export`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error("Failed to export data");
-        return response.json();
+        return httpClient.get("/users/me/export");
+    },
+
+    async getLikesReceived() {
+        return httpClient.get<{ likes: any[]; total: number }>("/users/me/likes-received");
     },
 
     async getUser(userId: string) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/users/${userId}`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error("Failed to fetch user");
-        return response.json();
+        return httpClient.get<UserProfile>(`/users/${userId}`);
     },
 
     async uploadPhoto(file: File) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
         const formData = new FormData();
         formData.append("file", file);
 
-        // CHANGE: Use real users endpoint
-        const response = await fetch(`${API_URL}/users/me/photo`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${token}`
-            },
-            body: formData
-        });
+        // HttpClient now handles FormData Content-Type automatically (by NOT setting it, letting browser set boundary)
+        const data = await httpClient.post<PhotoUploadResponse>("/users/me/photo", formData);
 
-        if (!response.ok) throw new Error("Upload failed");
-        const data = await response.json();
-        // Backend returns UserResponse. Extract last photo URL.
+        // Return the last uploaded photo url
         const url = data.photos && data.photos.length > 0 ? data.photos[data.photos.length - 1] : "";
         return { url };
     },
 
     async uploadChatMedia(file: File) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
         const formData = new FormData();
         formData.append("file", file);
-
-        const response = await fetch(`${API_URL}/chat/upload`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${token}`
-            },
-            body: formData
-        });
-
-        if (!response.ok) throw new Error("Upload failed");
-        return await response.json();
+        return httpClient.post("/chat/upload", formData);
     },
 
     async likeUser(userId: string, isSuper: boolean = false) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        // CHANGE: Use /likes and correct schema
-        try {
-            const res = await fetch(`${API_URL}/likes`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({ liked_user_id: userId, is_super: isSuper })
-            });
-            return res.json();
-        } catch (e) {
-            handleApiError(e);
-        }
+        return httpClient.post("/likes", { liked_user_id: userId, is_super: isSuper });
+    },
+
+    async swipe(userId: string, action: 'like' | 'dislike' | 'superlike') {
+        return httpClient.post("/swipe", { to_user_id: userId, action });
     },
 
     async getVapidKey() {
-        const response = await fetch(`${API_URL}/notifications/vapid-public-key`);
-        return response.json();
+        return httpClient.get<VapidKeyResponse>("/notifications/vapid-public-key", { skipAuth: true });
     },
 
     async subscribePush(subscription: { endpoint: string, keys: { p256dh: string, auth: string } }) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        return await fetch(`${API_URL}/notifications/subscribe`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify(subscription)
-        });
+        return httpClient.post("/notifications/subscribe", subscription);
+    },
+
+    async startChat(userId: string): Promise<{ match_id: string; is_new: boolean }> {
+        return httpClient.post<{ match_id: string; is_new: boolean }>(`/chat/start/${userId}`);
     },
 
     async getMatches() {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        try {
-            // CHANGE: Use /matches
-            const res = await fetch(`${API_URL}/matches`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (!res.ok) return [];
-            const data = await res.json();
-            return data.matches || data; // Handle both list or {matches: [...]} if format varies
-        } catch (error) {
-            handleApiError(error);
+        const data = await httpClient.get<MatchesResponse | { matches: Match[] }>("/matches");
+        // Handle potential backend structure variations if any, but assuming matches array
+        if ('matches' in data) {
+            return data.matches;
         }
+        return data as unknown as Match[];
+    },
+
+    async getMatch(matchId: string): Promise<Match> {
+        return httpClient.get<Match>(`/matches/${matchId}`);
     },
 
     async getMessages(matchId: string) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        try {
-            // CHANGE: Use /matches/{id}/messages
-            const res = await fetch(`${API_URL}/matches/${matchId}/messages`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error("Failed to get messages");
-            return await res.json();
-        } catch (error) {
-            handleApiError(error);
-        }
+        return httpClient.get(`/matches/${matchId}/messages`);
     },
 
     async sendMessage(matchId: string, text: string, type: string = "text", audio_url: string | null = null, duration: string | null = null) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        try {
-            // CHANGE: Use /chat/send
-            const res = await fetch(`${API_URL}/chat/send`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    match_id: matchId,
-                    text,
-                    type,
-                    media_url: audio_url,
-                    duration: duration ? parseInt(duration as string) : undefined
-                })
-            });
-            if (!res.ok) throw new Error("Failed to send");
-            return await res.json();
-        } catch (error) {
-            handleApiError(error);
-        }
+        return httpClient.post("/chat/send", {
+            match_id: matchId,
+            text,
+            type,
+            media_url: audio_url,
+            duration: duration ? parseInt(duration as string) : undefined
+        });
     },
 
     async updateLocation(lat: number, lon: number) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
         try {
-            await fetch(`${API_URL}/location`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({ lat, lon })
-            });
+            await httpClient.post("/location", { lat, lon });
         } catch (e) {
             console.error("Failed to update location", e);
         }
     },
 
     async blockUser(userId: string, reason?: string) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/safety/block`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({ user_id: userId, reason })
-        });
-        if (!response.ok) throw new Error("Failed to block user");
-        return response.json();
+        return httpClient.post("/safety/block", { user_id: userId, reason });
     },
 
     async reportUser(userId: string, reason: string, description?: string) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/safety/report`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({ user_id: userId, reason, description })
-        });
-        if (!response.ok) throw new Error("Failed to report user");
-        return response.json();
+        return httpClient.post("/safety/report", { user_id: userId, reason, description });
     },
 
     async rewindLastSwipe() {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/rewind`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${token}`
-            }
-        });
-        if (!response.ok) throw new Error("Failed to rewind");
-        return response.json();
+        return httpClient.post("/rewind");
+    },
+
+    async addStarsDev(amount: number) {
+        return httpClient.post("/users/me/add-stars-dev", { amount });
+    },
+
+    async spendStarsDev(amount: number) {
+        return httpClient.post("/users/me/spend-stars-dev", { amount });
+    },
+
+    async getAnalytics() {
+        return httpClient.get("/analytics/profile");
     },
 
     // ============================================
@@ -348,126 +321,64 @@ export const authService = {
     // ============================================
 
     async getGiftsCatalog(categoryId?: string, includePremium: boolean = true) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
         const params = new URLSearchParams();
         if (categoryId) params.append("category_id", categoryId);
         params.append("include_premium", String(includePremium));
 
-        const response = await fetch(`${API_URL}/gifts/catalog?${params}`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error("Failed to fetch gift catalog");
-        return response.json();
+        return httpClient.get<CatalogResponse>(`/gifts/catalog?${params}`);
     },
 
     async sendGift(giftId: string, receiverId: string, message?: string, isAnonymous: boolean = false) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/gifts/send`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                gift_id: giftId,
-                receiver_id: receiverId,
-                message,
-                is_anonymous: isAnonymous
-            })
+        return httpClient.post("/gifts/send", {
+            gift_id: giftId,
+            receiver_id: receiverId,
+            message,
+            is_anonymous: isAnonymous
         });
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Failed to send gift");
-        }
-        return response.json();
     },
 
     async getReceivedGifts(limit: number = 20, offset: number = 0, unreadOnly: boolean = false) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
         const params = new URLSearchParams({
             limit: String(limit),
             offset: String(offset),
             unread_only: String(unreadOnly)
         });
-
-        const response = await fetch(`${API_URL}/gifts/received?${params}`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error("Failed to fetch received gifts");
-        return response.json();
+        return httpClient.get<GiftListResponse>(`/gifts/received?${params}`);
     },
 
     async getSentGifts(limit: number = 20, offset: number = 0) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
         const params = new URLSearchParams({
             limit: String(limit),
             offset: String(offset)
         });
-
-        const response = await fetch(`${API_URL}/gifts/sent?${params}`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error("Failed to fetch sent gifts");
-        return response.json();
+        return httpClient.get<GiftListResponse>(`/gifts/sent?${params}`);
     },
 
     async markGiftAsRead(transactionId: string) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/gifts/mark-read`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({ transaction_id: transactionId })
-        });
-        if (!response.ok) throw new Error("Failed to mark gift as read");
-        return response.json();
+        return httpClient.post("/gifts/mark-read", { transaction_id: transactionId });
     },
 
     async sendGiftDirectPurchase(giftId: string, receiverId: string, message?: string, isAnonymous?: boolean) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/admin/monetization/payments/gift`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                gift_id: giftId,
-                receiver_id: receiverId,
-                message,
-                is_anonymous: isAnonymous
-            })
+        return httpClient.post<GiftPurchaseResponse>("/admin/monetization/payments/gift", {
+            gift_id: giftId,
+            receiver_id: receiverId,
+            message,
+            is_anonymous: isAnonymous
         });
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || "Failed to create gift invoice");
-        }
-        return response.json();
     },
 
     // ============================================
     // MONETIZATION API
     // ============================================
 
-    async buySubscription(tier: string) {
-        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
-        const response = await fetch(`${API_URL}/payments/subscription`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({ tier })
-        });
+    async createInvoice(amount: number, label: string) {
+        return httpClient.post<{ invoice_link: string; transaction_id: string; amount: number; currency: string }>(
+            "/api/payments/invoice",
+            { amount, label }
+        );
+    },
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const error: any = new Error(errorData.detail || "Failed to buy subscription");
-            error.data = errorData;
-            throw error;
-        }
-        return response.json();
+    async buySubscription(tier: string) {
+        return httpClient.post("/payments/subscription", { tier });
     }
 };

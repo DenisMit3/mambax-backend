@@ -1,360 +1,161 @@
-"use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+'use client';
 
-import { useState, useRef, useEffect } from "react";
-import { X, Star, Sparkles, Zap } from "lucide-react";
+import { useState } from "react";
+import { X, Star, Loader2 } from "lucide-react";
+import { useTelegram } from "@/lib/telegram";
+import { authService } from "@/services/api";
+import { motion, AnimatePresence } from "framer-motion";
+
+const PACKAGES = [
+    { id: 'starter', stars: 100, price: 100, label: 'Starter', popular: false },
+    { id: 'pro', stars: 500, price: 500, label: 'Pro', popular: true },
+    { id: 'whale', stars: 2500, price: 2500, label: 'Whale', popular: false },
+];
 
 interface TopUpModalProps {
     isOpen: boolean;
     onClose: () => void;
     currentBalance: number;
-    onSuccess?: (newBalance: number) => void;
+    onSuccess?: () => void;
 }
 
-const packages = [
-    { stars: 50, label: "Starter", icon: "⭐", popular: false },
-    { stars: 100, label: "Basic", icon: "✨", popular: false },
-    { stars: 250, label: "Popular", icon: "🌟", popular: true },
-    { stars: 500, label: "Best Value", icon: "💫", popular: false },
-];
-
 export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUpModalProps) {
-    const [selectedPackage, setSelectedPackage] = useState<number | null>(250);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const pollInterval = useRef<NodeJS.Timeout | null>(null);
+    const { webApp, hapticFeedback } = useTelegram();
+    const [loadingPkg, setLoadingPkg] = useState<string | null>(null);
 
-    // Cleanup polling on unmount
-    useEffect(() => {
-        return () => {
-            if (pollInterval.current) clearInterval(pollInterval.current);
-        };
-    }, []);
-
-    if (!isOpen) return null;
-
-    const handlePurchase = async () => {
-        if (!selectedPackage) return;
-
-        setLoading(true);
-        setError(null);
+    const handlePurchase = async (pkg: typeof PACKAGES[0]) => {
+        hapticFeedback.impactOccurred('heavy');
+        setLoadingPkg(pkg.id);
 
         try {
-            // Check if we're in Telegram WebApp
-            const tg = (window as any).Telegram?.WebApp;
+            // 1. Create Invoice
+            const invoice = await authService.createInvoice(pkg.stars, pkg.label);
 
-            if (tg) {
-                // Real Telegram payment flow
-                const token = localStorage.getItem("token");
-                const response = await fetch("/api_proxy/payments/top-up", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ amount: selectedPackage })
-                });
+            // 2. Open Telegram Interface (only if inside Telegram WebApp with supported version)
+            const webApp = window.Telegram?.WebApp as any;
+            const tgVersion = parseFloat(webApp?.version || '0');
+            const supportsInvoice = webApp && typeof webApp.openInvoice === 'function' && tgVersion >= 6.1;
 
-                if (!response.ok) {
-                    throw new Error("Failed to create invoice");
-                }
-
-                const data = await response.json();
-
-                // Start polling for status
-                const checkStatus = async () => {
-                    try {
-                        const statusRes = await fetch(`/api_proxy/payments/transaction/${data.transaction_id}/status`, {
-                            headers: { "Authorization": `Bearer ${token}` }
-                        });
-                        if (statusRes.ok) {
-                            const statusData = await statusRes.json();
-                            if (statusData.status === 'completed') {
-                                return true;
-                            }
-                        }
-                    } catch (e) {
-                        console.error("Polling error", e);
-                    }
-                    return false;
-                };
-
-                // Poll every 3 seconds for 60 seconds
-                let attempts = 0;
-                pollInterval.current = setInterval(async () => {
-                    attempts++;
-                    const isCompleted = await checkStatus();
-
-                    if (isCompleted) {
-                        if (pollInterval.current) clearInterval(pollInterval.current);
-                        onSuccess?.(currentBalance + selectedPackage);
-                        onClose();
-                        setLoading(false);
-                    } else if (attempts >= 20) {
-                        if (pollInterval.current) clearInterval(pollInterval.current);
-                        // Timeout - don't show error, just stop loading, let user check later
-                        setLoading(false);
-                    }
-                }, 3000);
-
-                // Open Telegram payment
-                tg.openInvoice(data.invoice_url, async (status: string) => {
+            if (supportsInvoice) {
+                webApp.openInvoice(invoice.invoice_link, (status: string) => {
                     if (status === 'paid') {
-                        // Immediate check
-                        const isCompleted = await checkStatus();
-                        if (isCompleted) {
-                            if (pollInterval.current) clearInterval(pollInterval.current);
-                            onSuccess?.(currentBalance + selectedPackage);
-                            onClose();
-                            setLoading(false);
-                        } else {
-                            // Keep polling
-                        }
-                    } else if (status === 'cancelled') {
-                        if (pollInterval.current) clearInterval(pollInterval.current);
-                        setError("Payment cancelled");
-                        setLoading(false);
-                    } else if (status === 'failed') {
-                        if (pollInterval.current) clearInterval(pollInterval.current);
-                        setError("Payment failed. Please try again.");
-                        setLoading(false);
+                        hapticFeedback.notificationOccurred('success');
+                        if (onSuccess) onSuccess();
+                        onClose();
+                        // Ideally we should listen to WS for balance update, but reload works for now
+                        setTimeout(() => window.location.reload(), 1000);
+                    } else if (status === 'cancelled' || status === 'failed') {
+                        hapticFeedback.notificationOccurred('error');
                     }
                 });
             } else {
-                // Dev mode - simulate adding stars
-                const token = localStorage.getItem("token");
-                const response = await fetch("/api_proxy/dev/add-stars", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ amount: selectedPackage })
-                });
-
-                if (!response.ok) {
-                    // Try the endpoint even if it fails - might not exist in prod
-                    console.warn("Dev endpoint not available, simulating success");
+                // Browser Fallback (Open link directly for dev/testing)
+                if (invoice.invoice_link) {
+                    window.open(invoice.invoice_link, '_blank');
                 }
-
-                // Simulate success for dev
-                setTimeout(() => {
-                    onSuccess?.(currentBalance + selectedPackage);
-                    onClose();
-                    setLoading(false);
-                }, 1000);
+                console.info('[Dev Mode] Telegram openInvoice not available. Invoice link opened in new tab.');
             }
-        } catch (err: any) {
-            setError(err.message || "An error occurred");
-            setLoading(false);
+
+        } catch (error) {
+            console.error("Payment setup failed", error);
+            alert("Не удалось создать платеж. Попробуйте позже.");
+        } finally {
+            setLoadingPkg(null);
         }
     };
 
     return (
-        <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.6)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '20px'
-        }}>
-            <div style={{
-                background: 'linear-gradient(180deg, #1a1a2e 0%, #16162a 100%)',
-                borderRadius: '24px',
-                width: '100%',
-                maxWidth: '380px',
-                overflow: 'hidden',
-                boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
-            }}>
-                {/* Header */}
-                <div style={{
-                    padding: '24px',
-                    background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
-                    position: 'relative'
-                }}>
-                    <button
+        <AnimatePresence>
+            {isOpen && (
+                <>
+                    {/* Backdrop */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                         onClick={onClose}
-                        style={{
-                            position: 'absolute',
-                            top: '16px',
-                            right: '16px',
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            background: 'rgba(0,0,0,0.2)',
-                            border: 'none',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            color: 'white'
-                        }}
+                        className="absolute inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
                     >
-                        <X size={18} />
-                    </button>
+                        {/* Modal Container */}
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-md bg-[#0f1115] border border-white/10 p-6 rounded-3xl relative overflow-hidden shadow-2xl"
+                        >
+                            {/* Decor */}
+                            <div className="absolute -top-20 -right-20 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{
-                            width: '56px',
-                            height: '56px',
-                            borderRadius: '16px',
-                            background: 'rgba(255,255,255,0.2)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}>
-                            <Star size={32} color="white" fill="white" />
-                        </div>
-                        <div>
-                            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: 'white' }}>
-                                Get Stars
-                            </h2>
-                            <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'rgba(255,255,255,0.8)' }}>
-                                Send gifts & unlock features
-                            </p>
-                        </div>
-                    </div>
+                            <div className="flex justify-between items-center mb-6 relative z-10">
+                                <h3 className="text-xl font-black text-white uppercase italic tracking-wider">
+                                    Пополнение
+                                </h3>
+                                <button onClick={onClose} className="p-2 rounded-full bg-white/5 text-slate-400 hover:text-white transition">
+                                    <X size={20} />
+                                </button>
+                            </div>
 
-                    {/* Current Balance */}
-                    <div style={{
-                        marginTop: '20px',
-                        padding: '12px 16px',
-                        background: 'rgba(0,0,0,0.15)',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: '14px' }}>Current Balance</span>
-                        <span style={{ color: 'white', fontSize: '20px', fontWeight: 700 }}>
-                            {currentBalance} ⭐
-                        </span>
-                    </div>
-                </div>
+                            {/* Balance Card */}
+                            <div className="mb-8 p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-transparent border border-amber-500/20 flex items-center gap-4 relative overflow-hidden">
+                                <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                                    <Star fill="currentColor" size={24} />
+                                </div>
+                                <div>
+                                    <div className="text-[10px] text-amber-500 font-bold uppercase tracking-widest">Текущий баланс</div>
+                                    <div className="text-2xl font-black text-white">{currentBalance} STARS</div>
+                                </div>
+                            </div>
 
-                {/* Packages */}
-                <div style={{ padding: '20px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        {packages.map((pkg) => (
-                            <button
-                                key={pkg.stars}
-                                onClick={() => setSelectedPackage(pkg.stars)}
-                                style={{
-                                    padding: '16px',
-                                    borderRadius: '16px',
-                                    border: selectedPackage === pkg.stars
-                                        ? '2px solid #FFD700'
-                                        : '2px solid rgba(255,255,255,0.1)',
-                                    background: selectedPackage === pkg.stars
-                                        ? 'rgba(255, 215, 0, 0.1)'
-                                        : 'rgba(255,255,255,0.05)',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    position: 'relative',
-                                    transition: 'all 0.2s ease'
-                                }}
-                            >
-                                {pkg.popular && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '-10px',
-                                        right: '-10px',
-                                        background: 'linear-gradient(135deg, #ec4899, #a855f7)',
-                                        padding: '4px 8px',
-                                        borderRadius: '8px',
-                                        fontSize: '10px',
-                                        fontWeight: 700,
-                                        color: 'white'
-                                    }}>
-                                        POPULAR
-                                    </div>
-                                )}
-                                <span style={{ fontSize: '28px' }}>{pkg.icon}</span>
-                                <span style={{
-                                    fontSize: '24px',
-                                    fontWeight: 800,
-                                    color: selectedPackage === pkg.stars ? '#FFD700' : 'white'
-                                }}>
-                                    {pkg.stars}
-                                </span>
-                                <span style={{
-                                    fontSize: '12px',
-                                    color: 'rgba(255,255,255,0.6)'
-                                }}>
-                                    {pkg.label}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
+                            <div className="space-y-3 mb-6 relative z-10">
+                                {PACKAGES.map((pkg) => (
+                                    <button
+                                        key={pkg.id}
+                                        disabled={loadingPkg !== null}
+                                        onClick={() => handlePurchase(pkg)}
+                                        className={`relative w-full group overflow-hidden rounded-2xl p-4 border transition-all duration-300 flex items-center justify-between
+                                            ${pkg.popular
+                                                ? 'bg-gradient-to-r from-amber-500/20 to-orange-600/10 border-amber-500/50 hover:border-amber-500'
+                                                : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'}
+                                            ${loadingPkg && loadingPkg !== pkg.id ? 'opacity-50' : ''}
+                                        `}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${pkg.popular ? 'bg-amber-500 text-black' : 'bg-white/10 text-white'}`}>
+                                                <Star size={18} fill="currentColor" />
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="text-white font-bold text-lg leading-none">{pkg.stars} STARS</div>
+                                                <div className="text-slate-400 text-xs font-mono mt-1">{pkg.price} XTR</div>
+                                            </div>
+                                        </div>
 
-                    {error && (
-                        <div style={{
-                            marginTop: '16px',
-                            padding: '12px',
-                            background: 'rgba(239, 68, 68, 0.1)',
-                            border: '1px solid rgba(239, 68, 68, 0.3)',
-                            borderRadius: '12px',
-                            color: '#ef4444',
-                            fontSize: '14px',
-                            textAlign: 'center'
-                        }}>
-                            {error}
-                        </div>
-                    )}
+                                        {loadingPkg === pkg.id ? (
+                                            <Loader2 className="animate-spin text-white" />
+                                        ) : (
+                                            <div className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${pkg.popular ? 'bg-amber-500 text-black' : 'bg-white/10 text-white group-hover:bg-white/20'}`}>
+                                                Купить
+                                            </div>
+                                        )}
 
-                    {/* Purchase Button */}
-                    <button
-                        onClick={handlePurchase}
-                        disabled={!selectedPackage || loading}
-                        style={{
-                            width: '100%',
-                            marginTop: '20px',
-                            padding: '16px',
-                            borderRadius: '16px',
-                            border: 'none',
-                            background: loading
-                                ? 'rgba(255, 215, 0, 0.5)'
-                                : 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
-                            color: '#1a1a2e',
-                            fontSize: '16px',
-                            fontWeight: 700,
-                            cursor: loading ? 'wait' : 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            boxShadow: '0 8px 20px rgba(255, 215, 0, 0.3)'
-                        }}
-                    >
-                        {loading ? (
-                            <>Processing...</>
-                        ) : (
-                            <>
-                                <Zap size={20} />
-                                Buy {selectedPackage} Stars
-                            </>
-                        )}
-                    </button>
+                                        {pkg.popular && (
+                                            <div className="absolute top-0 right-0 bg-amber-500 text-[9px] font-black text-black px-2 py-0.5 rounded-bl-lg">
+                                                HIT
+                                            </div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
 
-                    <p style={{
-                        marginTop: '16px',
-                        fontSize: '12px',
-                        color: 'rgba(255,255,255,0.4)',
-                        textAlign: 'center'
-                    }}>
-                        Powered by Telegram Stars ⭐
-                    </p>
-                </div>
-            </div>
-        </div>
+                            <div className="text-center text-[10px] text-slate-500">
+                                Оплата производится через Telegram Stars (XTR).<br />
+                                Средства зачисляются мгновенно.
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                </>
+            )}
+        </AnimatePresence>
     );
 }

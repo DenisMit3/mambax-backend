@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Monitor, Phone } from "lucide-react";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 export const DevModeToggle = () => {
     const [isMobileView, setIsMobileView] = useState(true);
@@ -8,13 +11,11 @@ export const DevModeToggle = () => {
 
     useEffect(() => {
         setMounted(true);
-        // Check localStorage on mount
         const savedMode = localStorage.getItem("devViewMode");
         if (savedMode === "desktop") {
             setIsMobileView(false);
             document.body.classList.add("force-desktop-view");
         } else {
-            // Default to mobile view (wrapper active)
             setIsMobileView(true);
             document.body.classList.remove("force-desktop-view");
         }
@@ -25,11 +26,9 @@ export const DevModeToggle = () => {
         setIsMobileView(newMode);
 
         if (newMode) {
-            // Switch TO Mobile emulation
             document.body.classList.remove("force-desktop-view");
             localStorage.setItem("devViewMode", "mobile");
         } else {
-            // Switch TO Desktop full width
             document.body.classList.add("force-desktop-view");
             localStorage.setItem("devViewMode", "desktop");
         }
@@ -38,46 +37,25 @@ export const DevModeToggle = () => {
     if (!mounted) return null;
 
     return (
-        <button
+        <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
             onClick={toggleMode}
-            className="fixed bottom-4 right-4 z-[9999] flex h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-lg transition-transform hover:scale-110 active:scale-95"
+            className={cn(
+                "fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-2xl",
+                "text-white shadow-2xl transition-colors hover:bg-slate-800",
+                "glass-panel bg-slate-900/80" // Override glass-panel bg with 80% opacity
+            )}
             title={isMobileView ? "Switch to Desktop View" : "Switch to Mobile View"}
-            style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}
         >
             {isMobileView ? (
-                // Desktop Icon
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                >
-                    <rect width="20" height="14" x="2" y="3" rx="2" />
-                    <line x1="8" x2="16" y1="21" y2="21" />
-                    <line x1="12" x2="12" y1="17" y2="21" />
-                </svg>
+                <Monitor size={24} className="text-amber-400" />
             ) : (
-                // Mobile Icon
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                >
-                    <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
-                    <path d="M12 18h.01" />
-                </svg>
+                <Phone size={24} className="text-blue-400" />
             )}
-        </button>
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900" />
+        </motion.button>
     );
 };

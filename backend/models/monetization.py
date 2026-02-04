@@ -19,7 +19,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     String, Integer, Boolean, Float, Text, DateTime, 
-    JSON, Uuid, Numeric, ForeignKey, Enum as SQLEnum
+    JSON, Uuid, Numeric, ForeignKey, Enum as SQLEnum, Index
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
@@ -30,6 +30,7 @@ from backend.db.base import Base
 class SubscriptionTier(str, enum.Enum):
     """Subscription tier levels"""
     FREE = "free"
+    VIP = "vip"
     GOLD = "gold"
     PLATINUM = "platinum"
 
@@ -622,6 +623,10 @@ class GiftTransaction(Base):
     Records every gift sent between users.
     """
     __tablename__ = "gift_transactions"
+    __table_args__ = (
+        # FIX (PERF): Composite index for "unread gifts" query optimization
+        Index("idx_gift_tx_receiver_unread", "receiver_id", "is_read"),
+    )
     
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid, primary_key=True, default=uuid.uuid4

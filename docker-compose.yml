@@ -6,15 +6,15 @@ services:
     image: postgres:16-alpine
     container_name: mambax_postgres
     environment:
-      POSTGRES_USER: mambax_user
-      POSTGRES_PASSWORD: mambax_password
-      POSTGRES_DB: mambax_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U mambax_user -d mambax_db" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,24 +48,30 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://mambax_user:mambax_password@postgres:5432/mambax_db
+      - DATABASE_URL=${DOCKER_DATABASE_URL}
       - REDIS_URL=redis://redis:6379
-      - SECRET_KEY=supersecretkey123-change-in-production
-      - ENVIRONMENT=development
-      - LOCAL_NETWORK_ACCESS=True
-      - ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,*
+      - SECRET_KEY=${SECRET_KEY}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - LOCAL_NETWORK_ACCESS=${LOCAL_NETWORK_ACCESS}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - FRONTEND_URL=http://localhost:3000
+      - FRONTEND_URL=${FRONTEND_URL}
       - BACKEND_URL=http://localhost:8001
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
-      - VAPID_CLAIMS_EMAIL=${VAPID_CLAIMS_EMAIL:-mailto:admin@mambax.com}
+      - VAPID_CLAIMS_EMAIL=${VAPID_CLAIMS_EMAIL}
       - SEED_ON_STARTUP=${SEED_ON_STARTUP:-False}
       - ADMIN_PHONE=+79062148253
       - ADMIN_USERNAME=RezidentMD
+      # S3 / MinIO Configuration
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - S3_ENDPOINT_URL=http://minio:9000
+      - BACKUP_BUCKET=${BACKUP_BUCKET}
     volumes:
-      - ./backend:/app
-      - backend_uploads:/app/static/uploads
+      - ./backend:/app/backend
+      - backend_uploads:/app/backend/static/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,7 +97,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8001
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
       - BACKEND_URL=http://backend:8001
       - NODE_ENV=development
     volumes:
@@ -112,14 +118,40 @@ services:
     container_name: mambax_bot
     command: [ "python", "bot.py" ]
     environment:
-      - DATABASE_URL=postgresql+asyncpg://mambax_user:mambax_password@postgres:5432/mambax_db
+      - DATABASE_URL=${DOCKER_DATABASE_URL}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - FRONTEND_URL=http://localhost:3000
+      - FRONTEND_URL=${FRONTEND_URL}
       - PYTHONPATH=/app
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - mambax-network
+
+  # MinIO (S3 Compatible Storage for Backups)
+  minio:
+    image: minio/minio:latest
+    container_name: mambax_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - mambax-network
+
+  # Create Buckets for MinIO
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c " /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin; /usr/bin/mc mb myminio/backups; /usr/bin/mc anonymous set public myminio/backups; exit 0; "
     networks:
       - mambax-network
 
@@ -129,6 +161,8 @@ volumes:
   redis_data:
     driver: local
   backend_uploads:
+    driver: local
+  minio_data:
     driver: local
 
 networks:

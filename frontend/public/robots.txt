@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /$
+Allow: /about
+Allow: /manifest.json
+Disallow: /feed
+Disallow: /admin
+Disallow: /users
+Disallow: /chat
+Disallow: /messages
+Disallow: /likes
+Disallow: /api_proxy/
+Disallow: /_next/

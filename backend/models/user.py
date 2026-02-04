@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Optional, List
 from decimal import Decimal
 
-from sqlalchemy import String, Integer, Boolean, Float, Text, DateTime, JSON, Uuid, Numeric, Enum as SQLAlchemyEnum
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import String, Integer, Boolean, Float, Text, DateTime, JSON, Uuid, Numeric, ForeignKey, Enum as SQLAlchemyEnum, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base
 
@@ -23,10 +23,12 @@ class UserStatus(str, enum.Enum):
     SUSPENDED = "suspended"
     BANNED = "banned"
     PENDING = "pending"
+    SHADOWBAN = "shadowban"
 
 
 class SubscriptionTier(str, enum.Enum):
     FREE = "free"
+    VIP = "vip"
     GOLD = "gold"
     PLATINUM = "platinum"
 
@@ -37,30 +39,39 @@ class UserRole(str, enum.Enum):
     MODERATOR = "moderator"
 
 
+class UserPhoto(Base):
+    __tablename__ = "user_photos"
+    
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f"<UserPhoto {self.id} for {self.user_id}>"
+
+
+class UserInterest(Base):
+    __tablename__ = "user_interests"
+    
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    tag: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+
+    def __repr__(self) -> str:
+        return f"<UserInterest {self.tag} for {self.user_id}>"
+
+
 class User(Base):
     """
     ORM модель пользователя дейтинг-платформы.
-    
-    Таблица: users
-    
-    Атрибуты:
-        id: Уникальный идентификатор (UUID)
-        email: Email пользователя (уникальный)
-        hashed_password: Хэш пароля (bcrypt)
-        name: Имя пользователя
-        age: Возраст (18-120)
-        gender: Пол (male/female/other)
-        bio: Описание профиля
-        photos: Список URL фотографий
-        interests: Список интересов (теги)
-        latitude: Широта для геопоиска
-        longitude: Долгота для геопоиска
-        is_vip: VIP статус (монетизация)
-        is_active: Активен ли аккаунт
-        created_at: Дата создания
-        updated_at: Дата обновления
     """
     __tablename__ = "users"
+    __table_args__ = (
+        Index("idx_users_gender_age", "gender", "age"),
+        Index("idx_users_active_created", "is_active", "created_at"),
+        Index("idx_users_lat_lon", "latitude", "longitude"),
+    )
     
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
@@ -86,23 +97,38 @@ class User(Base):
         nullable=False,
     )
     gender: Mapped[Gender] = mapped_column(
-        SQLAlchemyEnum(Gender),
+        SQLAlchemyEnum(Gender, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     bio: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
     )
-    photos: Mapped[List[str]] = mapped_column(
-        JSON,
-        default=list,
-        nullable=False,
+    
+    # Relationships
+    photos_rel: Mapped[List["UserPhoto"]] = relationship(
+        "UserPhoto", 
+        backref="user", 
+        cascade="all, delete-orphan",
+        lazy="selectin"
     )
-    interests: Mapped[List[str]] = mapped_column(
-        JSON,
-        default=list,
-        nullable=False,
+    
+    interests_rel: Mapped[List["UserInterest"]] = relationship(
+        "UserInterest",
+        backref="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
     )
+
+    @property
+    def photos(self) -> List[str]:
+        """Backward compatibility for reading photos as list of strings"""
+        return [p.url for p in self.photos_rel]
+
+    @property
+    def interests(self) -> List[str]:
+        """Backward compatibility for reading interests as list of strings"""
+        return [i.tag for i in self.interests_rel]
     
     # Extended profile fields for filtering
     height: Mapped[Optional[int]] = mapped_column(
@@ -205,17 +231,17 @@ class User(Base):
     
     # Admin & Status fields
     status: Mapped[UserStatus] = mapped_column(
-        SQLAlchemyEnum(UserStatus),
+        SQLAlchemyEnum(UserStatus, values_callable=lambda x: [e.value for e in x]),
         default=UserStatus.ACTIVE,
         nullable=False,
     )
     subscription_tier: Mapped[SubscriptionTier] = mapped_column(
-        SQLAlchemyEnum(SubscriptionTier),
+        SQLAlchemyEnum(SubscriptionTier, values_callable=lambda x: [e.value for e in x]),
         default=SubscriptionTier.FREE,
         nullable=False,
     )
     role: Mapped[UserRole] = mapped_column(
-        SQLAlchemyEnum(UserRole),
+        SQLAlchemyEnum(UserRole, values_callable=lambda x: [e.value for e in x]),
         default=UserRole.USER,
         nullable=False,
     )
@@ -236,6 +262,13 @@ class User(Base):
         default=0,
         nullable=False,
         comment="User's Telegram Stars balance"
+    )
+
+    # Last seen timestamp for "was online X minutes ago"
+    last_seen: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="When the user was last online"
     )
 
     @property

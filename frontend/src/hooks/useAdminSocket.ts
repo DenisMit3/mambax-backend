@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 const WS_BASE = API_BASE.replace(/^http/, 'ws').replace(/\/$/, '');
 
 interface AdminSocketHook {
@@ -21,13 +21,23 @@ export function useAdminSocket(): AdminSocketHook {
 
     useEffect(() => {
         // Get token from local storage (simplified for this task)
-        const token = localStorage.getItem('token');
+        let token = localStorage.getItem('token');
+
+        // Force mock_token in development for Admin access
+        if (process.env.NODE_ENV === 'development') {
+            token = 'mock_token';
+        }
+
         if (!token) {
             setError('No authentication token found');
             return;
         }
 
-        const wsUrl = `${WS_BASE}/admin/ws?token=${token}`;
+        // Use relative URL to leverage Next.js proxy and avoid CORS/Origin issues
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        let wsUrl = `${protocol}//${window.location.host}/admin/ws?token=${token}`;
+
+        console.log('Attempting WebSocket connection to:', wsUrl);
 
         try {
             const ws = new WebSocket(wsUrl);
@@ -55,9 +65,9 @@ export function useAdminSocket(): AdminSocketHook {
                 }
             };
 
-            ws.onclose = () => {
+            ws.onclose = (event) => {
                 setIsConnected(false);
-                console.log('Admin WebSocket Disconnected');
+                console.log(`Admin WebSocket Disconnected. Code: ${event.code}, Reason: ${event.reason}`);
             };
 
             ws.onerror = (event) => {

@@ -2,13 +2,34 @@
 
 import uuid
 from uuid import UUID
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, or_, and_
 
 from backend.core.security import verify_token
-from backend.crud_pkg.interaction import get_user_feed, create_swipe, check_existing_swipe
+from backend.crud.interaction import (
+    get_user_feed, 
+    create_swipe, 
+    check_existing_swipe, 
+    get_user_matches
+)
+from backend.crud.chat import get_messages
+from backend.models.user import User
+from backend.models.interaction import Swipe, Match
+from backend.services.pagination import get_profiles_paginated
+from backend.services.swipe_limits import (
+    get_swipe_status, 
+    add_to_swipe_history, 
+    can_use_undo, 
+    pop_last_swipe_from_history,
+    can_swipe,
+    record_swipe,
+    mark_undo_used
+)
+
 from backend.db.session import get_db
 from backend.schemas.user import UserResponse, Location
 from backend.schemas.interaction import SwipeCreate
@@ -67,19 +88,7 @@ async def get_feed(
 ):
     """
     📱 Лента профилей с курсорной пагинацией (Infinite Scroll)
-    
-    Параметры:
-    - limit: количество профилей (default: 20)
-    - cursor: курсор для следующей страницы
-    - exclude_swiped: исключить уже просвайпанные (default: true)
-    
-    Ответ:
-    - items: список профилей
-    - next_cursor: курсор для следующей страницы
-    - has_more: есть ли ещё профили
     """
-    from backend.services.pagination import get_profiles_paginated
-    
     result = await get_profiles_paginated(
         db=db,
         current_user_id=str(current_user_id),
@@ -99,27 +108,51 @@ async def swipe(
 ):
     """
     Обработка свайпа (лайк/дизлайк/суперлайк).
-    
-    Возвращает:
-    - success: bool — успешно ли обработан свайп
-    - is_match: bool — есть ли взаимный лайк (матч)
-    
-    Если is_match=true, фронтенд показывает анимацию матча.
     """
     
+    # Block Check
+    from backend.services.security import is_blocked
+    if await is_blocked(str(current_user_id), str(swipe_data.to_user_id)) or \
+       await is_blocked(str(swipe_data.to_user_id), str(current_user_id)):
+        raise HTTPException(status_code=403, detail="Interaction not allowed")
+
     # Check if already swiped
     existing = await check_existing_swipe(db, current_user_id, swipe_data.to_user_id)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Already swiped on this user"
+        # Infinite feed: allow re-swiping (idempotent success)
+        # Check if already matched
+        from sqlalchemy import or_, and_
+        match_stmt = select(Match).where(
+            or_(
+                and_(Match.user1_id == current_user_id, Match.user2_id == swipe_data.to_user_id),
+                and_(Match.user1_id == swipe_data.to_user_id, Match.user2_id == current_user_id)
+            )
         )
+        match_obj = (await db.execute(match_stmt)).scalars().first()
+        return SwipeResponse(success=True, is_match=match_obj is not None)
     
+    # Swipe Limit Check
+    allowed_status = await can_swipe(db, str(current_user_id))
+    if not allowed_status["allowed"]:
+        raise HTTPException(status_code=403, detail="Swipe limit reached")
+
     # Create swipe and check for match
     swipe_obj, is_match = await create_swipe(db, current_user_id, swipe_data)
+
+    # Record usage
+    await record_swipe(db, str(current_user_id), is_super=(swipe_data.action.value == 'superlike'))
     
     if is_match:
         MATCHES_COUNTER.inc()
+
+    # Записать в историю для Undo
+    await add_to_swipe_history(
+        str(current_user_id),
+        {
+            "to_user_id": str(swipe_data.to_user_id),
+            "action": swipe_data.action.value
+        }
+    )
 
     
     return SwipeResponse(success=True, is_match=is_match)
@@ -133,43 +166,30 @@ async def get_matches(
     """
     Получить список матчей текущего пользователя.
     """
-    from backend.crud_pkg.interaction import get_user_matches
-    from backend.models.user import User
-    from sqlalchemy import select
 
     matches = await get_user_matches(db, current_user_id)
     
-    # Collect partner IDs
-    partner_ids = set()
-    for m in matches:
-        if m.user1_id != current_user_id:
-            partner_ids.add(m.user1_id)
-        else:
-            partner_ids.add(m.user2_id)
-            
-    # Fetch partners
-    partners_map = {}
-    if partner_ids:
-        stmt = select(User).where(User.id.in_(partner_ids))
-        result = await db.execute(stmt)
-        partners = result.scalars().all()
-        for p in partners:
-            partners_map[p.id] = p
-            
     response_matches = []
     for m in matches:
-        partner_id = m.user2_id if m.user1_id == current_user_id else m.user1_id
-        partner = partners_map.get(partner_id)
-        
+        # Determine partner (User object is now eager loaded via relationships)
+        if m.user1_id == current_user_id:
+            partner = m.user2
+        else:
+            partner = m.user1
+            
         partner_data = None
         if partner:
+            # Check if partner is online via WebSocket manager
+            from backend.services.chat import manager
+            is_online = manager.is_online(str(partner.id))
+            
             # Basic profile info
             partner_data = {
                  "id": str(partner.id),
                  "name": partner.name,
                  "photos": partner.photos,
-                 "is_online": True, # Placeholder or fetch from manager
-                 "last_seen": None
+                 "is_online": is_online,
+                 "last_seen": partner.last_seen.isoformat() if getattr(partner, 'last_seen', None) else None
             }
 
         response_matches.append({
@@ -183,6 +203,57 @@ async def get_matches(
     return response_matches
 
 
+@router.get("/matches/{match_id}")
+async def get_match_by_id(
+    match_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: UUID = Depends(get_current_user_id)
+):
+    """
+    Get a single match by ID.
+    """
+    stmt = select(Match).where(Match.id == match_id)
+    result = await db.execute(stmt)
+    match = result.scalar_one_or_none()
+
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    # Verify user belongs to this match
+    if match.user1_id != current_user_id and match.user2_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Determine partner
+    if match.user1_id == current_user_id:
+        partner = match.user2
+    else:
+        partner = match.user1
+        
+    partner_data = None
+    if partner:
+        # Check if partner is online via WebSocket manager
+        from backend.services.chat import manager
+        is_online = manager.is_online(str(partner.id))
+        
+        partner_data = {
+            "id": str(partner.id),
+            "name": partner.name,
+            "photos": partner.photos,
+            "is_online": is_online,
+            "last_seen": partner.last_seen.isoformat() if partner.last_seen else None,
+            "is_premium": getattr(partner, 'is_vip', False)
+        }
+
+    return {
+        "id": str(match.id),
+        "user1_id": str(match.user1_id),
+        "user2_id": str(match.user2_id),
+        "current_user_id": str(current_user_id),
+        "created_at": match.created_at.isoformat(),
+        "user": partner_data
+    }
+
+
 @router.get("/matches/{match_id}/messages")
 async def get_match_messages(
     match_id: UUID, 
@@ -192,9 +263,6 @@ async def get_match_messages(
     """
     Получить историю сообщений для матча.
     """
-    from backend.crud_pkg.chat import get_messages
-    from backend.models.interaction import Match
-    from sqlalchemy import select, or_
 
     # Verify authorization
     stmt = select(Match).where(Match.id == match_id)
@@ -207,49 +275,137 @@ async def get_match_messages(
     if match.user1_id != current_user_id and match.user2_id != current_user_id:
         raise HTTPException(status_code=403, detail="Not authorized to view messages for this match")
 
-    return await get_messages(db, match_id)
+    messages = await get_messages(db, match_id)
+    
+    # Serialize to JSON-friendly format
+    return [
+        {
+            "id": str(m.id),
+            "match_id": str(m.match_id),
+            "sender_id": str(m.sender_id),
+            "receiver_id": str(m.receiver_id),
+            "text": m.text,
+            "content": m.text,  # Alias for compatibility
+            "type": m.type,
+            "audio_url": m.audio_url,
+            "photo_url": m.photo_url,
+            "media_url": m.photo_url or m.audio_url,
+            "duration": m.duration,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "is_read": m.is_read
+        }
+        for m in messages
+    ]
 
 
-@router.post("/rewind")
-async def rewind_last_swipe(
+@router.post("/undo-swipe")
+async def undo_last_swipe(
     current_user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Undo the last swipe (like or dislike).
-    Does not allow undoing if a match was formed (for simplicity, or we can cascading delete).
-    For now: simple delete of last 'Swipe' record.
+    ↩️ Отменить последний свайп (доступно для VIP или за Stars).
     """
-    from backend.models.interaction import Swipe, Match
-    from sqlalchemy import select
-
-    # Find last swipe
+    # Проверка VIP статуса
+    user = await db.get(models.User, current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # VIP имеют безлимитный Undo
+    if not user.is_vip:
+        # FREE пользователи могут использовать 1 раз в день или за Stars
+        can_undo = await can_use_undo(db, str(current_user_id))
+        if not can_undo["allowed"]:
+            raise HTTPException(
+                status_code=403, 
+                detail="Undo not available. Upgrade to VIP or wait until tomorrow."
+            )
+    
+    # Получить последний свайп из истории
+    last_swipe_data = await pop_last_swipe_from_history(str(current_user_id))
+    
+    if not last_swipe_data:
+        raise HTTPException(status_code=400, detail="No swipes to undo")
+    
+    # Удалить свайп из БД
     stmt = select(Swipe).where(
-        Swipe.from_user_id == current_user_id
-    ).order_by(Swipe.timestamp.desc()).limit(1)
+        and_(
+            Swipe.from_user_id == current_user_id,
+            Swipe.to_user_id == uuid.UUID(last_swipe_data["to_user_id"])
+        )
+    )
+    swipe_obj = (await db.execute(stmt)).scalars().first()
     
-    last_swipe = (await db.execute(stmt)).scalars().first()
-    
-    if not last_swipe:
-        raise HTTPException(status_code=400, detail="No swipes to rewind")
+    if swipe_obj:
+        # Если был матч - удалить его
+        if last_swipe_data["action"] in ["like", "superlike"]:
+            match_stmt = select(Match).where(
+                or_(
+                    and_(Match.user1_id == current_user_id, Match.user2_id == swipe_obj.to_user_id),
+                    and_(Match.user1_id == swipe_obj.to_user_id, Match.user2_id == current_user_id)
+                )
+            )
+            match_obj = (await db.execute(match_stmt)).scalars().first()
+            if match_obj:
+                await db.delete(match_obj)
         
-    # Optional: Prevent rewinding matches (if business logic dictates)
-    if last_swipe.action in ["like", "superlike"]:
-         # Check if it was a match
-         match_stmt = select(Match).where(
-             ((Match.user1_id == current_user_id) & (Match.user2_id == last_swipe.to_user_id)) |
-             ((Match.user1_id == last_swipe.to_user_id) & (Match.user2_id == current_user_id))
-         )
-         match_obj = (await db.execute(match_stmt)).scalars().first()
-         if match_obj:
-             # Delete match too
-             await db.delete(match_obj)
-
-    # Delete swipe
-    await db.delete(last_swipe)
-    await db.commit()
+        await db.delete(swipe_obj)
+        await db.commit()
     
-    return {"message": "Rewind successful"}
+    # Если пользователь не VIP - списать попытку Undo
+    if not user.is_vip:
+        await mark_undo_used(str(current_user_id))
+
+    # Вернуть данные отмененного профиля для UI
+    return {
+        "success": True,
+        "undone_profile_id": last_swipe_data["to_user_id"],
+        "action": last_swipe_data["action"]
+    }
+
+
+@router.post("/chat/start/{target_user_id}")
+async def start_chat_with_user(
+    target_user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: UUID = Depends(get_current_user_id)
+):
+    """
+    💬 Start a chat with a user.
+    Returns existing match if found, or creates a new match to enable chat.
+    """
+    from sqlalchemy import or_, and_
+    
+    # Block Check
+    from backend.services.security import is_blocked
+    if await is_blocked(str(current_user_id), str(target_user_id)) or \
+       await is_blocked(str(target_user_id), str(current_user_id)):
+        raise HTTPException(status_code=403, detail="Interaction not allowed")
+    
+    # Check if match already exists
+    match_stmt = select(Match).where(
+        or_(
+            and_(Match.user1_id == current_user_id, Match.user2_id == target_user_id),
+            and_(Match.user1_id == target_user_id, Match.user2_id == current_user_id)
+        )
+    )
+    existing_match = (await db.execute(match_stmt)).scalars().first()
+    
+    if existing_match:
+        return {"match_id": str(existing_match.id), "is_new": False}
+    
+    # Create new match to enable chat
+    new_match = Match(
+        id=uuid.uuid4(),
+        user1_id=current_user_id,
+        user2_id=target_user_id,
+        is_active=True
+    )
+    db.add(new_match)
+    await db.commit()
+    await db.refresh(new_match)
+    
+    return {"match_id": str(new_match.id), "is_new": True}
 
 
 @router.get("/swipe-status")
@@ -258,7 +414,6 @@ async def get_swipe_status_endpoint(
     db: AsyncSession = Depends(get_db)
 ):
     """Get current swipe limits and status"""
-    from backend.services.swipe_limits import get_swipe_status
     return await get_swipe_status(db, str(current_user))
 
 
@@ -269,9 +424,6 @@ async def get_received_likes_endpoint(
 ):
     """
     👀 Кто меня лайкнул (Premium функция)
-    
-    Для VIP пользователей: полные профили тех, кто поставил лайк
-    Для бесплатных: только количество и размытые превью
     """
     # Получить профиль пользователя для проверки VIP статуса
     # Using simplistic crud usage from main.py

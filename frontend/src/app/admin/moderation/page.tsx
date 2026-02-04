@@ -27,6 +27,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { adminApi, ModerationQueueItem, ModerationStats } from '@/services/adminApi';
+import { GlassCard } from '@/components/ui/GlassCard';
+import styles from '../admin.module.css';
 
 interface QueueItem {
   id: string;
@@ -53,90 +55,27 @@ function QueueStats({ stats, loading }: { stats: ModerationStats | null; loading
   ];
 
   return (
-    <div className="queue-stats">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
       {displayStats.map((stat, index) => (
-        <motion.div
+        <GlassCard
           key={stat.label}
-          className="stat-card"
+          className="flex items-center gap-3.5 p-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.05 }}
         >
-          <div className="stat-icon" style={{ background: `${stat.color}20`, color: stat.color }}>
-            {loading ? <Loader2 className="spinner" size={18} /> : stat.icon}
+          <div
+            className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: `${stat.color}20`, color: stat.color }}
+          >
+            {loading ? <Loader2 className="animate-spin" size={18} /> : stat.icon}
           </div>
-          <div className="stat-content">
-            <span className="stat-value">{loading ? '...' : stat.value}</span>
-            <span className="stat-label">{stat.label}</span>
+          <div className="flex flex-col">
+            <span className="text-xl font-bold text-[var(--admin-text-primary)]">{loading ? '...' : stat.value}</span>
+            <span className="text-xs text-[var(--admin-text-muted)]">{stat.label}</span>
           </div>
-        </motion.div>
+        </GlassCard>
       ))}
-
-      <style jsx>{`
-        .queue-stats {
-          display: grid;
-          grid-template-columns: repeat(6, 1fr);
-          gap: 16px;
-          margin-bottom: 24px;
-        }
-        
-        @media (max-width: 1400px) {
-          .queue-stats {
-            grid-template-columns: repeat(3, 1fr);
-          }
-        }
-        
-        @media (max-width: 800px) {
-          .queue-stats {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        
-        .stat-card {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          padding: 16px 20px;
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 14px;
-        }
-        
-        .stat-icon {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .stat-content {
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .stat-value {
-          font-size: 22px;
-          font-weight: 700;
-          color: #f1f5f9;
-        }
-        
-        .stat-label {
-          font-size: 12px;
-          color: #94a3b8;
-        }
-        
-        .spinner {
-          animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }
@@ -161,37 +100,37 @@ function ContentCard({ item, onAction }: { item: QueueItem; onAction: (action: s
   };
 
   return (
-    <motion.div
-      className="content-card"
+    <GlassCard
+      className="p-0 overflow-hidden group hover:border-neon-purple/30 hover:shadow-neon-purple/15 transition-all duration-300"
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       whileHover={{ y: -4 }}
       layout
     >
       {/* Content Preview */}
-      <div className="content-preview">
+      <div className="relative h-[180px] flex items-center justify-center bg-slate-800/50 border-b border-[var(--admin-glass-border)]">
         {item.type === 'photo' && (
-          <div className="photo-placeholder">
+          <div className="flex flex-col items-center gap-2 text-[var(--admin-text-muted)]">
             <Image size={32} />
-            <span>Photo Content</span>
+            <span className="text-xs">Photo Content</span>
           </div>
         )}
         {item.type === 'chat' && (
-          <div className="chat-preview">
-            <MessageCircle size={24} />
-            <p>"{item.description || 'Chat message...'}"</p>
+          <div className="flex flex-col items-center gap-3 p-5 text-center">
+            <MessageCircle size={24} className="text-blue-500" />
+            <p className="text-[13px] text-[var(--admin-text-muted)] italic">"{item.description || 'Chat message...'}"</p>
           </div>
         )}
         {item.type === 'report' && (
-          <div className="report-preview">
-            <AlertTriangle size={24} />
-            <p>{item.reason || 'Report submitted'}</p>
+          <div className="flex flex-col items-center gap-3 p-5 text-center">
+            <AlertTriangle size={24} className="text-orange-500" />
+            <p className="text-[13px] text-[var(--admin-text-muted)] italic">{item.reason || 'Report submitted'}</p>
           </div>
         )}
 
         {/* AI Score Badge */}
         <div
-          className="ai-score"
+          className="absolute top-3 right-3 flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-full"
           style={{
             background: `${getScoreColor(item.ai_score)}20`,
             color: getScoreColor(item.ai_score)
@@ -203,276 +142,70 @@ function ContentCard({ item, onAction }: { item: QueueItem; onAction: (action: s
       </div>
 
       {/* Content Info */}
-      <div className="content-info">
-        <div className="info-header">
-          <div className="type-badge" style={{ background: `${priorityColors[item.priority]?.bg || priorityColors.low.bg}`, color: priorityColors[item.priority]?.color || priorityColors.low.color }}>
+      <div className="p-4">
+        <div className="flex justify-between items-center mb-3">
+          <div
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase"
+            style={{ background: `${priorityColors[item.priority]?.bg || priorityColors.low.bg}`, color: priorityColors[item.priority]?.color || priorityColors.low.color }}
+          >
             {typeIcons[item.type] || typeIcons.report}
             <span>{item.type}</span>
           </div>
-          <span className="priority" style={priorityColors[item.priority] || priorityColors.low}>
+          <span
+            className="text-[10px] font-semibold px-2 py-0.5 rounded-xl uppercase"
+            style={priorityColors[item.priority] || priorityColors.low}
+          >
             {item.priority}
           </span>
         </div>
 
-        <div className="user-info">
-          <div className="user-avatar">{item.user_name?.charAt(0) || 'U'}</div>
-          <span>{item.user_name || 'Unknown'}</span>
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-semibold text-white bg-gradient-to-br from-neon-blue to-neon-purple">
+            {item.user_name?.charAt(0) || 'U'}
+          </div>
+          <span className="text-sm text-[var(--admin-text-primary)]">{item.user_name || 'Unknown'}</span>
         </div>
 
         {item.ai_flags && item.ai_flags.length > 0 && (
-          <div className="ai-flags">
+          <div className="flex flex-wrap gap-1.5 mb-2.5">
             {item.ai_flags.map(flag => (
-              <span key={flag} className="flag-badge">
+              <span key={flag} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md uppercase bg-red-500/15 text-red-500">
                 <Flag size={10} /> {flag}
               </span>
             ))}
           </div>
         )}
 
-        <div className="content-time">
+        <div className="flex items-center gap-1.5 text-xs text-[var(--admin-text-secondary)]">
           <Clock size={12} />
           {new Date(item.created_at).toLocaleTimeString()}
         </div>
       </div>
 
       {/* Actions */}
-      <div className="content-actions">
-        <button className="action-btn approve" onClick={() => onAction('approve', item)}>
+      <div className="flex gap-2 p-3 bg-slate-800/30 border-t border-[var(--admin-glass-border)]">
+        <button
+          className="flex-1 flex items-center justify-center gap-1.5 p-2.5 rounded-xl text-[13px] font-medium transition-all bg-neon-green/15 text-neon-green hover:bg-neon-green/30 hover:shadow-neon-green/30"
+          onClick={() => onAction('approve', item)}
+        >
           <ThumbsUp size={18} />
-          <span>Approve</span>
+          <span className="hidden sm:inline">Approve</span>
         </button>
-        <button className="action-btn reject" onClick={() => onAction('reject', item)}>
+        <button
+          className="flex-1 flex items-center justify-center gap-1.5 p-2.5 rounded-xl text-[13px] font-medium transition-all bg-primary-red/15 text-primary-red hover:bg-primary-red/30 hover:shadow-primary-red/30"
+          onClick={() => onAction('reject', item)}
+        >
           <ThumbsDown size={18} />
-          <span>Reject</span>
+          <span className="hidden sm:inline">Reject</span>
         </button>
-        <button className="action-btn skip" onClick={() => onAction('skip', item)}>
+        <button
+          className="flex-none p-2.5 rounded-xl text-[var(--admin-text-muted)] bg-slate-500/15 hover:bg-slate-500/30 transition-all"
+          onClick={() => onAction('skip', item)}
+        >
           <SkipForward size={16} />
         </button>
       </div>
-
-      <style jsx>{`
-        .content-card {
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 16px;
-          overflow: hidden;
-          transition: all 0.3s ease;
-        }
-        
-        .content-card:hover {
-          border-color: rgba(168, 85, 247, 0.3);
-          box-shadow: 0 0 30px rgba(168, 85, 247, 0.15);
-        }
-        
-        .content-preview {
-          position: relative;
-          height: 180px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(30, 41, 59, 0.5);
-          border-bottom: 1px solid rgba(148, 163, 184, 0.1);
-        }
-        
-        .photo-placeholder {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 8px;
-          color: #64748b;
-        }
-        
-        .photo-placeholder span {
-          font-size: 12px;
-        }
-        
-        .chat-preview,
-        .report-preview {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 12px;
-          padding: 20px;
-          text-align: center;
-        }
-        
-        .chat-preview svg {
-          color: #3b82f6;
-        }
-        
-        .report-preview svg {
-          color: #f97316;
-        }
-        
-        .chat-preview p,
-        .report-preview p {
-          font-size: 13px;
-          color: #94a3b8;
-          font-style: italic;
-        }
-        
-        .ai-score {
-          position: absolute;
-          top: 12px;
-          right: 12px;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 12px;
-          font-weight: 600;
-          padding: 6px 10px;
-          border-radius: 20px;
-        }
-        
-        .content-info {
-          padding: 16px;
-        }
-        
-        .info-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 12px;
-        }
-        
-        .type-badge {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 11px;
-          font-weight: 600;
-          padding: 4px 10px;
-          border-radius: 20px;
-          text-transform: uppercase;
-        }
-        
-        .priority {
-          font-size: 10px;
-          font-weight: 600;
-          padding: 3px 8px;
-          border-radius: 12px;
-          text-transform: uppercase;
-        }
-        
-        .user-info {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 10px;
-        }
-        
-        .user-avatar {
-          width: 28px;
-          height: 28px;
-          background: linear-gradient(135deg, #667eea, #764ba2);
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 12px;
-          font-weight: 600;
-          color: white;
-        }
-        
-        .user-info span {
-          font-size: 14px;
-          color: #f1f5f9;
-        }
-        
-        .ai-flags {
-          display: flex;
-          gap: 6px;
-          flex-wrap: wrap;
-          margin-bottom: 10px;
-        }
-        
-        .flag-badge {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          padding: 3px 8px;
-          background: rgba(239, 68, 68, 0.15);
-          color: #ef4444;
-          border-radius: 10px;
-          text-transform: uppercase;
-        }
-        
-        .content-time {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 12px;
-          color: #64748b;
-        }
-        
-        .content-actions {
-          display: flex;
-          gap: 8px;
-          padding: 12px 16px;
-          background: rgba(30, 41, 59, 0.3);
-          border-top: 1px solid rgba(148, 163, 184, 0.1);
-        }
-        
-        .action-btn {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          padding: 10px;
-          border-radius: 10px;
-          border: none;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .action-btn span {
-          display: none;
-        }
-        
-        @media (min-width: 400px) {
-          .action-btn span {
-            display: inline;
-          }
-        }
-        
-        .action-btn.approve {
-          background: rgba(16, 185, 129, 0.15);
-          color: #10b981;
-        }
-        
-        .action-btn.approve:hover {
-          background: rgba(16, 185, 129, 0.3);
-          box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
-        }
-        
-        .action-btn.reject {
-          background: rgba(239, 68, 68, 0.15);
-          color: #ef4444;
-        }
-        
-        .action-btn.reject:hover {
-          background: rgba(239, 68, 68, 0.3);
-          box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
-        }
-        
-        .action-btn.skip {
-          flex: 0;
-          background: rgba(148, 163, 184, 0.15);
-          color: #94a3b8;
-          padding: 10px 14px;
-        }
-        
-        .action-btn.skip:hover {
-          background: rgba(148, 163, 184, 0.3);
-        }
-      `}</style>
-    </motion.div>
+    </GlassCard>
   );
 }
 
@@ -483,226 +216,80 @@ function ReviewModal({ item, onClose, onAction }: {
 }) {
   return (
     <motion.div
-      className="modal-overlay"
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-5"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={onClose}
     >
       <motion.div
-        className="modal-content"
+        className="w-full max-w-2xl bg-[#0f172a]/95 backdrop-blur-xl border border-slate-700/30 rounded-3xl overflow-hidden"
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header">
-          <h3>Content Review</h3>
-          <button className="close-btn" onClick={onClose}>×</button>
+        <div className="flex justify-between items-center p-6 border-b border-slate-700/20">
+          <h3 className="text-lg font-semibold text-[var(--admin-text-primary)]">Content Review</h3>
+          <button
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800/50 border border-slate-700/20 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 transition-all"
+            onClick={onClose}
+          >
+            ×
+          </button>
         </div>
 
-        <div className="modal-body">
-          <div className="review-preview">
+        <div className="p-6">
+          <div className="h-[300px] flex items-center justify-center bg-slate-800/50 rounded-xl mb-5">
             {item.type === 'photo' && (
-              <div className="large-placeholder">
+              <div className="flex flex-col items-center gap-3 text-[var(--admin-text-muted)]">
                 <Image size={64} />
-                <span>Photo Content Preview</span>
+                <span className="text-sm">Photo Content Preview</span>
               </div>
             )}
           </div>
 
-          <div className="review-details">
-            <div className="detail-row">
-              <span className="label">Type:</span>
-              <span className="value">{item.type}</span>
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-between py-2.5 border-b border-slate-700/10">
+              <span className="text-sm text-[var(--admin-text-muted)]">Type:</span>
+              <span className="text-sm font-medium text-[var(--admin-text-primary)]">{item.type}</span>
             </div>
-            <div className="detail-row">
-              <span className="label">User:</span>
-              <span className="value">{item.user_name}</span>
+            <div className="flex justify-between py-2.5 border-b border-slate-700/10">
+              <span className="text-sm text-[var(--admin-text-muted)]">User:</span>
+              <span className="text-sm font-medium text-[var(--admin-text-primary)]">{item.user_name}</span>
             </div>
-            <div className="detail-row">
-              <span className="label">AI Score:</span>
-              <span className="value">{item.ai_score}%</span>
+            <div className="flex justify-between py-2.5 border-b border-slate-700/10">
+              <span className="text-sm text-[var(--admin-text-muted)]">AI Score:</span>
+              <span className="text-sm font-medium text-[var(--admin-text-primary)]">{item.ai_score}%</span>
             </div>
-            <div className="detail-row">
-              <span className="label">Flags:</span>
-              <span className="value">{item.ai_flags?.join(', ') || 'None'}</span>
+            <div className="flex justify-between py-2.5 border-b border-slate-700/10">
+              <span className="text-sm text-[var(--admin-text-muted)]">Flags:</span>
+              <span className="text-sm font-medium text-[var(--admin-text-primary)]">{item.ai_flags?.join(', ') || 'None'}</span>
             </div>
           </div>
         </div>
 
-        <div className="modal-actions">
-          <button className="modal-btn approve" onClick={() => { onAction('approve', item); onClose(); }}>
+        <div className="flex gap-3 p-6 bg-slate-800/30 border-t border-slate-700/20">
+          <button
+            className="flex-1 flex items-center justify-center gap-2 p-3.5 rounded-xl text-sm font-semibold bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all"
+            onClick={() => { onAction('approve', item); onClose(); }}
+          >
             <CheckCircle size={18} /> Approve
           </button>
-          <button className="modal-btn reject" onClick={() => { onAction('reject', item); onClose(); }}>
+          <button
+            className="flex-1 flex items-center justify-center gap-2 p-3.5 rounded-xl text-sm font-semibold bg-orange-500/20 text-orange-500 hover:bg-orange-500 hover:text-white transition-all"
+            onClick={() => { onAction('reject', item); onClose(); }}
+          >
             <XCircle size={18} /> Reject
           </button>
-          <button className="modal-btn ban" onClick={() => { onAction('ban', item); onClose(); }}>
+          <button
+            className="flex-1 flex items-center justify-center gap-2 p-3.5 rounded-xl text-sm font-semibold bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+            onClick={() => { onAction('ban', item); onClose(); }}
+          >
             <Ban size={18} /> Ban User
           </button>
         </div>
       </motion.div>
-
-      <style jsx>{`
-        .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.8);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-          padding: 20px;
-        }
-        
-        .modal-content {
-          width: 100%;
-          max-width: 600px;
-          background: rgba(15, 23, 42, 0.95);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.3);
-          border-radius: 20px;
-          overflow: hidden;
-        }
-        
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 20px 24px;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-        }
-        
-        .modal-header h3 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-        }
-        
-        .close-btn {
-          width: 36px;
-          height: 36px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #94a3b8;
-          font-size: 24px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .close-btn:hover {
-          background: rgba(239, 68, 68, 0.2);
-          color: #ef4444;
-        }
-        
-        .modal-body {
-          padding: 24px;
-        }
-        
-        .review-preview {
-          height: 300px;
-          background: rgba(30, 41, 59, 0.5);
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 20px;
-        }
-        
-        .large-placeholder {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 12px;
-          color: #64748b;
-        }
-        
-        .large-placeholder span {
-          font-size: 14px;
-        }
-        
-        .review-details {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-        
-        .detail-row {
-          display: flex;
-          justify-content: space-between;
-          padding: 10px 0;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.1);
-        }
-        
-        .detail-row .label {
-          font-size: 14px;
-          color: #94a3b8;
-        }
-        
-        .detail-row .value {
-          font-size: 14px;
-          color: #f1f5f9;
-          font-weight: 500;
-        }
-        
-        .modal-actions {
-          display: flex;
-          gap: 12px;
-          padding: 20px 24px;
-          background: rgba(30, 41, 59, 0.3);
-          border-top: 1px solid rgba(148, 163, 184, 0.2);
-        }
-        
-        .modal-btn {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 14px;
-          border-radius: 12px;
-          border: none;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .modal-btn.approve {
-          background: rgba(16, 185, 129, 0.2);
-          color: #10b981;
-        }
-        
-        .modal-btn.approve:hover {
-          background: #10b981;
-          color: white;
-        }
-        
-        .modal-btn.reject {
-          background: rgba(249, 115, 22, 0.2);
-          color: #f97316;
-        }
-        
-        .modal-btn.reject:hover {
-          background: #f97316;
-          color: white;
-        }
-        
-        .modal-btn.ban {
-          background: rgba(239, 68, 68, 0.2);
-          color: #ef4444;
-        }
-        
-        .modal-btn.ban:hover {
-          background: #ef4444;
-          color: white;
-        }
-      `}</style>
     </motion.div>
   );
 }
@@ -802,21 +389,17 @@ export default function ModerationPage() {
   });
 
   return (
-    <div className="moderation-page">
+    <div className={styles.pageContainer}>
       {/* Header */}
-      <div className="page-header">
-        <div>
-          <h1>Content Moderation</h1>
-          <p>Review and moderate user-submitted content</p>
+      <div className={styles.headerSection}>
+        <div className={styles.headerContent}>
+          <h1 className={styles.headerTitle}>Content Moderation</h1>
+          <p className={styles.headerDescription}>Review and moderate user-submitted content</p>
         </div>
-        <div className="header-actions">
-          <button className="btn-secondary" onClick={handleRefresh}>
+        <div className="flex gap-3">
+          <button className={styles.secondaryButton} onClick={handleRefresh}>
             <RotateCcw size={16} />
             Refresh
-          </button>
-          <button className="btn-primary">
-            <Zap size={16} />
-            AI Batch Process
           </button>
         </div>
       </div>
@@ -825,19 +408,22 @@ export default function ModerationPage() {
       <QueueStats stats={stats} loading={statsLoading} />
 
       {/* Filters */}
-      <div className="filters-bar">
-        <div className="filter-tabs">
+      <GlassCard className="flex flex-wrap items-center justify-between gap-4 p-4 mb-6">
+        <div className="flex gap-2 p-1.5 bg-slate-800/50 rounded-xl border border-[var(--admin-glass-border)]">
           {(['all', 'photo', 'chat', 'report'] as const).map((type) => (
             <button
               key={type}
-              className={`filter-tab ${filter === type ? 'active' : ''}`}
+              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[13px] font-medium transition-all ${filter === type
+                ? 'bg-purple-500/20 text-purple-500'
+                : 'text-[var(--admin-text-muted)] hover:bg-slate-700/30 hover:text-[var(--admin-text-primary)]'
+                }`}
               onClick={() => { setFilter(type); setCurrentPage(1); }}
             >
               {type === 'all' && 'All'}
               {type === 'photo' && <><Image size={14} /> Photos</>}
               {type === 'chat' && <><MessageCircle size={14} /> Chat</>}
               {type === 'report' && <><AlertTriangle size={14} /> Reports</>}
-              <span className="tab-count">
+              <span className={`px-2 py-0.5 rounded-md text-[11px] ${filter === type ? 'bg-purple-500/30' : 'bg-slate-700/50'}`}>
                 {type === 'all'
                   ? queue.length
                   : queue.filter(i => i.type === type).length}
@@ -846,36 +432,42 @@ export default function ModerationPage() {
           ))}
         </div>
 
-        <div className="priority-filter">
-          <select value={priority} onChange={(e) => { setPriority(e.target.value as any); setCurrentPage(1); }}>
+        <div className="relative">
+          <select
+            value={priority}
+            onChange={(e) => { setPriority(e.target.value as any); setCurrentPage(1); }}
+            className="pl-4 pr-10 py-2.5 bg-slate-800/50 border border-[var(--admin-glass-border)] rounded-xl text-sm text-[var(--admin-text-primary)] outline-none cursor-pointer hover:border-[var(--admin-glass-border-hover)] transition-colors appearance-none"
+          >
             <option value="all">All Priority</option>
             <option value="high">High Priority</option>
             <option value="medium">Medium Priority</option>
             <option value="low">Low Priority</option>
           </select>
+          <Filter size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--admin-text-muted)] pointer-events-none" />
         </div>
-      </div>
+      </GlassCard>
 
       {/* Loading State */}
       {loading && (
-        <div className="loading-state">
-          <Loader2 className="spinner" size={32} />
+        <div className="flex flex-col items-center justify-center py-20 text-[var(--admin-text-muted)]">
+          <Loader2 className="animate-spin mb-4 text-[var(--neon-purple)]" size={32} />
           <span>Loading moderation queue...</span>
         </div>
       )}
 
       {/* Error State */}
       {error && (
-        <div className="error-state">
-          <AlertTriangle size={24} />
-          <span>{error}</span>
-          <button onClick={handleRefresh}>Retry</button>
-        </div>
+        <GlassCard className="flex flex-col items-center justify-center py-20 text-center border-red-500/30">
+          <AlertTriangle size={32} className="text-red-500 mb-4" />
+          <h3 className="text-lg font-bold text-white mb-2">Failed to load queue</h3>
+          <p className="text-[var(--admin-text-secondary)] mb-6">{error}</p>
+          <button className={styles.primaryButton} onClick={handleRefresh}>Retry</button>
+        </GlassCard>
       )}
 
       {/* Queue Grid */}
       {!loading && !error && (
-        <div className="queue-grid">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           <AnimatePresence>
             {filteredQueue.map((item) => (
               <ContentCard
@@ -889,11 +481,11 @@ export default function ModerationPage() {
       )}
 
       {!loading && !error && filteredQueue.length === 0 && (
-        <div className="empty-state">
-          <CheckCircle size={64} />
-          <h3>All caught up!</h3>
-          <p>No items in the moderation queue</p>
-        </div>
+        <GlassCard className="flex flex-col items-center justify-center py-24 text-center border-dashed border-[var(--admin-glass-border)]">
+          <CheckCircle size={64} className="text-[var(--admin-text-muted)] opacity-50 mb-6" />
+          <h3 className="text-xl font-bold text-white mb-2">All caught up!</h3>
+          <p className="text-[var(--admin-text-secondary)]">No items in the moderation queue</p>
+        </GlassCard>
       )}
 
       {/* Review Modal */}
@@ -906,196 +498,6 @@ export default function ModerationPage() {
           />
         )}
       </AnimatePresence>
-
-      <style jsx>{`
-        .moderation-page {
-          max-width: 1600px;
-          margin: 0 auto;
-        }
-        
-        .page-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 24px;
-        }
-        
-        .page-header h1 {
-          font-size: 28px;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin-bottom: 4px;
-        }
-        
-        .page-header p {
-          font-size: 15px;
-          color: #94a3b8;
-        }
-        
-        .header-actions {
-          display: flex;
-          gap: 12px;
-        }
-        
-        .btn-secondary,
-        .btn-primary {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 12px 20px;
-          border-radius: 12px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .btn-secondary {
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          color: #f1f5f9;
-        }
-        
-        .btn-secondary:hover {
-          background: rgba(30, 41, 59, 0.8);
-        }
-        
-        .btn-primary {
-          background: linear-gradient(135deg, #a855f7, #7c3aed);
-          border: none;
-          color: white;
-          box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
-        }
-        
-        .btn-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(168, 85, 247, 0.5);
-        }
-        
-        .filters-bar {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 24px;
-          flex-wrap: wrap;
-          gap: 16px;
-        }
-        
-        .filter-tabs {
-          display: flex;
-          gap: 8px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 14px;
-          padding: 6px;
-        }
-        
-        .filter-tab {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 10px 16px;
-          background: transparent;
-          border: none;
-          border-radius: 10px;
-          color: #94a3b8;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .filter-tab:hover {
-          background: rgba(148, 163, 184, 0.1);
-          color: #f1f5f9;
-        }
-        
-        .filter-tab.active {
-          background: rgba(168, 85, 247, 0.2);
-          color: #a855f7;
-        }
-        
-        .tab-count {
-          background: rgba(148, 163, 184, 0.2);
-          padding: 2px 8px;
-          border-radius: 10px;
-          font-size: 11px;
-        }
-        
-        .filter-tab.active .tab-count {
-          background: rgba(168, 85, 247, 0.3);
-        }
-        
-        .priority-filter select {
-          padding: 10px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #f1f5f9;
-          font-size: 14px;
-          cursor: pointer;
-          outline: none;
-        }
-        
-        .loading-state,
-        .error-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 60px 20px;
-          color: #94a3b8;
-          gap: 16px;
-        }
-        
-        .spinner {
-          animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        
-        .error-state {
-          color: #ef4444;
-        }
-        
-        .error-state button {
-          padding: 8px 16px;
-          background: rgba(239, 68, 68, 0.2);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          border-radius: 8px;
-          color: #ef4444;
-          cursor: pointer;
-        }
-        
-        .queue-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-          gap: 20px;
-        }
-        
-        .empty-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 80px 20px;
-          color: #64748b;
-        }
-        
-        .empty-state h3 {
-          font-size: 24px;
-          font-weight: 600;
-          color: #f1f5f9;
-          margin: 20px 0 8px;
-        }
-        
-        .empty-state p {
-          font-size: 15px;
-        }
-      `}</style>
     </div>
   );
 }

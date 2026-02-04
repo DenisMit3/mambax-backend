@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { adminApi } from '@/services/adminApi';
 import RevenueChart from '@/components/admin/analytics/RevenueChart';
 import { RefreshCw, Download, DollarSign, TrendingUp, CreditCard } from 'lucide-react';
+import { GlassCard } from '@/components/ui/GlassCard';
+import styles from '../../admin.module.css';
 
 export default function RevenueAnalyticsPage() {
     const [loading, setLoading] = useState(true);
@@ -30,31 +32,31 @@ export default function RevenueAnalyticsPage() {
     }, [period]);
 
     return (
-        <div className="revenue-page">
-            <div className="page-header">
-                <div>
-                    <h1>Revenue Analytics</h1>
-                    <p>Track financial performance and income sources</p>
+        <div className={styles.pageContainer}>
+            <div className={styles.headerSection}>
+                <div className={styles.headerContent}>
+                    <h1 className={styles.headerTitle}>Revenue Analytics</h1>
+                    <p className={styles.headerDescription}>Track financial performance and income sources</p>
                 </div>
-                <div className="header-controls">
-                    <button className="btn-icon" onClick={fetchData} disabled={loading}>
-                        <RefreshCw size={18} className={loading ? 'spinning' : ''} />
+                <div className="flex gap-3">
+                    <button className={styles.iconButton} onClick={fetchData} disabled={loading}>
+                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button className="btn-primary">
+                    <button className={styles.primaryButton}>
                         <Download size={16} />
                         Export
                     </button>
                 </div>
             </div>
 
-            <div className="revenue-layout">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 {/* Main Revenue Chart */}
-                <div className="revenue-main">
+                <div className="lg:col-span-3">
                     {error ? (
-                        <div className="error-state glass-panel">
-                            <p>{error}</p>
-                            <button onClick={fetchData} className="retry-btn">Retry</button>
-                        </div>
+                        <GlassCard className="flex flex-col items-center justify-center min-h-[400px] text-[var(--admin-text-muted)]">
+                            <p className="mb-4 text-red-500">{error}</p>
+                            <button onClick={fetchData} className={styles.primaryButton}>Retry</button>
+                        </GlassCard>
                     ) : (
                         <RevenueChart
                             data={revenueData}
@@ -67,190 +69,40 @@ export default function RevenueAnalyticsPage() {
                 </div>
 
                 {/* Additional Stats */}
-                <div className="revenue-side">
-                    <div className="stat-card glass-panel">
-                        <div className="stat-icon p-blue">
+                <div className="flex flex-col gap-4">
+                    <GlassCard className="p-5 flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-500/20 text-blue-500">
                             <CreditCard size={20} />
                         </div>
-                        <div className="stat-info">
-                            <span className="stat-label">Active Subscriptions</span>
-                            <span className="stat-value">
+                        <div className="flex flex-col">
+                            <span className="text-xs text-[var(--admin-text-muted)] mb-1">Active Subscriptions</span>
+                            <span className="text-lg font-bold text-[var(--admin-text-primary)]">
                                 {loading ? '...' : revenueData?.sources.find((s: any) => s.source === 'Subscriptions')?.amount > 0 ? 'Active' : '-'}
                             </span>
                         </div>
-                    </div>
+                    </GlassCard>
 
-                    <div className="stat-card glass-panel">
-                        <div className="stat-icon p-green">
+                    <GlassCard className="p-5 flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-emerald-500/20 text-emerald-500">
                             <TrendingUp size={20} />
                         </div>
-                        <div className="stat-info">
-                            <span className="stat-label">Growth (MoM)</span>
-                            <span className="stat-value positive">+12.5%</span>
+                        <div className="flex flex-col">
+                            <span className="text-xs text-[var(--admin-text-muted)] mb-1">Growth (MoM)</span>
+                            <span className="text-lg font-bold text-emerald-500">+12.5%</span>
                         </div>
-                    </div>
+                    </GlassCard>
 
-                    <div className="stat-card glass-panel">
-                        <div className="stat-icon p-purple">
+                    <GlassCard className="p-5 flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-purple-500/20 text-purple-500">
                             <DollarSign size={20} />
                         </div>
-                        <div className="stat-info">
-                            <span className="stat-label">Avg. Revenue Per User</span>
-                            <span className="stat-value">$4.20</span>
+                        <div className="flex flex-col">
+                            <span className="text-xs text-[var(--admin-text-muted)] mb-1">Avg. Revenue Per User</span>
+                            <span className="text-lg font-bold text-[var(--admin-text-primary)]">$4.20</span>
                         </div>
-                    </div>
+                    </GlassCard>
                 </div>
             </div>
-
-            <style jsx>{`
-                .revenue-page {
-                    max-width: 1400px;
-                    margin: 0 auto;
-                }
-
-                .page-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 32px;
-                }
-
-                .page-header h1 {
-                    font-size: 24px;
-                    font-weight: 700;
-                    color: #fff;
-                    margin-bottom: 4px;
-                }
-
-                .page-header p {
-                    color: #94a3b8;
-                    font-size: 14px;
-                }
-
-                .header-controls {
-                    display: flex;
-                    gap: 12px;
-                }
-
-                .btn-icon {
-                    width: 40px;
-                    height: 40px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 12px;
-                    background: rgba(30, 41, 59, 0.5);
-                    border: 1px solid rgba(148, 163, 184, 0.2);
-                    color: #94a3b8;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }
-
-                .btn-icon:hover {
-                    background: rgba(59, 130, 246, 0.2);
-                    color: #3b82f6;
-                    border-color: #3b82f6;
-                }
-
-                .btn-primary {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    padding: 0 20px;
-                    height: 40px;
-                    border-radius: 12px;
-                    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-                    color: white;
-                    font-weight: 500;
-                    font-size: 14px;
-                    transition: all 0.2s;
-                }
-
-                .revenue-layout {
-                    display: grid;
-                    grid-template-columns: 3fr 1fr;
-                    gap: 24px;
-                }
-
-                @media (max-width: 1024px) {
-                    .revenue-layout {
-                        grid-template-columns: 1fr;
-                    }
-                }
-
-                .error-state {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 60px;
-                    border-radius: 20px;
-                    text-align: center;
-                    min-height: 400px;
-                }
-
-                .spinning {
-                    animation: spin 1s linear infinite;
-                }
-
-                @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-
-                .glass-panel {
-                    background: rgba(15, 23, 42, 0.65);
-                    backdrop-filter: blur(20px);
-                    border: 1px solid rgba(148, 163, 184, 0.1);
-                }
-
-                /* Side Stats */
-                .revenue-side {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 16px;
-                }
-
-                .stat-card {
-                    padding: 20px;
-                    border-radius: 16px;
-                    display: flex;
-                    align-items: center;
-                    gap: 16px;
-                }
-
-                .stat-icon {
-                    width: 48px;
-                    height: 48px;
-                    border-radius: 12px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-
-                .p-blue { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-                .p-green { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-                .p-purple { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
-
-                .stat-info {
-                    display: flex;
-                    flex-direction: column;
-                }
-
-                .stat-label {
-                    font-size: 12px;
-                    color: #94a3b8;
-                    margin-bottom: 4px;
-                }
-
-                .stat-value {
-                    font-size: 18px;
-                    font-weight: 700;
-                    color: #fff;
-                }
-
-                .stat-value.positive { color: #10b981; }
-            `}</style>
         </div>
     );
 }

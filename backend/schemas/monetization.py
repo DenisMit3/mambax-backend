@@ -54,6 +54,16 @@ class SubscriptionPlanBase(BaseModel):
 class SubscriptionPlanCreate(SubscriptionPlanBase):
     pass
 
+class SubscriptionPlanUpdate(BaseModel):
+    name: Optional[str] = None
+    tier: Optional[PlanTier] = None
+    price: Optional[float] = None
+    currency: Optional[str] = None
+    duration_days: Optional[int] = None
+    features: Optional[Dict] = None
+    is_active: Optional[bool] = None
+    is_popular: Optional[bool] = None
+
 class SubscriptionPlanResponse(SubscriptionPlanBase):
     id: UUID
     is_active: bool
@@ -182,3 +192,10 @@ class TransactionListResponse(BaseModel):
 
 class RefundRequest(BaseModel):
     reason: str
+
+
+class CategoryResponse(BaseModel):
+    id: Optional[UUID]
+    name: str
+    description: Optional[str] = None
+    gifts: List[VirtualGiftResponse]

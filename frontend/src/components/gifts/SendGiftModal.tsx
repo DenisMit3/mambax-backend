@@ -5,8 +5,11 @@ import { useState, useEffect } from "react";
 import { authService } from "@/services/api";
 import { wsService } from "@/services/websocket";
 import { Gift, Star, X, Send, MessageSquare, EyeOff, Loader2, Check, Sparkles } from "lucide-react";
-import { GiftCatalog } from "./GiftCatalog";
-import styles from "./SendGiftModal.module.css";
+import dynamic from 'next/dynamic';
+
+const GiftCatalog = dynamic(() => import("./GiftCatalog").then(mod => mod.GiftCatalog), {
+    loading: () => <div className="h-[400px] flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={32} /></div>
+});
 
 interface VirtualGift {
     id: string;
@@ -45,8 +48,6 @@ export function SendGiftModal({
     const [paymentMethod, setPaymentMethod] = useState<'balance' | 'stars'>('balance');
     const [sending, setSending] = useState(false);
     const [error, setError] = useState("");
-
-
 
     const handleGiftSelect = (gift: VirtualGift) => {
         setSelectedGift(gift);
@@ -137,64 +138,64 @@ export function SendGiftModal({
     };
 
     return (
-        <div className={styles.overlay} onClick={handleClose}>
-            <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-5 z-[1000] animate-in fade-in duration-200" onClick={handleClose}>
+            <div className="w-full max-w-[480px] max-h-[90vh] bg-background rounded-[24px] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-5 duration-300" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
-                <div className={styles.header}>
-                    <div className={styles.headerContent}>
-                        <Gift size={20} />
-                        <h2>
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-gradient-to-br from-primary/10 to-accent/5">
+                    <div className="flex items-center gap-2.5">
+                        <Gift size={20} className="text-primary" />
+                        <h2 className="m-0 text-lg font-semibold text-foreground">
                             {step === "catalog" && "Send a Gift"}
                             {step === "confirm" && "Confirm Gift"}
                             {step === "success" && "Gift Sent!"}
                         </h2>
                     </div>
-                    <button className={styles.closeButton} onClick={handleClose}>
+                    <button className="w-9 h-9 rounded-full border-none bg-surface text-muted-foreground flex items-center justify-center cursor-pointer transition-all hover:bg-border hover:text-foreground" onClick={handleClose}>
                         <X size={20} />
                     </button>
                 </div>
 
                 {/* Receiver Info */}
                 {step !== "success" && (
-                    <div className={styles.receiverInfo}>
-                        <div className={styles.receiverAvatar}>
+                    <div className="flex items-center gap-3 px-5 py-3 bg-surface text-sm text-muted-foreground">
+                        <div className="w-9 h-9 rounded-full overflow-hidden">
                             {receiverPhoto ? (
-                                <img src={receiverPhoto} alt={receiverName} />
+                                <img src={receiverPhoto} alt={receiverName} className="w-full h-full object-cover" />
                             ) : (
-                                <div className={styles.avatarPlaceholder}>
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary to-accent text-white font-semibold">
                                     {receiverName.charAt(0).toUpperCase()}
                                 </div>
                             )}
                         </div>
-                        <span>Sending to <strong>{receiverName}</strong></span>
+                        <span>Sending to <strong className="text-foreground">{receiverName}</strong></span>
                     </div>
                 )}
 
                 {/* Content */}
-                <div className={styles.content}>
+                <div className="flex-1 overflow-y-auto max-h-[60vh]">
                     {step === "catalog" && (
                         <GiftCatalog onGiftSelect={handleGiftSelect} receiverId={receiverId} />
                     )}
 
                     {step === "confirm" && selectedGift && (
-                        <div className={styles.confirmContent}>
+                        <div className="p-5 flex flex-col gap-5">
                             {/* Selected Gift Preview */}
-                            <div className={`${styles.giftPreview} ${selectedGift.is_premium ? styles.premium : ""}`}>
-                                <div className={styles.giftPreviewEmoji}>
+                            <div className={`relative flex items-center gap-4 p-5 rounded-2xl bg-surface overflow-hidden ${selectedGift.is_premium ? "bg-gradient-to-br from-yellow-500/15 to-orange-500/8 border border-yellow-500/30" : ""}`}>
+                                <div className="text-[56px] leading-none">
                                     {getGiftEmoji(selectedGift.name)}
                                 </div>
-                                <div className={styles.giftPreviewInfo}>
-                                    <h3>{selectedGift.name}</h3>
+                                <div className="flex-1">
+                                    <h3 className="m-0 mb-1.5 text-lg font-semibold text-foreground">{selectedGift.name}</h3>
                                     {selectedGift.description && (
-                                        <p>{selectedGift.description}</p>
+                                        <p className="m-0 mb-2 text-[13px] text-muted-foreground">{selectedGift.description}</p>
                                     )}
-                                    <div className={styles.giftPrice}>
-                                        <Star size={14} className={styles.starIcon} />
+                                    <div className="flex items-center gap-1 text-base font-bold text-primary">
+                                        <Star size={14} className="text-[#FFD700]" />
                                         {selectedGift.price} {selectedGift.currency}
                                     </div>
                                 </div>
                                 {selectedGift.is_premium && (
-                                    <div className={styles.premiumTag}>
+                                    <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500 text-black text-[11px] font-semibold">
                                         <Sparkles size={12} />
                                         Premium
                                     </div>
@@ -203,39 +204,39 @@ export function SendGiftModal({
 
 
                             {/* Payment Method */}
-                            <div className={styles.messageSection} style={{ marginBottom: '15px' }}>
-                                <label className={styles.label}>
+                            <div className="flex flex-col gap-2 mb-4">
+                                <label className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
                                     <Star size={16} />
                                     Payment Method
                                 </label>
-                                <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'white' }}>
+                                <div className="flex gap-4 mt-2.5">
+                                    <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
                                         <input
                                             type="radio"
                                             name="paymentMethod"
                                             value="balance"
                                             checked={paymentMethod === 'balance'}
                                             onChange={() => setPaymentMethod('balance')}
-                                            style={{ accentColor: '#E91E63' }}
+                                            className="accent-primary"
                                         />
                                         <span>Use Balance</span>
                                     </label>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'white' }}>
+                                    <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
                                         <input
                                             type="radio"
                                             name="paymentMethod"
                                             value="stars"
                                             checked={paymentMethod === 'stars'}
                                             onChange={() => setPaymentMethod('stars')}
-                                            style={{ accentColor: '#E91E63' }}
+                                            className="accent-primary"
                                         />
                                         <span>Telegram Stars</span>
                                     </label>
                                 </div>
                             </div>
 
-                            <div className={styles.messageSection}>
-                                <label className={styles.label}>
+                            <div className="flex flex-col gap-2">
+                                <label className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
                                     <MessageSquare size={16} />
                                     Add a message (optional)
                                 </label>
@@ -244,48 +245,49 @@ export function SendGiftModal({
                                     onChange={(e) => setMessage(e.target.value)}
                                     placeholder="Write something special..."
                                     maxLength={500}
-                                    className={styles.messageInput}
+                                    className="w-full min-h-[80px] p-3 rounded-xl border border-border bg-surface text-foreground text-sm resize-y outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10"
                                 />
-                                <span className={styles.charCount}>{message.length}/500</span>
+                                <span className="self-end text-[11px] text-muted-foreground">{message.length}/500</span>
                             </div>
 
                             {/* Anonymous Toggle */}
-                            <label className={styles.anonymousToggle}>
+                            <label className="flex items-center gap-3 p-3 px-4 rounded-xl bg-surface cursor-pointer transition-all hover:bg-border">
                                 <input
                                     type="checkbox"
                                     checked={isAnonymous}
                                     onChange={(e) => setIsAnonymous(e.target.checked)}
+                                    className="hidden"
                                 />
-                                <div className={styles.toggleTrack}>
-                                    <div className={styles.toggleThumb}></div>
+                                <div className={`w-11 h-6 rounded-full relative transition-all ${isAnonymous ? "bg-primary" : "bg-border"}`}>
+                                    <div className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all shadow-md ${isAnonymous ? "left-[22px]" : "left-0.5"}`}></div>
                                 </div>
-                                <EyeOff size={16} />
-                                <span>Send anonymously</span>
+                                <EyeOff size={16} className="text-muted-foreground" />
+                                <span className="text-sm text-foreground">Send anonymously</span>
                             </label>
 
                             {error && (
-                                <div className={styles.errorMessage}>
+                                <div className="p-3 px-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-[13px]">
                                     {error}
                                 </div>
                             )}
 
                             {/* Action Buttons */}
-                            <div className={styles.actions}>
+                            <div className="flex gap-3 mt-2">
                                 <button
-                                    className={styles.backButton}
+                                    className="flex-1 py-3.5 px-5 rounded-xl border border-border bg-transparent text-muted-foreground text-sm font-medium cursor-pointer transition-all hover:bg-surface hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                                     onClick={() => setStep("catalog")}
                                     disabled={sending}
                                 >
                                     Back
                                 </button>
                                 <button
-                                    className={styles.sendButton}
+                                    className="flex-[2] flex items-center justify-center gap-2 py-3.5 px-5 rounded-xl border-none bg-gradient-to-br from-primary to-accent text-white text-sm font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(233,30,99,0.4)] disabled:opacity-70 disabled:cursor-not-allowed"
                                     onClick={handleSendGift}
                                     disabled={sending}
                                 >
                                     {sending ? (
                                         <>
-                                            <Loader2 size={18} className={styles.spinner} />
+                                            <Loader2 size={18} className="animate-spin" />
                                             {paymentMethod === 'balance' ? 'Sending...' : 'Creating Invoice...'}
                                         </>
                                     ) : (
@@ -305,36 +307,36 @@ export function SendGiftModal({
                     )}
 
                     {step === "success" && selectedGift && (
-                        <div className={styles.successContent}>
-                            <div className={styles.successAnimation}>
-                                <div className={styles.successIcon}>
+                        <div className="flex flex-col items-center text-center p-10 px-5">
+                            <div className="relative mb-5">
+                                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white animate-in zoom-in duration-500">
                                     <Check size={48} />
                                 </div>
-                                <div className={styles.confetti}></div>
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120px] h-[120px] bg-radial-gradient-yellow animate-confetti pointer-events-none opacity-0"></div>
                             </div>
-                            <div className={styles.successGift}>
+                            <div className="text-[64px] mb-5 animate-bounce">
                                 {getGiftEmoji(selectedGift.name)}
                             </div>
-                            <h3>Gift Sent Successfully!</h3>
-                            <p>
-                                Your <strong>{selectedGift.name}</strong> has been sent to{" "}
-                                <strong>{receiverName}</strong>
+                            <h3 className="m-0 mb-3 text-[22px] font-semibold text-foreground">Gift Sent Successfully!</h3>
+                            <p className="m-0 mb-6 text-sm text-muted-foreground leading-relaxed">
+                                Your <strong className="text-foreground">{selectedGift.name}</strong> has been sent to{" "}
+                                <strong className="text-foreground">{receiverName}</strong>
                                 {isAnonymous && " anonymously"}
                             </p>
-                            <button className={styles.doneButton} onClick={handleClose}>
+                            <button className="w-full max-w-[200px] py-3.5 px-7 rounded-xl border-none bg-gradient-to-br from-primary to-accent text-white text-[15px] font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(233,30,99,0.4)]" onClick={handleClose}>
                                 Done
                             </button>
                         </div>
                     )}
 
                     {step === "waiting_payment" && (
-                        <div className={styles.successContent}>
-                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-                                <Loader2 size={48} className={styles.spinner} color="#E91E63" />
+                        <div className="flex flex-col items-center text-center p-10 px-5">
+                            <div className="flex justify-center mb-5">
+                                <Loader2 size={48} className="animate-spin text-primary" />
                             </div>
-                            <h3>Waiting for Payment...</h3>
-                            <p>Please complete the payment in the Telegram window.</p>
-                            <p style={{ fontSize: 13, opacity: 0.7, marginTop: 15, background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '8px' }}>
+                            <h3 className="m-0 mb-3 text-[22px] font-semibold text-foreground">Waiting for Payment...</h3>
+                            <p className="m-0 mb-6 text-sm text-muted-foreground leading-relaxed">Please complete the payment in the Telegram window.</p>
+                            <p className="text-[13px] opacity-70 mt-4 bg-white/10 p-2.5 rounded-lg">
                                 Do not close this window. We will update it automatically once payment is confirmed.
                             </p>
                         </div>

@@ -1,66 +1,77 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Flame, Map, Heart, MessageCircle, User } from "lucide-react";
+import React from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Search, Heart, Layers, MessageCircle, User } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export function BottomNav() {
     const pathname = usePathname();
 
+    // FIX (A11Y): Added aria-labels for screen readers
     const navItems = [
-        { href: "/discover", icon: Flame, label: "Discover" },
-        { href: "/map", icon: Map, label: "Map" },
-        { href: "/likes", icon: Heart, label: "Likes" },
-        { href: "/chat", icon: MessageCircle, label: "Chat" },
-        { href: "/profile", icon: User, label: "Profile" },
+        { name: 'Search', href: '/search', icon: Search, ariaLabel: 'Поиск' },
+        { name: 'Likes', href: '/likes', icon: Heart, ariaLabel: 'Симпатии' },
+        { name: 'Discover', href: '/', icon: Layers, ariaLabel: 'Главная' },
+        { name: 'Chat', href: '/chat', icon: MessageCircle, ariaLabel: 'Чаты' },
+        { name: 'Profile', href: '/profile', icon: User, ariaLabel: 'Профиль' },
     ];
 
     return (
-        <nav style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            width: '100%',
-            background: 'var(--surface)',  // Solid background instead of glass
-            borderTop: '1px solid var(--border)', // Top border
-            padding: '8px 0 20px 0', // Extra padding for safe area (iOS)
-            zIndex: 100,
-            display: 'flex',
-            justifyContent: 'space-around',
-            alignItems: 'center',
-            boxShadow: '0 -2px 10px rgba(0,0,0,0.05)'
-        }}>
-            {navItems.map((item) => {
-                const isActive = pathname === item.href;
-                const Icon = item.icon;
+        <div className="w-full bg-[#1a1a1e] backdrop-blur-xl border-t border-white/15 pb-safe pt-2 px-6 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] rounded-t-[2rem]">
+            <div className="flex justify-between items-center h-16 max-w-md mx-auto">
+                {navItems.map((item) => {
+                    const isActive = pathname === item.href;
+                    const Icon = item.icon;
 
-                return (
-                    <Link
-                        key={item.href}
-                        href={item.href}
-                        style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '4px',
-                            color: isActive ? 'var(--primary)' : 'var(--text-muted)',
-                            transition: 'all 0.3s ease',
-                            flex: 1,
-                            position: 'relative'
-                        }}
-                    >
-                        <div style={{
-                            padding: '8px',
-                            background: isActive ? 'rgba(255, 77, 109, 0.15)' : 'transparent',
-                            borderRadius: '16px',
-                            transition: 'background 0.3s'
-                        }}>
-                            <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
-                        </div>
-                        <span style={{ fontSize: '10px', fontWeight: 500 }}>{item.label}</span>
-                    </Link>
-                );
-            })}
-        </nav>
+                    return (
+                        <Link
+                            key={item.name}
+                            href={item.href}
+                            aria-label={item.ariaLabel}
+                            className="relative flex flex-col items-center justify-center w-14 h-14"
+                        >
+                            {/* Active Liquid Glow Background */}
+                            {isActive && (
+                                <motion.div
+                                    layoutId="nav-glow"
+                                    className="absolute inset-1 bg-gradient-to-tr from-[#ff4b91]/10 to-[#ff9e4a]/10 rounded-2xl -z-10"
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                />
+                            )}
+
+                            {/* Icon Animation */}
+                            <motion.div
+                                whileTap={{ scale: 0.8 }}
+                                animate={{
+                                    y: isActive ? -4 : 0,
+                                    scale: isActive ? 1.1 : 1
+                                }}
+                                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                            >
+                                <Icon
+                                    size={24}
+                                    strokeWidth={isActive ? 2.5 : 2}
+                                    className={`transition-colors duration-300 ${isActive
+                                        ? 'text-[#ff4b91] drop-shadow-[0_0_8px_rgba(255,75,145,0.5)]'
+                                        : 'text-slate-500 hover:text-slate-300'
+                                        }`}
+                                />
+                            </motion.div>
+
+                            {/* Glowing Active Dot */}
+                            {isActive && (
+                                <motion.div
+                                    layoutId="nav-dot"
+                                    className="absolute bottom-2 w-1.5 h-1.5 bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] rounded-full shadow-[0_0_8px_#ff4b91]"
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                />
+                            )}
+                        </Link>
+                    );
+                })}
+            </div>
+        </div>
     );
 }

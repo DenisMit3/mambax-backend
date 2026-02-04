@@ -1,5 +1,6 @@
 import stripe
 import logging
+import uuid
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -53,22 +54,32 @@ async def handle_checkout_completed(session: dict, db: AsyncSession):
         await db.flush() # Get ID
         
         # 2. Grant Logic
+        # 2. Grant Logic
         if product_type == "subscription":
             plan_id = metadata.get("plan_id")
-            # Logic to create subscription record...
-            # Note: Ideally fetch plan details
+            
+            # Fetch Plan Duration
+            plan = None
+            if plan_id:
+                try:
+                    plan_uuid = uuid.UUID(plan_id)
+                    res = await db.execute(select(models.SubscriptionPlan).where(models.SubscriptionPlan.id == plan_uuid))
+                    plan = res.scalars().first()
+                except:
+                    logger.warning(f"Invalid plan_id in metadata: {plan_id}")
+
+            duration_days = plan.duration_days if plan else 30
+            expires_at = datetime.utcnow() + timedelta(days=duration_days)
+            
             sub = models.UserSubscription(
                 user_id=user_id,
-                plan_id=plan_id, # Assuming valid UUID passed
+                plan_id=plan.id if plan else None, 
                 status="active",
                 started_at=datetime.utcnow(),
-                expires_at=datetime.utcnow(), # TODO: Calculate based on plan duration
+                expires_at=expires_at,
                 payment_method="stripe",
                 stripe_subscription_id=session.get("subscription")
             )
-            # Need to fetch plan duration to set expires_at properly
-            # For now, default 30 days if logic missing
-            # sub.expires_at = ... 
             db.add(sub)
             
             # Update User status
@@ -138,7 +149,7 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None),
         
     elif event['type'] == 'payment_intent.succeeded':
         # Handled via checkout usually, but kept for custom flows
-        pass
+        logger.info(f"Payment intent succeeded: {event['data']['object'].get('id')}")
         
     elif event['type'] == 'customer.subscription.deleted':
         # Handle churn

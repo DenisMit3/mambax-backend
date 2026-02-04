@@ -286,11 +286,9 @@ export default function PremiumPage() {
                 isOpen={showTopUp}
                 onClose={() => setShowTopUp(false)}
                 currentBalance={user?.stars_balance || 0}
-                onSuccess={(newBalance) => {
+                onSuccess={() => {
                     // Update local balance
-                    setUser((prev: any) => ({ ...prev, stars_balance: newBalance }));
-                    // Maybe retry purchase? Or just close and let user click again.
-                    // User stays on page, balance update visible.
+                    fetchUser();
                 }}
             />
         </div>

@@ -1,81 +1,42 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { SwipeCard } from "@/components/ui/SwipeCard";
 import { SendGiftModal } from "@/components/gifts";
 import { BuySwipesModal } from "@/components/ui/BuySwipesModal";
 import { TopUpModal } from "@/components/ui/TopUpModal";
-import { X, Heart, Star, Zap } from "lucide-react";
+import { X, Heart, Star, MessageCircle } from "lucide-react";
 import { authService } from "@/services/api";
-
-type Profile = {
-    id: string;
-    name: string;
-    age: number;
-    bio?: string;
-    photos: string[];
-};
-
-interface SwipeStatus {
-    remaining: number;
-    daily_remaining: number;
-    bonus_swipes: number;
-    stars_balance: number;
-    can_buy_swipes: boolean;
-    swipe_pack_price: number;
-    swipe_pack_count: number;
-}
+import { motion, AnimatePresence } from "framer-motion";
+import { useProfiles, useSwipeStatus, useLikeMutation, Profile } from "@/hooks/useDiscovery";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function DiscoverPage() {
     const router = useRouter();
-    const [profiles, setProfiles] = useState<Profile[]>([]);
+    const queryClient = useQueryClient();
+
+    // Data Hooks
+    const { data: profiles = [], isLoading: isLoadingProfiles } = useProfiles();
+    const { data: swipeStatus, refetch: refetchSwipeStatus } = useSwipeStatus();
+    const likeMutation = useLikeMutation();
+
+    // Local State
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [loading, setLoading] = useState(true);
     const [showGiftModal, setShowGiftModal] = useState(false);
     const [selectedGiftProfile, setSelectedGiftProfile] = useState<Profile | null>(null);
-
-    // Swipe limit state
-    const [swipeStatus, setSwipeStatus] = useState<SwipeStatus | null>(null);
     const [showBuySwipesModal, setShowBuySwipesModal] = useState(false);
     const [showTopUpModal, setShowTopUpModal] = useState(false);
-
-    const fetchSwipeStatus = async () => {
-        try {
-            const token = localStorage.getItem("token");
-            const res = await fetch("/api_proxy/payments/swipe-status", {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setSwipeStatus(data);
-            }
-        } catch (e) {
-            console.error("Failed to fetch swipe status", e);
-        }
-    };
-
-    useEffect(() => {
-        authService.getProfiles()
-            .then((data) => {
-                setProfiles(data);
-            })
-            .catch(err => console.error("Feed Error", err))
-            .finally(() => setLoading(false));
-
-        // Fetch swipe status
-        fetchSwipeStatus();
-    }, []);
 
     const handleSwipe = async (direction: "left" | "right") => {
         const profile = profiles[currentIndex];
         if (!profile) return;
 
-        // Check swipe limit before swiping right (like)
+        // Check limits before swiping right
         if (direction === "right" && swipeStatus) {
             if (swipeStatus.remaining <= 0) {
-                // No swipes left - show buy modal or top-up
                 if (swipeStatus.can_buy_swipes) {
                     setShowBuySwipesModal(true);
                 } else {
@@ -85,49 +46,61 @@ export default function DiscoverPage() {
             }
         }
 
-        // Optimistic UI update
+        // Optimistic Update: Move to next card immediately
         setCurrentIndex((prev) => prev + 1);
 
         if (direction === "right") {
-            try {
-                const res = await authService.likeUser(profile.id);
-                if (res.status === "matched") {
-                    // Show Match Popup
-                    alert("IT'S A MATCH! Go to chat.");
-                    // In real app, fancy modal
-                }
-                // Refresh swipe status after successful swipe
-                fetchSwipeStatus();
-            } catch (e) {
-                console.error("Like failed", e);
-            }
+            likeMutation.mutate({ userId: profile.id });
         }
     };
 
-    if (loading) {
+    // Loading State with Skeleton
+    if (isLoadingProfiles) {
         return (
-            <div className="container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh' }}>
-                <p>Loading profiles...</p>
+            <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center p-4">
+                {/* Header Skeleton */}
+                <div className="absolute top-6 left-0 right-0 flex justify-center gap-3 px-6 z-50">
+                    <Skeleton className="h-10 w-20 rounded-2xl bg-slate-800" />
+                    <Skeleton className="h-10 w-20 rounded-2xl bg-slate-800" />
+                </div>
+
+                {/* Card Skeleton */}
+                <div className="w-full max-w-md aspect-[3/4] rounded-3xl overflow-hidden relative">
+                    <Skeleton className="w-full h-full bg-slate-900" />
+                    <div className="absolute bottom-0 left-0 right-0 p-6 space-y-3">
+                        <Skeleton className="h-8 w-3/4 bg-slate-800" />
+                        <Skeleton className="h-4 w-1/2 bg-slate-800" />
+                    </div>
+                </div>
+
+                {/* Controls Skeleton */}
+                <div className="absolute bottom-24 flex gap-6">
+                    <Skeleton className="w-16 h-16 rounded-full bg-slate-900" />
+                    <Skeleton className="w-16 h-16 rounded-full bg-slate-900" />
+                </div>
             </div>
         );
     }
 
-    // No more profiles
+    // No More Profiles
     if (!profiles || currentIndex >= profiles.length) {
         return (
-            <div className="container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh' }}>
-                <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '10px' }}>No more profiles</h2>
-                <p style={{ color: 'var(--text-secondary)' }}>Check back later!</p>
-                <button
-                    className="btn btn-secondary"
-                    style={{ marginTop: '20px' }}
-                    onClick={() => window.location.reload()}
-                >
-                    Refresh
-                </button>
-                <div style={{ position: 'absolute', bottom: 0, width: '100%' }}>
-                    <BottomNav />
+            <div className="fixed inset-0 flex flex-col items-center justify-center bg-slate-950 p-6 text-center">
+                <div className="w-24 h-24 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-6">
+                    <Star size={40} className="text-slate-700" />
                 </div>
+                <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">No more profiles</h2>
+                <p className="text-slate-500 mb-8 max-w-xs">You've seen everyone in your area for now. Check back later!</p>
+                <button
+                    className="px-8 py-4 rounded-2xl bg-slate-900 border border-slate-700 text-white font-black uppercase tracking-widest hover:bg-slate-800 transition-colors"
+                    onClick={() => {
+                        setCurrentIndex(0);
+                        queryClient.invalidateQueries({ queryKey: ['profiles'] });
+                    }}
+                >
+                    Refresh Feed
+                </button>
+                <BottomNav />
             </div>
         );
     }
@@ -135,109 +108,109 @@ export default function DiscoverPage() {
     const currentProfile = profiles[currentIndex];
 
     return (
-        <div style={{
-            height: '100dvh',
-            width: '100%',
-            position: 'relative',
-            background: 'var(--background)',
-            overflow: 'hidden'
-        }}>
+        <div className="fixed inset-0 bg-slate-950 overflow-hidden flex flex-col">
+            {/* Header / Stats */}
+            <AnimatePresence>
+                {swipeStatus && (
+                    <motion.div
+                        initial={{ y: -20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        className="fixed top-6 left-0 right-0 z-50 flex justify-center gap-3 px-6"
+                    >
+                        {/* Swipes Left */}
+                        <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-xl">
+                            <Heart size={14} className={swipeStatus.remaining > 0 ? 'text-pink-500 fill-pink-500' : 'text-slate-600'} />
+                            <span className="text-white text-sm font-black">
+                                {swipeStatus.remaining === -1 ? '∞' : swipeStatus.remaining}
+                            </span>
+                        </div>
+
+                        {/* Stars Balance */}
+                        <button
+                            onClick={() => setShowTopUpModal(true)}
+                            className="bg-amber-400/10 backdrop-blur-xl border border-amber-400/30 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-xl group hover:bg-amber-400/20 transition-colors"
+                        >
+                            <Star size={14} className="text-amber-400 fill-amber-400 group-hover:scale-110 transition-transform" />
+                            <span className="text-amber-400 text-sm font-black">
+                                {swipeStatus.stars_balance}
+                            </span>
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Main Swipe Area */}
-            <div style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: '60px', // Space for BottomNav
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '10px'
-            }}>
-                <SwipeCard
-                    key={currentProfile.id}
-                    name={currentProfile.name}
-                    age={currentProfile.age}
-                    bio={currentProfile.bio || ""}
-                    image={currentProfile.photos[0] || "https://placehold.co/400x600/1a1a1a/white?text=No+Photo"}
-                    onSwipe={handleSwipe}
-                    onGiftClick={() => {
-                        setSelectedGiftProfile(currentProfile);
-                        setShowGiftModal(true);
-                    }}
-                    onProfileClick={() => router.push(`/users/${currentProfile.id}`)}
-                />
+            <div className="flex-1 relative mt-16 mb-24 px-4 py-2">
+                <div className="relative w-full h-full max-w-md mx-auto">
+                    <SwipeCard
+                        key={currentProfile.id}
+                        name={currentProfile.name}
+                        age={currentProfile.age}
+                        bio={currentProfile.bio || ""}
+                        image={currentProfile.photos[0] || "https://placehold.co/400x600/1a1a1a/white?text=No+Photo"}
+                        onSwipe={handleSwipe}
+                        onGiftClick={() => {
+                            setSelectedGiftProfile(currentProfile);
+                            setShowGiftModal(true);
+                        }}
+                        onProfileClick={() => router.push(`/users/${currentProfile.id}`)}
+                    />
+                </div>
             </div>
 
-            {/* Floating Action Buttons */}
-            <div style={{
-                position: 'fixed',
-                bottom: '90px', // Above nav
-                left: '50%',
-                transform: 'translateX(-50%)',
-                display: 'flex',
-                gap: '20px',
-                zIndex: 20,
-                alignItems: 'center'
-            }}>
-                {/* Rewind Button */}
+            {/* Bottom Controls */}
+            <div className="fixed bottom-24 left-0 right-0 z-50 flex justify-center items-center gap-6 px-6 pointer-events-auto">
+                {/* Chat with this person */}
                 <button
                     onClick={async () => {
-                        if (currentIndex > 0) {
+                        console.log("Chat button clicked, currentProfile:", currentProfile);
+                        if (currentProfile) {
                             try {
-                                await authService.rewindLastSwipe();
-                                setCurrentIndex(prev => prev - 1);
+                                console.log("Calling startChat for user:", currentProfile.id);
+                                const result = await authService.startChat(currentProfile.id);
+                                console.log("startChat result:", result);
+                                router.push(`/chat/${result.match_id}`);
                             } catch (e) {
-                                alert("Cannot rewind further");
+                                console.error("Failed to start chat", e);
+                                alert("Не удалось начать чат. Попробуйте войти снова.");
                             }
+                        } else {
+                            console.log("No currentProfile available");
+                            alert("Профиль не загружен");
                         }
                     }}
-                    style={{
-                        width: '42px', height: '42px', borderRadius: '50%',
-                        background: 'white',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#F59E0B' // Amber color
-                    }}
+                    className="w-12 h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-blue-400 shadow-lg active:scale-90 transition-transform hover:bg-slate-800"
                 >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                        <path d="M3 3v5h5" />
-                    </svg>
+                    <MessageCircle size={20} strokeWidth={2.5} />
                 </button>
 
+                {/* Nope */}
                 <button
                     onClick={() => handleSwipe("left")}
-                    style={{
-                        width: '56px', height: '56px', borderRadius: '50%',
-                        background: 'white',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#FF4D6D'
-                    }}
+                    className="w-16 h-16 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-rose-500 shadow-xl active:scale-90 transition-transform"
                 >
-                    <X size={28} strokeWidth={3} />
+                    <X size={32} strokeWidth={3} />
                 </button>
 
+                {/* Like */}
                 <button
                     onClick={() => handleSwipe("right")}
-                    style={{
-                        width: '56px', height: '56px', borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #FF5A27 0%, #FF2E55 100%)',
-                        boxShadow: '0 8px 20px rgba(255, 90, 39, 0.3)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'white'
-                    }}
+                    className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center text-white shadow-[0_10px_30px_rgba(244,63,94,0.3)] active:scale-90 transition-transform"
                 >
-                    <Heart size={28} fill="white" strokeWidth={0} />
+                    <Heart size={32} fill="white" strokeWidth={0} />
+                </button>
+
+                {/* Boost - placeholder for now */}
+                <button
+                    className="w-12 h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-purple-500 shadow-lg active:scale-90 transition-transform"
+                >
+                    <Star size={20} fill="currentColor" strokeWidth={0} />
                 </button>
             </div>
 
-            {/* Bottom Nav */}
             <BottomNav />
 
-            {/* Send Gift Modal */}
+            {/* Modals */}
             {selectedGiftProfile && (
                 <SendGiftModal
                     isOpen={showGiftModal}
@@ -251,84 +224,23 @@ export default function DiscoverPage() {
                 />
             )}
 
-            {/* Swipe Status Badge */}
-            {swipeStatus && (
-                <div style={{
-                    position: 'fixed',
-                    top: '20px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    display: 'flex',
-                    gap: '12px',
-                    zIndex: 30
-                }}>
-                    {/* Swipes Left */}
-                    <div style={{
-                        padding: '8px 16px',
-                        borderRadius: '20px',
-                        background: 'rgba(0,0,0,0.6)',
-                        backdropFilter: 'blur(10px)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                    }}>
-                        <Heart size={16} color={swipeStatus.remaining > 0 ? '#ec4899' : '#ef4444'} fill={swipeStatus.remaining > 0 ? '#ec4899' : 'transparent'} />
-                        <span style={{
-                            color: 'white',
-                            fontSize: '14px',
-                            fontWeight: 600
-                        }}>
-                            {swipeStatus.remaining === -1 ? '∞' : swipeStatus.remaining}
-                        </span>
-                    </div>
-
-                    {/* Stars Balance */}
-                    <button
-                        onClick={() => setShowTopUpModal(true)}
-                        style={{
-                            padding: '8px 16px',
-                            borderRadius: '20px',
-                            background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 165, 0, 0.2))',
-                            backdropFilter: 'blur(10px)',
-                            border: '1px solid rgba(255, 215, 0, 0.3)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        <Star size={16} color="#FFD700" fill="#FFD700" />
-                        <span style={{
-                            color: '#FFD700',
-                            fontSize: '14px',
-                            fontWeight: 600
-                        }}>
-                            {swipeStatus.stars_balance}
-                        </span>
-                    </button>
-                </div>
-            )}
-
-            {/* Buy Swipes Modal */}
             <BuySwipesModal
                 isOpen={showBuySwipesModal}
                 onClose={() => setShowBuySwipesModal(false)}
                 currentBalance={swipeStatus?.stars_balance || 0}
                 onSuccess={() => {
-                    fetchSwipeStatus();
+                    refetchSwipeStatus();
                     setShowBuySwipesModal(false);
                 }}
                 mode="swipes"
             />
 
-            {/* Top Up Modal */}
             <TopUpModal
                 isOpen={showTopUpModal}
                 onClose={() => setShowTopUpModal(false)}
                 currentBalance={swipeStatus?.stars_balance || 0}
-                onSuccess={(newBalance) => {
-                    setSwipeStatus(prev => prev ? { ...prev, stars_balance: newBalance } : null);
-                    fetchSwipeStatus();
+                onSuccess={() => {
+                    refetchSwipeStatus();
                 }}
             />
         </div>

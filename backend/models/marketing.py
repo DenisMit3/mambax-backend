@@ -64,3 +64,29 @@ class EmailCampaign(Base):
     
     sent_count: Mapped[int] = mapped_column(Integer, default=0)
     open_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class AcquisitionChannel(Base):
+    """
+    User acquisition channels for tracking marketing performance.
+    """
+    __tablename__ = "acquisition_channels"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True)  # e.g., "organic", "paid_ads", "referral"
+    color: Mapped[str] = mapped_column(String(7), default="#3b82f6")  # Hex color for UI
+    
+    # Costs
+    total_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    
+    # Metrics (updated by background job or on user registration)
+    total_users: Mapped[int] = mapped_column(Integer, default=0)
+    total_conversions: Mapped[int] = mapped_column(Integer, default=0)  # Users who became paying
+    total_revenue: Mapped[float] = mapped_column(Float, default=0.0)
+    
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+

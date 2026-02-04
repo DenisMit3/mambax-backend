@@ -1,33 +1,14 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState, useEffect } from "react";
-import { authService } from "@/services/api";
-import { Gift, Sparkles, Star, Heart, X, Search } from "lucide-react";
-import styles from "./GiftCatalog.module.css";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { authService, CatalogResponse, GiftCategory, VirtualGift } from "@/services/api";
+import { Sparkles, Star, Heart, Search, Loader2, Gift as GiftIcon } from "lucide-react";
 
-interface GiftCategory {
-    id: string;
-    name: string;
-    description: string | null;
-    icon: string | null;
-    sort_order: number;
-}
-
-interface VirtualGift {
-    id: string;
-    name: string;
-    description: string | null;
-    image_url: string;
-    animation_url: string | null;
-    price: number;
-    currency: string;
-    is_animated: boolean;
-    is_premium: boolean;
-    is_limited: boolean;
-    times_sent: number;
-    category_id: string | null;
-}
+// Remove local interfaces that are now imported
+// interface GiftCategory { ... }
+// interface VirtualGift { ... }
 
 interface GiftCatalogProps {
     onGiftSelect?: (gift: VirtualGift) => void;
@@ -35,44 +16,34 @@ interface GiftCatalogProps {
     showSendButton?: boolean;
 }
 
+// Fallback mock data
+const FALLBACK_CATEGORIES: GiftCategory[] = [
+    { id: "1", name: "Romantic", description: "Express your feelings", icon: "💕", sort_order: 1, is_active: true },
+    { id: "2", name: "Fun", description: "Fun gifts", icon: "🎉", sort_order: 2, is_active: true },
+    { id: "3", name: "Premium", description: "Exclusive gifts", icon: "💎", sort_order: 3, is_active: true },
+];
+
+const FALLBACK_GIFTS: VirtualGift[] = [
+    { id: "1", name: "Red Rose", description: "A classic symbol of love", image_url: "/static/gifts/rose.png", animation_url: null, price: 10, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, is_active: true, times_sent: 1250, category_id: "1", sort_order: 1, available_until: null, max_quantity: null },
+];
+
 export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }: GiftCatalogProps) {
-    const [categories, setCategories] = useState<GiftCategory[]>([]);
-    const [gifts, setGifts] = useState<VirtualGift[]>([]);
-    const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedGift, setSelectedGift] = useState<VirtualGift | null>(null);
 
-    useEffect(() => {
-        loadCatalog();
-    }, [selectedCategory]);
+    // FIX (CACHE): Use React Query with aggressive caching
+    // Gift catalog rarely changes - cache for 1 hour
+    const { data, isLoading } = useQuery<CatalogResponse>({
+        queryKey: ['giftsCatalog', selectedCategory],
+        queryFn: () => authService.getGiftsCatalog(selectedCategory || undefined),
+        staleTime: 1000 * 60 * 60, // 1 hour - catalog rarely changes
+        gcTime: 1000 * 60 * 60 * 24, // 24 hours cache time
+        retry: 2,
+    });
 
-    const loadCatalog = async () => {
-        try {
-            setLoading(true);
-            const data = await authService.getGiftsCatalog(selectedCategory || undefined);
-            setCategories(data.categories);
-            setGifts(data.gifts);
-        } catch (error) {
-            console.error("Failed to load gift catalog:", error);
-            // Fallback mock data
-            setCategories([
-                { id: "1", name: "Romantic", description: "Express your feelings", icon: "💕", sort_order: 1 },
-                { id: "2", name: "Fun", description: "Fun gifts", icon: "🎉", sort_order: 2 },
-                { id: "3", name: "Premium", description: "Exclusive gifts", icon: "💎", sort_order: 3 },
-            ]);
-            setGifts([
-                { id: "1", name: "Red Rose", description: "A classic symbol of love", image_url: "/static/gifts/rose.png", animation_url: null, price: 10, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, times_sent: 1250, category_id: "1" },
-                { id: "2", name: "Heart Balloon", description: "A cute heart balloon", image_url: "/static/gifts/heart_balloon.png", animation_url: null, price: 15, currency: "XTR", is_animated: true, is_premium: false, is_limited: false, times_sent: 980, category_id: "1" },
-                { id: "3", name: "Teddy Bear", description: "A cuddly teddy bear", image_url: "/static/gifts/teddy.png", animation_url: null, price: 25, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, times_sent: 756, category_id: "1" },
-                { id: "4", name: "Diamond Ring", description: "For that special someone", image_url: "/static/gifts/diamond_ring.png", animation_url: null, price: 100, currency: "XTR", is_animated: true, is_premium: true, is_limited: false, times_sent: 234, category_id: "3" },
-                { id: "5", name: "Party Popper", description: "Celebrate together", image_url: "/static/gifts/party.png", animation_url: null, price: 8, currency: "XTR", is_animated: true, is_premium: false, is_limited: false, times_sent: 1567, category_id: "2" },
-                { id: "6", name: "Star", description: "You are my star", image_url: "/static/gifts/star.png", animation_url: null, price: 5, currency: "XTR", is_animated: true, is_premium: false, is_limited: false, times_sent: 2345, category_id: "2" },
-            ]);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const categories = data?.categories || FALLBACK_CATEGORIES;
+    const gifts = data?.gifts || FALLBACK_GIFTS;
 
     const filteredGifts = gifts.filter(gift => {
         if (searchQuery) {
@@ -107,42 +78,42 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
         return emojiMap[gift.name] || "🎁";
     };
 
-    if (loading) {
+    if (isLoading) {
         return (
-            <div className={styles.loadingContainer}>
-                <div className={styles.loadingSpinner}></div>
+            <div className="flex flex-col items-center justify-center gap-4 py-12 text-muted-foreground">
+                <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin"></div>
                 <p>Loading gifts...</p>
             </div>
         );
     }
 
     return (
-        <div className={styles.catalogContainer}>
+        <div className="flex flex-col gap-4 p-4 max-w-full">
             {/* Search Bar */}
-            <div className={styles.searchContainer}>
-                <Search className={styles.searchIcon} size={18} />
+            <div className="relative flex items-center">
+                <Search className="absolute left-3 text-muted-foreground" size={18} />
                 <input
                     type="text"
                     placeholder="Search gifts..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className={styles.searchInput}
+                    className="w-full py-3 pl-10 pr-3 rounded-xl border border-border bg-surface text-foreground text-sm transition-all focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
                 />
             </div>
 
             {/* Categories */}
-            <div className={styles.categoriesContainer}>
+            <div className="flex gap-2 overflow-x-auto py-1 scrollbar-hide no-scrollbar">
                 <button
-                    className={`${styles.categoryChip} ${!selectedCategory ? styles.active : ""}`}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-border bg-surface text-muted-foreground text-[13px] font-medium cursor-pointer transition-all hover:border-primary hover:text-primary whitespace-nowrap ${!selectedCategory ? "bg-gradient-to-br from-primary to-accent border-transparent text-white" : ""}`}
                     onClick={() => setSelectedCategory(null)}
                 >
-                    <Gift size={14} />
+                    <GiftIcon size={14} />
                     All
                 </button>
                 {categories.map((category) => (
                     <button
                         key={category.id}
-                        className={`${styles.categoryChip} ${selectedCategory === category.id ? styles.active : ""}`}
+                        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-border bg-surface text-muted-foreground text-[13px] font-medium cursor-pointer transition-all hover:border-primary hover:text-primary whitespace-nowrap ${selectedCategory === category.id ? "bg-gradient-to-br from-primary to-accent border-transparent text-white" : ""}`}
                         onClick={() => setSelectedCategory(category.id)}
                     >
                         <span>{category.icon || "🎁"}</span>
@@ -152,53 +123,53 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
             </div>
 
             {/* Gifts Grid */}
-            <div className={styles.giftsGrid}>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {filteredGifts.map((gift) => (
                     <div
                         key={gift.id}
-                        className={`${styles.giftCard} ${gift.is_premium ? styles.premium : ""} ${selectedGift?.id === gift.id ? styles.selected : ""}`}
+                        className={`relative flex flex-col items-center p-4 rounded-2xl bg-surface border-2 border-transparent cursor-pointer transition-all hover:-translate-y-1 hover:shadow-xl hover:border-primary ${gift.is_premium ? "bg-gradient-to-br from-yellow-500/10 to-orange-500/5 hover:shadow-yellow-500/30" : ""} ${selectedGift?.id === gift.id ? "border-primary bg-gradient-to-br from-primary/10 to-accent/10" : ""}`}
                         onClick={() => handleGiftClick(gift)}
                     >
                         {gift.is_premium && (
-                            <div className={styles.premiumBadge}>
+                            <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500 text-black text-[10px] font-semibold">
                                 <Sparkles size={10} />
                                 Premium
                             </div>
                         )}
                         {gift.is_animated && (
-                            <div className={styles.animatedBadge}>
+                            <div className="absolute top-2 left-2 flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 text-white animate-pulse">
                                 <Star size={10} />
                             </div>
                         )}
 
-                        <div className={styles.giftImageContainer}>
+                        <div className="w-16 h-16 flex items-center justify-center mb-3">
                             {gift.image_url ? (
                                 <img
                                     src={gift.image_url.startsWith("http") || gift.image_url.startsWith("/") ? gift.image_url : `/api_proxy/${gift.image_url}`}
                                     alt={gift.name}
-                                    className={styles.giftImage}
+                                    className="max-w-full max-h-full object-contain"
                                     onError={(e) => {
                                         (e.target as HTMLImageElement).style.display = "none";
-                                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove(styles.hidden);
+                                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
                                     }}
                                 />
                             ) : null}
-                            <div className={`${styles.giftEmoji} ${gift.image_url ? styles.hidden : ""}`}>
+                            <div className={`text-[48px] leading-none ${gift.image_url ? "hidden" : ""}`}>
                                 {getGiftImage(gift)}
                             </div>
                         </div>
 
-                        <div className={styles.giftInfo}>
-                            <h4 className={styles.giftName}>{gift.name}</h4>
-                            <div className={styles.giftPrice}>
-                                <Star size={12} className={styles.starIcon} />
+                        <div className="text-center">
+                            <h4 className="text-sm font-semibold text-foreground mb-1.5">{gift.name}</h4>
+                            <div className="flex items-center justify-center gap-1 text-[13px] font-semibold text-primary">
+                                <Star size={12} className="text-[#FFD700]" />
                                 {gift.price} {gift.currency}
                             </div>
                         </div>
 
                         {gift.times_sent > 0 && (
-                            <div className={styles.sentCount}>
-                                <Heart size={10} />
+                            <div className="absolute bottom-2 right-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Heart size={10} className="text-red-500" />
                                 {gift.times_sent.toLocaleString()}
                             </div>
                         )}
@@ -207,8 +178,8 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
             </div>
 
             {filteredGifts.length === 0 && (
-                <div className={styles.emptyState}>
-                    <Gift size={48} />
+                <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
+                    <GiftIcon size={48} className="opacity-50" />
                     <p>No gifts found</p>
                 </div>
             )}

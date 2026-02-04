@@ -19,11 +19,17 @@ class GeoService:
     def __init__(self):
         # Initialize Async Redis Connection
         # Using connection pool for high concurrency
-        self.redis = redis.from_url(
-            settings.REDIS_URL or "redis://localhost:6379",
-            encoding="utf-8", 
-            decode_responses=True
-        )
+        # Initialize Async Redis Connection
+        # Using connection pool for high concurrency
+        if settings.REDIS_URL:
+            self.redis = redis.from_url(
+                settings.REDIS_URL,
+                encoding="utf-8", 
+                decode_responses=True
+            )
+        else:
+            logger.warning("REDIS_URL not configured. GeoService disabled.")
+            self.redis = None
 
     async def update_location(self, user_id: str, lat: float, lon: float, metadata: dict = None):
         """

@@ -53,8 +53,8 @@ This will start:
 
 ### 3. Create Test Users (Optional)
 ```bash
-# After services are running, seed 50 test users:
-curl -X POST http://localhost:8001/init
+# After services are running, seed 50 test users (Dev mode only):
+curl -X POST http://localhost:8001/debug/init-users
 ```
 
 ---
@@ -65,22 +65,27 @@ curl -X POST http://localhost:8001/init
 |---------|-----|-------------|
 | **Frontend** | http://localhost:3000 | Main web application |
 | **Backend API** | http://localhost:8001 | REST API |
-| **API Docs** | http://localhost:8001/docs | Swagger documentation |
+| **Swagger UI** | http://localhost:8001/docs | Interactive API Docs |
+| **API Reference** | [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Detailed Documentation |
 | **Health Check** | http://localhost:8001/health | Service status |
 | **Admin Panel** | http://localhost:3000/admin | Admin dashboard |
 
 ---
 
-## Default Credentials
+## Security & Verification (Update 2026)
 
-### Admin Account
-- **Phone:** +79062148253
-- **Telegram:** @RezidentMD
-- **OTP (dev):** 0000
+### New Verification Flow
+We have moved to a strict **manual verification** model to ensure platform quality.
+1.  **Registration**: Users start with `is_verified=False`.
+2.  **Onboarding**: New users must complete their profile (Photo + Age) to be visible in the feed.
+3.  **Verification**: To get the blue checkmark, users must submit a selfie in the app settings.
+4.  **Review**: Admins review requests in the new Admin Panel.
 
-### Test Users (after running /init)
-- **Phone format:** +79000000001 to +79000000050
-- **OTP (dev):** 0000
+### Admin Panel
+Accessible at `/admin`. Includes:
+- **Moderation Queue**: Review photos and verification requests.
+- **Analytics**: Real-time revenue and retention tracking.
+- **User Management**: Ban/Suspend users with auto-cleanup of content.
 
 ---
 
@@ -207,7 +212,7 @@ docker-compose up --build
 ### No test users on /discover
 ```bash
 # Seed test users
-curl -X POST http://localhost:8001/init
+curl -X POST http://localhost:8001/debug/init-users
 ```
 
 ### Database migration errors
@@ -224,23 +229,73 @@ docker-compose up --build
 
 ## Project Structure
 
+### MambaX Frontend - Project Map
+
+**1. Architecture**
+MambaX Frontend is a modern Next.js 16 application built with a focus on premium aesthetics, performance, and a "cyber-dating" experience. It uses the App Router architecture and integrates with a backend via a strongly typed API layer.
+
+**Core Stack:**
+- **Framework:** Next.js 16.1.1 (Turbopack)
+- **Styling:** Tailwind CSS (Custom Design System)
+- **State:** @tanstack/react-query
+- **Error Handling:** Sentry
+
+### Directory Structure
+
 ```
-├── backend/           # FastAPI backend
-│   ├── api/          # API routes
-│   ├── models/       # SQLAlchemy models
-│   ├── services/     # Business logic
-│   ├── main.py       # Entry point
-│   ├── bot.py        # Telegram bot
-│   └── Dockerfile
-├── frontend/          # Next.js frontend
+root/
+├── backend/                 # FastAPI backend
+├── frontend/                # Next.js frontend
 │   ├── src/
-│   │   ├── app/      # Pages (App Router)
-│   │   ├── components/
-│   │   └── services/ # API clients
+│   │   ├── app/             # Next.js App Router (Routes & Pages)
+│   │   │   ├── activity/    # Matches & Likes Activity
+│   │   │   ├── admin/       # Admin Dashboard (Vision Terminal)
+│   │   │   ├── auth/        # Login & Registration
+│   │   │   ├── chat/        # Chat Interface & List
+│   │   │   ├── discover/    # Main Swipe Interface
+│   │   │   ├── gifts/       # Gift Catalog & My Gifts
+│   │   │   ├── onboarding/  # User Setup Flow
+│   │   │   ├── radar/       # Geo-location Discovery
+│   │   │   └── ...
+│   │   ├── components/      # Reusable UI Components
+│   │   │   ├── admin/       # Admin-specific components
+│   │   │   ├── chat/        # Chat bubbles, inputs, gift picker
+│   │   │   ├── discovery/   # Swipe cards, Radar map
+│   │   │   └── ...
+│   │   ├── lib/             # Core Utilities
+│   │   │   ├── http-client.ts # Centralized HTTP Client
+│   │   │   ├── telegram.ts  # Telegram WebApp Integration
+│   │   │   └── ...
+│   │   ├── services/        # API Service Layer
+│   │   │   ├── api.ts       # Main Service (Auth, Profile, Chat, Swipe)
+│   │   │   ├── adminApi.ts  # Admin Features
+│   │   │   └── advancedApi.ts # Algo Tuning & Analytics
 │   └── Dockerfile
 ├── docker-compose.yml
 └── README.md
 ```
+
+### Key Features & Components
+
+**1. Centralized API Layer**
+- **HttpClient (`src/lib/http-client.ts`)**: Handles base URL, auth tokens, errors (401 interception), and `FormData`.
+- **Services**:
+    - `authService` (`src/services/api.ts`): Unified service for user actions.
+    - `adminApi`: For the "Vision Terminal".
+    - `Feature Flags`: Dynamic toggling of premium features (Boost, Incognito, etc.) via Admin Panel.
+
+**2. Admin Vision Terminal (`src/components/admin/AdminVisionTerminal.tsx`)**
+- Real-time simulated "Network Traffic".
+- Interactive Algorithm Tuner (Sliders for matching weights).
+- Moderation Queue with photo review.
+
+**3. Discovery Engine (`src/components/home/SmartDiscoveryEngine.tsx`)**
+- High-performance swipe interface with Framer Motion animations.
+- Smart filtering and premium UI effects.
+
+**4. Real-time Chat**
+- WebSocket integration with optimistic UI updates.
+- Gift sending flows and "Super Like" interactions.
 
 ---
 

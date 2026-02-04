@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { adminApi, RetentionCohort } from '@/services/adminApi';
 import RetentionHeatmap from '@/components/admin/analytics/RetentionHeatmap';
-import { TrendingUp, TrendingDown, RefreshCw, Calendar, Download, Filter, HelpCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, RefreshCw, Download, HelpCircle } from 'lucide-react';
+import { GlassCard } from '@/components/ui/GlassCard';
+import styles from '../../admin.module.css';
 
 export default function RetentionPage() {
     const [loading, setLoading] = useState(true);
@@ -36,17 +37,17 @@ export default function RetentionPage() {
     };
 
     return (
-        <div className="retention-page">
-            <div className="page-header">
-                <div>
-                    <h1>Retention Analytics</h1>
-                    <p>Track user retention cohorts and engagement over time</p>
+        <div className={styles.pageContainer}>
+            <div className={styles.headerSection}>
+                <div className={styles.headerContent}>
+                    <h1 className={styles.headerTitle}>Retention Analytics</h1>
+                    <p className={styles.headerDescription}>Track user retention cohorts and engagement over time</p>
                 </div>
-                <div className="header-controls">
-                    <button className="btn-icon" onClick={fetchData} disabled={loading}>
-                        <RefreshCw size={18} className={loading ? 'spinning' : ''} />
+                <div className="flex gap-3">
+                    <button className={styles.iconButton} onClick={fetchData} disabled={loading}>
+                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button className="btn-primary">
+                    <button className={styles.primaryButton}>
                         <Download size={16} />
                         Export
                     </button>
@@ -54,213 +55,62 @@ export default function RetentionPage() {
             </div>
 
             {/* Key Metrics Cards */}
-            <div className="metrics-grid">
-                <div className="metric-card glass-panel">
-                    <div className="metric-header">
-                        <div className="metric-title">Day 1 Retention</div>
-                        <HelpCircle size={16} className="info-icon" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <GlassCard className="p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="text-sm font-medium text-[var(--admin-text-muted)]">Day 1 Retention</div>
+                        <HelpCircle size={16} className="text-[var(--admin-text-secondary)] cursor-help" />
                     </div>
-                    <div className="metric-value">{calculateAverageRetention('d1')}%</div>
-                    <div className="metric-trend positive">
+                    <div className="text-3xl font-bold text-[var(--admin-text-primary)] mb-3">{calculateAverageRetention('d1')}%</div>
+                    <div className="flex items-center gap-1.5 text-[13px] text-emerald-500">
                         <TrendingUp size={16} />
                         <span>Avg last 30 days</span>
                     </div>
-                </div>
+                </GlassCard>
 
-                <div className="metric-card glass-panel">
-                    <div className="metric-header">
-                        <div className="metric-title">Day 7 Retention</div>
-                        <HelpCircle size={16} className="info-icon" />
+                <GlassCard className="p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="text-sm font-medium text-[var(--admin-text-muted)]">Day 7 Retention</div>
+                        <HelpCircle size={16} className="text-[var(--admin-text-secondary)] cursor-help" />
                     </div>
-                    <div className="metric-value">{calculateAverageRetention('d7')}%</div>
-                    <div className="metric-trend neutral">
+                    <div className="text-3xl font-bold text-[var(--admin-text-primary)] mb-3">{calculateAverageRetention('d7')}%</div>
+                    <div className="flex items-center gap-1.5 text-[13px] text-amber-500">
                         <TrendingUp size={16} />
                         <span>Avg last 30 days</span>
                     </div>
-                </div>
+                </GlassCard>
 
-                <div className="metric-card glass-panel">
-                    <div className="metric-header">
-                        <div className="metric-title">Day 30 Retention</div>
-                        <HelpCircle size={16} className="info-icon" />
+                <GlassCard className="p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="text-sm font-medium text-[var(--admin-text-muted)]">Day 30 Retention</div>
+                        <HelpCircle size={16} className="text-[var(--admin-text-secondary)] cursor-help" />
                     </div>
-                    <div className="metric-value">{calculateAverageRetention('d30')}%</div>
-                    <div className="metric-trend negative">
+                    <div className="text-3xl font-bold text-[var(--admin-text-primary)] mb-3">{calculateAverageRetention('d30')}%</div>
+                    <div className="flex items-center gap-1.5 text-[13px] text-red-500">
                         <TrendingDown size={16} />
                         <span>Avg last 30 days</span>
                     </div>
-                </div>
+                </GlassCard>
             </div>
 
             {/* Retention Heatmap */}
-            <div className="heatmap-section">
+            <div className="mb-10">
                 {loading ? (
-                    <div className="loading-state glass-panel">
-                        <RefreshCw size={32} className="spinning" />
+                    <GlassCard className="flex flex-col items-center justify-center py-20 text-[var(--admin-text-muted)]">
+                        <RefreshCw size={32} className="animate-spin mb-4 text-[var(--neon-blue)]" />
                         <p>Loading retention data...</p>
-                    </div>
+                    </GlassCard>
                 ) : error ? (
-                    <div className="error-state glass-panel">
-                        <p>{error}</p>
-                        <button onClick={fetchData} className="retry-btn">Retry</button>
-                    </div>
+                    <GlassCard className="flex flex-col items-center justify-center py-20 text-[var(--admin-text-muted)]">
+                        <p className="mb-4 text-red-400">{error}</p>
+                        <button onClick={fetchData} className={styles.primaryButton}>Retry</button>
+                    </GlassCard>
                 ) : (
                     <RetentionHeatmap
                         data={cohorts}
-                        isLoading={loading}
-                        onRefresh={fetchData}
                     />
                 )}
             </div>
-
-            <style jsx>{`
-                .retention-page {
-                    max-width: 1200px;
-                    margin: 0 auto;
-                }
-
-                .page-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 32px;
-                }
-
-                .page-header h1 {
-                    font-size: 24px;
-                    font-weight: 700;
-                    color: #fff;
-                    margin-bottom: 4px;
-                }
-
-                .page-header p {
-                    color: #94a3b8;
-                    font-size: 14px;
-                }
-
-                .header-controls {
-                    display: flex;
-                    gap: 12px;
-                }
-
-                .btn-icon {
-                    width: 40px;
-                    height: 40px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 12px;
-                    background: rgba(30, 41, 59, 0.5);
-                    border: 1px solid rgba(148, 163, 184, 0.2);
-                    color: #94a3b8;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }
-
-                .btn-icon:hover {
-                    background: rgba(59, 130, 246, 0.2);
-                    color: #3b82f6;
-                    border-color: #3b82f6;
-                }
-
-                .btn-primary {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    padding: 0 20px;
-                    height: 40px;
-                    border-radius: 12px;
-                    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-                    color: white;
-                    font-weight: 500;
-                    font-size: 14px;
-                    transition: all 0.2s;
-                }
-
-                .btn-primary:hover {
-                    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-                    transform: translateY(-1px);
-                }
-
-                /* Metrics Grid */
-                .metrics-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-                    gap: 24px;
-                    margin-bottom: 32px;
-                }
-
-                .metric-card {
-                    padding: 24px;
-                    border-radius: 20px;
-                }
-
-                .metric-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 16px;
-                }
-
-                .metric-title {
-                    color: #94a3b8;
-                    font-size: 14px;
-                    font-weight: 500;
-                }
-
-                .info-icon {
-                    color: #475569;
-                    cursor: help;
-                }
-
-                .metric-value {
-                    font-size: 32px;
-                    font-weight: 700;
-                    color: #fff;
-                    margin-bottom: 12px;
-                }
-
-                .metric-trend {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    font-size: 13px;
-                }
-
-                .metric-trend.positive { color: #10b981; }
-                .metric-trend.neutral { color: #f59e0b; }
-                .metric-trend.negative { color: #ef4444; }
-
-                /* Heatmap Section */
-                .heatmap-section {
-                    margin-bottom: 40px;
-                }
-
-                .loading-state, .error-state {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 60px;
-                    border-radius: 20px;
-                    text-align: center;
-                }
-
-                .spinning {
-                    animation: spin 1s linear infinite;
-                }
-
-                @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-
-                .glass-panel {
-                    background: rgba(15, 23, 42, 0.65);
-                    backdrop-filter: blur(20px);
-                    border: 1px solid rgba(148, 163, 184, 0.1);
-                }
-            `}</style>
         </div>
     );
 }

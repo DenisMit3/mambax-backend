@@ -1,13 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from sqlalchemy import update, select, desc
 from backend.db.session import get_db
 from backend.api.interaction import get_current_user_id
 from backend.schemas.safety import BlockCreate, ReportCreate, BlockResponse, ReportResponse
-from backend.crud_pkg import safety as crud_safety
+from backend.crud import safety as crud_safety
 from uuid import UUID
+from backend.auth import get_current_admin
+from backend.models.user import User, UserStatus
+from backend.models.moderation import ModerationLog
+from backend.models.interaction import Report
+from enum import Enum
 
 router = APIRouter(prefix="/safety", tags=["Safety"])
+
+class ModerationAction(str, Enum):
+    DISMISS = "dismiss"
+    BAN_USER = "ban_user"
+    DELETE_CONTENT = "delete_content"
 
 @router.post("/block", response_model=BlockResponse)
 async def block_user(
@@ -46,16 +56,13 @@ async def get_moderation_queue(
     status: str = "pending",
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
-    # current_admin: User = Depends(get_current_admin) # TODO: Add admin dependency check
+    current_admin: User = Depends(get_current_admin)
 ):
     """
     Get items requiring moderation. 
     Combines User Reports and Automated Content Flags.
     """
-    from sqlalchemy import select, desc
-    from backend.models.moderation import ModerationLog
-    from backend.models.interaction import Report
-
+    
     # 1. Get User Reports
     reports_stmt = select(Report).where(Report.status == status).limit(limit)
     reports = await db.execute(reports_stmt)
@@ -95,24 +102,28 @@ async def get_moderation_queue(
 @router.post("/admin/resolve/{item_id}")
 async def resolve_moderation_item(
     item_id: UUID,
-    action: str, # dismiss, ban_user, delete_content
+    action: ModerationAction, # dismiss, ban_user, delete_content
     notes: str = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_current_admin)
 ):
-    from sqlalchemy import select
-    from backend.models.interaction import Report
-    from backend.crud_pkg import safety as crud_safety
     
     # Check if it's a report
     report = await db.get(Report, item_id)
     if report:
         report.status = "resolved"
         # If action is ban, call block logic
-        if action == "ban_user":
-             # Logic to ban user (add to BannedUser table)
-             pass
+        if action == ModerationAction.BAN_USER:
+             # Logic to ban user (add to BannedUser table or update status)
+             await db.execute(
+                 update(User)
+                 .where(User.id == report.reported_user_id)
+                 .values(status=UserStatus.BANNED, is_active=False)
+             )
+             # TODO: Invalidate tokens (requires redis blacklist or token versioning)
+             
         await db.commit()
-        return {"status": "success", "message": f"Report resolved with action {action}"}
+        return {"status": "success", "message": f"Report resolved with action {action.value}"}
         
     # Check if it's a moderation log (not fully implemented 'resolution' for logs yet without a status column)
     return {"status": "success", "message": "Item processed"}

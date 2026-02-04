@@ -21,8 +21,16 @@ import {
   Target,
   Percent,
 } from 'lucide-react';
-import RealtimeMetrics from '@/components/admin/analytics/RealtimeMetrics';
+import dynamic from 'next/dynamic';
+
+const RealtimeMetrics = dynamic(() => import('@/components/admin/analytics/RealtimeMetrics'), {
+  loading: () => <div className="h-32 animate-pulse bg-slate-800/50 rounded-xl" />,
+  ssr: false
+});
 import { adminApi, AnalyticsData, FunnelStage, RetentionCohort } from '@/services/adminApi';
+
+import { GlassCard } from '@/components/ui/GlassCard';
+import styles from '../admin.module.css';
 
 interface MetricCardProps {
   title: string;
@@ -37,102 +45,26 @@ function MetricCard({ title, value, change, changeLabel, icon, color }: MetricCa
   const isPositive = change >= 0;
 
   return (
-    <motion.div
-      className="metric-card"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4 }}
-    >
-      <div className="metric-header">
-        <div className="metric-icon" style={{ background: `${color}20`, color }}>
+    <GlassCard className="p-6 flex flex-col h-full bg-[var(--admin-glass-bg)] hover:bg-[var(--admin-glass-bg-hover)] border-[var(--admin-glass-border)]">
+      <div className="flex justify-between items-start mb-5">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center transition-colors duration-300"
+          style={{ background: `${color}20`, color }}>
           {icon}
         </div>
-        <div className={`metric-change ${isPositive ? 'positive' : 'negative'}`}>
+        <div className={`flex items-center gap-1 text-[13px] font-semibold px-2.5 py-1 rounded-full ${isPositive
+          ? 'bg-emerald-500/15 text-emerald-500'
+          : 'bg-red-500/15 text-red-500'
+          }`}>
           {isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
           <span>{Math.abs(change)}%</span>
         </div>
       </div>
-      <div className="metric-value">{value}</div>
-      <div className="metric-meta">
-        <span className="metric-title">{title}</span>
-        <span className="metric-label">{changeLabel}</span>
+      <div className="text-4xl font-bold text-[var(--admin-text-primary)] mb-2 tracking-tight">{value}</div>
+      <div className="flex justify-between items-center mt-auto">
+        <span className="text-sm text-[var(--admin-text-secondary)] font-medium">{title}</span>
+        <span className="text-xs text-[var(--admin-text-muted)]">{changeLabel}</span>
       </div>
-
-      <style jsx>{`
-        .metric-card {
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 20px;
-          padding: 24px;
-          transition: all 0.3s ease;
-        }
-        
-        .metric-card:hover {
-          border-color: ${color}40;
-          box-shadow: 0 0 30px ${color}20;
-        }
-        
-        .metric-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 20px;
-        }
-        
-        .metric-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .metric-change {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 13px;
-          font-weight: 600;
-          padding: 4px 10px;
-          border-radius: 20px;
-        }
-        
-        .metric-change.positive {
-          background: rgba(16, 185, 129, 0.15);
-          color: #10b981;
-        }
-        
-        .metric-change.negative {
-          background: rgba(239, 68, 68, 0.15);
-          color: #ef4444;
-        }
-        
-        .metric-value {
-          font-size: 36px;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin-bottom: 8px;
-        }
-        
-        .metric-meta {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        
-        .metric-title {
-          font-size: 14px;
-          color: #94a3b8;
-        }
-        
-        .metric-label {
-          font-size: 12px;
-          color: #64748b;
-        }
-      `}</style>
-    </motion.div>
+    </GlassCard>
   );
 }
 
@@ -144,414 +76,52 @@ function UserActivityChart({ data }: UserActivityChartProps) {
   const maxValue = Math.max(...data.map(d => d.dau), 1);
 
   return (
-    <div className="chart-container glass-panel">
-      <div className="chart-header">
-        <div className="chart-title">
-          <BarChart3 size={20} style={{ color: '#3b82f6' }} />
-          <h3>Daily Active Users</h3>
+    <GlassCard className="p-6 h-full border-[var(--admin-glass-border)]">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-500/10 rounded-lg">
+            <BarChart3 size={20} style={{ color: '#3b82f6' }} />
+          </div>
+          <h3 className="text-lg font-semibold text-[var(--admin-text-primary)]">Daily Active Users</h3>
         </div>
       </div>
 
-      <div className="bar-chart">
+      <div className="flex justify-between items-end h-[200px] gap-2 pt-5">
         {data.map((item, index) => (
           <motion.div
             key={item.date}
-            className="bar-item"
+            className="flex-1 flex flex-col items-center h-full group"
             initial={{ opacity: 0, scaleY: 0 }}
             animate={{ opacity: 1, scaleY: 1 }}
             transition={{ delay: index * 0.1 }}
           >
-            <div className="bar-wrapper">
+            <div className="flex-1 w-full flex items-end justify-center relative">
               <motion.div
-                className="bar"
+                className="w-full max-w-[50px] bg-gradient-to-b from-blue-500 to-blue-700 rounded-t-md relative cursor-pointer min-h-[4px] transition-all duration-200 group-hover:from-blue-400 group-hover:to-blue-600 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.5)]"
                 style={{ height: `${(item.dau / maxValue) * 100}%` }}
                 whileHover={{ scale: 1.05 }}
               >
-                <div className="bar-tooltip">{item.dau.toLocaleString()}</div>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 bg-slate-900/90 border border-slate-700 rounded-lg py-1.5 px-3 text-xs font-semibold text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity mb-2 pointer-events-none z-10">
+                  {item.dau.toLocaleString()}
+                </div>
               </motion.div>
             </div>
-            <span className="bar-label">{item.date.slice(-5)}</span>
+            <span className="text-[11px] text-[var(--admin-text-muted)] mt-3">{item.date.slice(-5)}</span>
           </motion.div>
         ))}
       </div>
-
-      <style jsx>{`
-        .chart-container {
-          padding: 24px;
-        }
-        
-        .chart-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 24px;
-        }
-        
-        .chart-title {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        
-        .chart-title h3 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-        }
-        
-        .bar-chart {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          height: 200px;
-          gap: 8px;
-          padding-top: 20px;
-        }
-        
-        .bar-item {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          height: 100%;
-        }
-        
-        .bar-wrapper {
-          flex: 1;
-          width: 100%;
-          display: flex;
-          align-items: flex-end;
-          justify-content: center;
-        }
-        
-        .bar {
-          width: 100%;
-          max-width: 50px;
-          background: linear-gradient(180deg, #3b82f6, #1d4ed8);
-          border-radius: 8px 8px 0 0;
-          position: relative;
-          cursor: pointer;
-          transition: all 0.2s;
-          transform-origin: bottom;
-          min-height: 4px;
-        }
-        
-        .bar:hover {
-          background: linear-gradient(180deg, #60a5fa, #3b82f6);
-          box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
-        }
-        
-        .bar-tooltip {
-          position: absolute;
-          bottom: 100%;
-          left: 50%;
-          transform: translateX(-50%);
-          background: rgba(15, 23, 42, 0.9);
-          border: 1px solid rgba(148, 163, 184, 0.3);
-          border-radius: 8px;
-          padding: 6px 12px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #f1f5f9;
-          white-space: nowrap;
-          opacity: 0;
-          pointer-events: none;
-          transition: opacity 0.2s;
-          margin-bottom: 8px;
-        }
-        
-        .bar:hover .bar-tooltip {
-          opacity: 1;
-        }
-        
-        .bar-label {
-          font-size: 11px;
-          color: #94a3b8;
-          margin-top: 12px;
-        }
-      `}</style>
-    </div>
+    </GlassCard>
   );
 }
 
-interface FunnelChartProps {
-  data: FunnelStage[];
-}
-
-function FunnelChart({ data }: FunnelChartProps) {
-  return (
-    <div className="funnel-container glass-panel">
-      <div className="funnel-header">
-        <div className="funnel-title">
-          <Target size={20} style={{ color: '#a855f7' }} />
-          <h3>Conversion Funnel</h3>
-        </div>
-      </div>
-
-      <div className="funnel-chart">
-        {data.map((item, index) => {
-          const width = 100 - (index * 12);
-          const color = `hsl(${260 - index * 20}, 80%, 60%)`;
-
-          return (
-            <motion.div
-              key={item.stage}
-              className="funnel-stage"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <div className="funnel-bar-container">
-                <motion.div
-                  className="funnel-bar"
-                  style={{
-                    width: `${width}%`,
-                    background: `linear-gradient(90deg, ${color}, ${color}dd)`
-                  }}
-                  whileHover={{ scale: 1.02 }}
-                >
-                  <span className="funnel-value">{item.value.toLocaleString()}</span>
-                </motion.div>
-              </div>
-              <div className="funnel-info">
-                <span className="funnel-stage-name">{item.stage}</span>
-                <span className="funnel-rate">{item.rate.toFixed(1)}%</span>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      <style jsx>{`
-        .funnel-container {
-          padding: 24px;
-        }
-        
-        .funnel-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 24px;
-        }
-        
-        .funnel-title {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        
-        .funnel-title h3 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-        }
-        
-        .funnel-chart {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-        
-        .funnel-stage {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-        
-        .funnel-bar-container {
-          display: flex;
-          justify-content: center;
-        }
-        
-        .funnel-bar {
-          height: 40px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .funnel-bar:hover {
-          box-shadow: 0 4px 20px rgba(168, 85, 247, 0.3);
-        }
-        
-        .funnel-value {
-          font-size: 14px;
-          font-weight: 600;
-          color: white;
-        }
-        
-        .funnel-info {
-          display: flex;
-          justify-content: space-between;
-          padding: 0 8px;
-        }
-        
-        .funnel-stage-name {
-          font-size: 13px;
-          color: #94a3b8;
-        }
-        
-        .funnel-rate {
-          font-size: 13px;
-          font-weight: 600;
-          color: #10b981;
-        }
-      `}</style>
-    </div>
-  );
-}
-
-interface RetentionHeatmapProps {
-  data: RetentionCohort[];
-}
-
-function RetentionHeatmap({ data }: RetentionHeatmapProps) {
-  const getCellColor = (value: number | null | undefined) => {
-    if (value === null || value === undefined) return 'rgba(30, 41, 59, 0.3)';
-    const v = Number(value);
-    if (v >= 40) return 'rgba(16, 185, 129, 0.8)';
-    if (v >= 30) return 'rgba(16, 185, 129, 0.6)';
-    if (v >= 20) return 'rgba(249, 115, 22, 0.6)';
-    if (v >= 10) return 'rgba(249, 115, 22, 0.4)';
-    return 'rgba(239, 68, 68, 0.4)';
-  };
-
-  return (
-    <div className="retention-container glass-panel">
-      <div className="retention-header">
-        <div className="retention-title">
-          <Clock size={20} style={{ color: '#10b981' }} />
-          <h3>Retention Cohorts</h3>
-        </div>
-      </div>
-
-      <div className="retention-table">
-        <div className="retention-header-row">
-          <div className="retention-cell header">Cohort</div>
-          <div className="retention-cell header">Day 1</div>
-          <div className="retention-cell header">Day 3</div>
-          <div className="retention-cell header">Day 7</div>
-          <div className="retention-cell header">Day 14</div>
-          <div className="retention-cell header">Day 30</div>
-        </div>
-
-        {data.map((row, index) => (
-          <motion.div
-            key={row.cohort}
-            className="retention-row"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.05 }}
-          >
-            <div className="retention-cell cohort">{row.cohort}</div>
-            <div
-              className="retention-cell value"
-              style={{ background: getCellColor(row.d1) }}
-            >
-              {row.d1 !== null ? `${row.d1}%` : '-'}
-            </div>
-            <div
-              className="retention-cell value"
-              style={{ background: getCellColor(row.d3) }}
-            >
-              {row.d3 !== null ? `${row.d3}%` : '-'}
-            </div>
-            <div
-              className="retention-cell value"
-              style={{ background: getCellColor(row.d7) }}
-            >
-              {row.d7 !== null ? `${row.d7}%` : '-'}
-            </div>
-            <div
-              className="retention-cell value"
-              style={{ background: getCellColor(row.d14) }}
-            >
-              {row.d14 !== null ? `${row.d14}%` : '-'}
-            </div>
-            <div
-              className="retention-cell value"
-              style={{ background: getCellColor(row.d30) }}
-            >
-              {row.d30 !== null ? `${row.d30}%` : '-'}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <style jsx>{`
-        .retention-container {
-          padding: 24px;
-        }
-        
-        .retention-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 24px;
-        }
-        
-        .retention-title {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        
-        .retention-title h3 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-        }
-        
-        .retention-table {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        
-        .retention-header-row,
-        .retention-row {
-          display: grid;
-          grid-template-columns: 100px repeat(5, 1fr);
-          gap: 4px;
-        }
-        
-        .retention-cell {
-          padding: 12px 16px;
-          border-radius: 8px;
-          text-align: center;
-          font-size: 13px;
-        }
-        
-        .retention-cell.header {
-          background: rgba(30, 41, 59, 0.5);
-          color: #94a3b8;
-          font-weight: 600;
-        }
-        
-        .retention-cell.cohort {
-          background: rgba(30, 41, 59, 0.5);
-          color: #f1f5f9;
-          text-align: left;
-          font-weight: 500;
-        }
-        
-        .retention-cell.value {
-          color: white;
-          font-weight: 600;
-          transition: all 0.2s;
-          cursor: default;
-        }
-        
-        .retention-cell.value:hover {
-          transform: scale(1.05);
-        }
-      `}</style>
-    </div>
-  );
-}
+const FunnelChart = dynamic(() => import('@/components/admin/analytics/FunnelChart'), {
+  ssr: false,
+  loading: () => <div className="h-[300px] flex items-center justify-center bg-[var(--admin-glass-bg)] border border-[var(--admin-glass-border)] rounded-2xl animate-pulse text-[var(--admin-text-muted)]">Loading funnel...</div>
+});
+const RetentionHeatmap = dynamic(() => import('@/components/admin/analytics/RetentionHeatmap'), {
+  ssr: false,
+  loading: () => <div className="h-[300px] flex items-center justify-center bg-[var(--admin-glass-bg)] border border-[var(--admin-glass-border)] rounded-2xl animate-pulse text-[var(--admin-text-muted)]">Loading retention...</div>
+});
 
 interface RealtimeData {
   timestamp: string;
@@ -699,68 +269,51 @@ export default function AnalyticsPage() {
 
   if (error) {
     return (
-      <div className="analytics-page">
-        <div className="error-container glass-panel">
-          <h2>Error Loading Analytics</h2>
-          <p>{error}</p>
-          <button className="btn-primary" onClick={fetchAnalyticsData}>
+      <div className="max-w-[1600px] mx-auto p-4">
+        <GlassCard className="p-12 text-center border-red-500/30">
+          <h2 className="text-xl font-bold text-red-500 mb-3">Error Loading Analytics</h2>
+          <p className="text-[var(--admin-text-secondary)] mb-6">{error}</p>
+          <button className={styles.primaryButton} onClick={fetchAnalyticsData}>
             <RefreshCw size={16} />
             Retry
           </button>
-        </div>
-        <style jsx>{`
-                    .analytics-page { max-width: 1600px; margin: 0 auto; }
-                    .error-container { 
-                        padding: 48px; 
-                        text-align: center;
-                        background: rgba(15, 23, 42, 0.65);
-                        backdrop-filter: blur(20px);
-                        border: 1px solid rgba(239, 68, 68, 0.3);
-                        border-radius: 20px;
-                    }
-                    .error-container h2 { color: #ef4444; margin-bottom: 12px; }
-                    .error-container p { color: #94a3b8; margin-bottom: 24px; }
-                    .btn-primary {
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 8px;
-                        padding: 12px 24px;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        border: none;
-                        border-radius: 12px;
-                        color: white;
-                        font-weight: 600;
-                        cursor: pointer;
-                    }
-                `}</style>
+        </GlassCard>
       </div>
     );
   }
 
   return (
-    <div className="analytics-page">
+    <div className={styles.pageContainer}>
       {/* Header */}
-      <div className="page-header">
-        <div>
-          <h1>Analytics Overview</h1>
-          <p>Monitor your platform performance and user engagement</p>
+      <div className={styles.headerSection}>
+        <div className={styles.headerContent}>
+          <h1 className={styles.headerTitle}>Analytics Overview</h1>
+          <p className={styles.headerDescription}>Monitor your platform performance and user engagement</p>
         </div>
-        <div className="header-controls">
-          <div className="date-selector">
-            <Calendar size={16} />
-            <select value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
+        <div className="flex gap-3 flex-wrap">
+          <div className="flex items-center gap-2 bg-[var(--admin-glass-bg-light)] border border-[var(--admin-glass-border)] rounded-xl px-4 py-2">
+            <Calendar size={16} className="text-[var(--admin-text-secondary)]" />
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="bg-transparent border-none outline-none text-[var(--admin-text-primary)] text-sm"
+            >
               <option value="7d">Last 7 Days</option>
               <option value="30d">Last 30 Days</option>
               <option value="90d">Last 90 Days</option>
             </select>
           </div>
-          <button className="btn-icon" onClick={fetchAnalyticsData} disabled={loading}>
-            <RefreshCw size={18} className={loading ? 'spinning' : ''} />
+          <button className={styles.iconButton} onClick={fetchAnalyticsData} disabled={loading}>
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button className="btn-icon">
-            <Filter size={18} />
-          </button>
-          <button className="btn-primary">
+          <button className={styles.primaryButton} onClick={async () => {
+            const { startDate, endDate } = getDateRange();
+            try {
+              await adminApi.analytics.exportData(startDate, endDate, 'csv');
+            } catch (e) {
+              console.error('Export failed:', e);
+            }
+          }}>
             <Download size={16} />
             Export
           </button>
@@ -768,14 +321,14 @@ export default function AnalyticsPage() {
       </div>
 
       {loading ? (
-        <div className="loading-container">
-          <RefreshCw size={32} className="spinning" />
+        <div className="flex flex-col items-center justify-center py-20 text-[var(--admin-text-muted)]">
+          <RefreshCw size={32} className="animate-spin mb-4 text-[var(--neon-blue)]" />
           <p>Loading analytics data...</p>
         </div>
       ) : (
         <>
           {/* Realtime Metrics */}
-          <div className="realtime-section">
+          <div className="mb-8">
             <RealtimeMetrics
               data={currentRealtimeData || undefined}
               onRefresh={fetchRealtimeData}
@@ -784,7 +337,7 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Key Metrics */}
-          <div className="metrics-grid">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
             <MetricCard
               title="Daily Active Users"
               value={metrics.dau.toLocaleString()}
@@ -798,212 +351,46 @@ export default function AnalyticsPage() {
               value={metrics.mau.toLocaleString()}
               change={realtimeData?.trend?.mau_change || 0}
               changeLabel="vs last month"
-              icon={<Eye size={22} />}
+              icon={<Calendar size={22} />}
               color="#a855f7"
             />
             <MetricCard
-              title="New Matches Today"
+              title="Total Matches"
               value={metrics.matches.toLocaleString()}
-              change={12.5}
-              changeLabel="vs yesterday"
+              change={5.2}
+              changeLabel="vs last week"
               icon={<Heart size={22} />}
               color="#ec4899"
             />
             <MetricCard
               title="Conversion Rate"
               value={`${metrics.conversionRate}%`}
-              change={-0.3}
+              change={-1.1}
               changeLabel="vs last week"
               icon={<Percent size={22} />}
-              color="#f97316"
+              color="#10b981"
             />
           </div>
 
-          {/* Charts Grid */}
-          <div className="charts-grid">
-            <div className="chart-full">
-              <UserActivityChart data={analyticsData?.daily_data || []} />
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="lg:col-span-2 min-h-[300px]">
+              {analyticsData && (
+                <UserActivityChart data={analyticsData.daily_data} />
+              )}
             </div>
-            <div className="chart-half">
+            <div className="min-h-[300px]">
               <FunnelChart data={funnelData} />
             </div>
-            <div className="chart-half">
-              <RetentionHeatmap data={retentionData} />
-            </div>
+          </div>
+
+          {/* Retention Row */}
+          <div className="grid grid-cols-1 mb-8">
+            <RetentionHeatmap data={retentionData} />
           </div>
         </>
       )}
-
-      <style jsx>{`
-        .analytics-page {
-          max-width: 1600px;
-          margin: 0 auto;
-        }
-        
-        .page-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 32px;
-        }
-        
-        .page-header h1 {
-          font-size: 28px;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin-bottom: 4px;
-        }
-        
-        .page-header p {
-          font-size: 15px;
-          color: #94a3b8;
-        }
-        
-        .header-controls {
-          display: flex;
-          gap: 12px;
-          align-items: center;
-        }
-        
-        .date-selector {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 12px;
-          padding: 10px 16px;
-          color: #94a3b8;
-        }
-        
-        .date-selector select {
-          background: transparent;
-          border: none;
-          color: #f1f5f9;
-          font-size: 14px;
-          cursor: pointer;
-          outline: none;
-        }
-        
-        .btn-icon {
-          width: 44px;
-          height: 44px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 12px;
-          color: #94a3b8;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .btn-icon:hover {
-          background: rgba(59, 130, 246, 0.2);
-          border-color: rgba(59, 130, 246, 0.4);
-          color: #3b82f6;
-        }
-        
-        .btn-icon:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        .btn-primary {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 12px 20px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border: none;
-          border-radius: 12px;
-          color: white;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .btn-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
-        }
-        
-        .loading-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 64px;
-          color: #94a3b8;
-          gap: 16px;
-        }
-        
-        .spinning {
-          animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        
-        .realtime-section {
-          margin-bottom: 32px;
-        }
-        
-        .metrics-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 20px;
-          margin-bottom: 32px;
-        }
-        
-        @media (max-width: 1200px) {
-          .metrics-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        
-        @media (max-width: 600px) {
-          .metrics-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-        
-        .charts-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 24px;
-        }
-        
-        .chart-full {
-          grid-column: span 2;
-        }
-        
-        .chart-half {
-          grid-column: span 1;
-        }
-        
-        @media (max-width: 1000px) {
-          .charts-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .chart-full,
-          .chart-half {
-            grid-column: span 1;
-          }
-        }
-        
-        :global(.glass-panel) {
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 20px;
-        }
-      `}</style>
     </div>
   );
 }
+

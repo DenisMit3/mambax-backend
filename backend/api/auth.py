@@ -18,12 +18,13 @@ from backend.db.session import get_db
 from backend.models.user import User, Gender
 from backend.schemas.user import UserCreate, UserResponse, Location
 # CRUD
-from backend.crud_pkg.user import (
+from backend.crud.user import (
     create_user, 
     get_user_by_email, 
     get_user_by_phone, 
     create_user_via_phone,
-    get_user_by_telegram_id
+    get_user_by_telegram_id,
+    get_user_by_username
 )
 # Auth Logic
 from backend.auth import (
@@ -31,6 +32,11 @@ from backend.auth import (
     validate_telegram_data
 )
 from backend.config.settings import settings
+from backend.core.redis import redis_manager
+from backend.services.geo import geo_service
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -90,6 +96,18 @@ async def register(
     # Create token
     access_token = create_access_token(db_user.id)
     
+    # Sync to Redis if location provided
+    if db_user.latitude and db_user.longitude:
+        try:
+             await geo_service.update_location(
+                str(db_user.id), 
+                db_user.latitude, 
+                db_user.longitude,
+                metadata={"name": db_user.name or "", "age": db_user.age or 0}
+            )
+        except Exception as e:
+            logger.error(f"Failed to sync new user location to Redis: {e}")
+    
     # Build location for response
     location = None
     if db_user.latitude and db_user.longitude:
@@ -129,6 +147,21 @@ async def login(
     - Проверяет email и пароль в PostgreSQL
     - Возвращает JWT токен
     """
+    # FIX: Rate limit to prevent brute force (5 attempts per 5 min per email)
+    # Skip rate limiting in development mode to avoid Redis connection issues
+    is_allowed = True
+    if settings.ENVIRONMENT != "development":
+        is_allowed = await redis_manager.rate_limit(
+            f"login_attempt:{credentials.email}", 
+            limit=5, 
+            period=300
+        )
+    if not is_allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many login attempts. Please try again in 5 minutes."
+        )
+    
     # Get user from database
     user = await get_user_by_email(db, credentials.email)
     
@@ -158,30 +191,55 @@ async def login(
     # Create and return token
     access_token = create_access_token(user.id)
     
-    return TokenResponse(access_token=access_token)
+    return TokenResponse(access_token=access_token, has_profile=user.is_complete)
 
 
 @router.post("/request-otp")
 async def request_otp(data: OTPRequest, db: AsyncSession = Depends(get_db)):
-    # Try to find user to see if they have Telegram connected
-    user = await get_user_by_phone(db, data.identifier)
-    
-    otp = generate_otp()
-    save_otp(data.identifier, otp)
-    
-    if user and user.telegram_id:
-        success = await send_otp_via_telegram(user.telegram_id, otp)
-        if success:
-             return {"success": True, "message": "OTP sent via Telegram"}
-    
-    # Fallback to debug/console
-    if settings.ENVIRONMENT == "development":
-        print(f"DEBUG: Generated OTP for {data.identifier}: {otp}")
-        return {"success": True, "message": "OTP generated (Demo mode)", "debug_otp": otp}
-    else:
-        # In prod, we might use SMS here if configured, otherwise just console/log
-        print(f"OTP generated for {data.identifier}") 
-        return {"success": True, "message": "OTP sent (Console/SMS)"}
+    # Rate Limit: max 3 requests per 10 minutes per identifier
+    is_allowed = await redis_manager.rate_limit(f"otp_request:{data.identifier}", limit=3, period=600)
+    if not is_allowed:
+        raise HTTPException(
+            status_code=429, 
+            detail="Too many requests. Please try again later."
+        )
+
+    try:
+        user = None
+        # Try to find user
+        if data.identifier.startswith("@"):
+            # Lookup by username
+            username = data.identifier.lstrip("@")
+            user = await get_user_by_username(db, username)
+        else:
+            # Lookup by phone
+            user = await get_user_by_phone(db, data.identifier)
+        
+        otp = generate_otp()
+        await save_otp(data.identifier, otp)
+        
+        if user and user.telegram_id:
+            success = await send_otp_via_telegram(user.telegram_id, otp)
+            if success:
+                 return {"success": True, "message": "OTP sent via Telegram"}
+            else:
+                 logger.warning(f"Failed to send Telegram message to {user.telegram_id}")
+        
+        # Fallback to debug/console
+        if settings.ENVIRONMENT == "development":
+            logger.info(f"DEBUG OTP for {data.identifier}: {otp}")
+            msg = "OTP generated (Demo mode)."
+            if data.identifier.startswith("@") and not user:
+                msg += " (User not found in DB, cannot send to Telegram)"
+            return {"success": True, "message": msg, "debug_otp": otp}
+        else:
+            # In prod, logging exact OTP is careless, just log the event
+            logger.info(f"OTP generated for {data.identifier}") 
+            return {"success": True, "message": "OTP sent (Console/SMS)"}
+            
+    except Exception as e:
+        logger.error(f"Error in request_otp: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -194,7 +252,7 @@ async def login_otp(
     Если пользователь не найден - создает нового.
     """
     try:
-        if not verify_otp(data.identifier, data.otp):
+        if not await verify_otp(data.identifier, data.otp):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid OTP"
@@ -208,18 +266,21 @@ async def login_otp(
             try:
                 user = await create_user_via_phone(db, data.identifier)
             except Exception as e:
-                print(f"Error creating user: {e}")
-                raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
+                logger.error(f"Error creating user: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail="Failed to create user during OTP login")
+        
+        # Security Check: Banned/inactive users
+        if not user.is_active or (user.status and str(user.status).lower() == "banned"):
+             raise HTTPException(status_code=401, detail="User account is disabled or banned")
                 
         access_token = create_access_token(user.id)
-        return TokenResponse(access_token=access_token)
+        return TokenResponse(access_token=access_token, has_profile=user.is_complete)
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Unhandled error in login_otp: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Unhandled internal error: {str(e)}")
+        logger.error(f"Unhandled error in login_otp: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Unhandled internal error")
 
 
 @router.post("/telegram", response_model=TokenResponse)
@@ -234,19 +295,6 @@ async def login_telegram(
     """
     auth_data = validate_telegram_data(data.init_data)
     
-    if not auth_data:
-        # Development override: If init_data is just a JSON string (mock), allow it?
-        if os.getenv("ENVIRONMENT", "development") == "development" and "hash=" not in data.init_data:
-             try:
-                 mock_user = json.loads(data.init_data)
-                 auth_data = {
-                     "id": str(mock_user.get("id", "00000")), 
-                     "username": mock_user.get("username", "mock_user"),
-                     "first_name": mock_user.get("first_name", "Mock User")
-                 }
-             except Exception:
-                 pass
-    
     if not auth_data:         
         raise HTTPException(status_code=401, detail="Invalid Telegram data")
 
@@ -257,20 +305,21 @@ async def login_telegram(
     user = await get_user_by_telegram_id(db, telegram_id)
     
     if not user:
-        # Create new user
-        random_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
-        fake_email = f"tg_{telegram_id}_{random_suffix}@mambax.local"
+        # Generate random password placeholder for security
+        import secrets
+        random_pwd = secrets.token_urlsafe(32)
         
         user = User(
             telegram_id=telegram_id,
             username=username or f"user_{telegram_id}",
-            email=fake_email,
-            hashed_password="nopassword",
-            name=auth_data.get("first_name", username),
-            age=18,
+            email=None, # Allow NULL as per model nullable=True
+            hashed_password=random_pwd, # Must be string
+            name=auth_data.get("first_name", username or "Telegram User"),
+            age=18, # FIXME: Schema requires age, but we don't know it yet. Ask later.
             gender=Gender.OTHER,
             is_active=True,
-            is_verified=True,
+            is_verified=False,
+            is_complete=False # Explicitly mark incomplete
         )
         db.add(user)
         await db.commit()
@@ -280,5 +329,9 @@ async def login_telegram(
         user.username = username
         await db.commit()
     
+    # Security Check: Banned/inactive users
+    if not user.is_active or (user.status and str(user.status).lower() == "banned"):
+            raise HTTPException(status_code=401, detail="User account is disabled or banned")
+    
     access_token = create_access_token(user.id)
-    return TokenResponse(access_token=access_token)
+    return TokenResponse(access_token=access_token, has_profile=user.is_complete)

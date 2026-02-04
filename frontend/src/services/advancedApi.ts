@@ -8,27 +8,7 @@
  * consistency with the rest of the backend architecture.
  */
 
-// Get base URL from existing API service pattern
-// Get base URL from existing API service pattern
-const getBaseUrl = () => {
-    // Server-side rendering fallback
-    if (typeof window === 'undefined') {
-        return process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
-    }
-    // Client-side: use proxy prefix
-    return "/api_proxy";
-};
-
-const API_URL = getBaseUrl();
-
-// Helper to get auth token
-const getAuthHeaders = () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    return {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    };
-};
+import { httpClient } from "@/lib/http-client";
 
 // Types
 export interface AIGenerateRequest {
@@ -305,79 +285,33 @@ export interface PartnersResponse {
 export const advancedApi = {
     // AI Content Generation
     async generateContent(request: AIGenerateRequest): Promise<AIGenerateResponse> {
-        const response = await fetch(`${API_URL}/admin/advanced/ai/generate`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(request),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to generate content: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.post<AIGenerateResponse>('/admin/advanced/ai/generate', request);
     },
 
     async getAIModels(): Promise<{ models: AIModel[]; usage_summary: Record<string, number> }> {
-        const response = await fetch(`${API_URL}/admin/advanced/ai/models`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch AI models: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get('/admin/advanced/ai/models');
     },
 
     async getAIUsage(period: string = '7d'): Promise<Record<string, unknown>> {
-        const response = await fetch(`${API_URL}/admin/advanced/ai/usage?period=${period}`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch AI usage: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get(`/admin/advanced/ai/usage?period=${period}`);
     },
 
     // Algorithm
     async getAlgorithmParams(): Promise<AlgorithmParamsResponse> {
-        const response = await fetch(`${API_URL}/admin/advanced/algorithm/params`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch algorithm params: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get<AlgorithmParamsResponse>('/admin/advanced/algorithm/params');
     },
 
     async updateAlgorithmParams(params: AlgorithmParams): Promise<{ status: string; new_params: AlgorithmParams; version?: string }> {
-        const response = await fetch(`${API_URL}/admin/advanced/algorithm/params`, {
-            method: 'PUT',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(params),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to update algorithm params: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.put('/admin/advanced/algorithm/params', params);
     },
 
     async getAlgorithmPerformance(period: string = '30d'): Promise<Record<string, unknown>> {
-        const response = await fetch(`${API_URL}/admin/advanced/algorithm/performance?period=${period}`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch algorithm performance: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get(`/admin/advanced/algorithm/performance?period=${period}`);
     },
 
     // Reports
     async getReports(): Promise<ReportsListResponse> {
-        const response = await fetch(`${API_URL}/admin/advanced/reports`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch reports: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get<ReportsListResponse>('/admin/advanced/reports');
     },
 
     async generateReport(
@@ -385,51 +319,30 @@ export const advancedApi = {
         period: string = '30d',
         customSql: string = '',
         schedule: string = '',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         parameters: Record<string, any> = {}
     ): Promise<GenerateReportResponse> {
-        const response = await fetch(
-            `${API_URL}/admin/advanced/reports/generate`,
-            {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    report_type: reportType,
-                    period,
-                    custom_sql: customSql,
-                    schedule,
-                    parameters
-                })
-            }
-        );
-        if (!response.ok) {
-            throw new Error(`Failed to generate report: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.post<GenerateReportResponse>('/admin/advanced/reports/generate', {
+            report_type: reportType,
+            period,
+            custom_sql: customSql,
+            schedule,
+            parameters
+        });
     },
 
     // Web3
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async getWeb3Stats(): Promise<any> {
-        const response = await fetch(`${API_URL}/admin/advanced/web3/stats`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch web3 stats: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get('/admin/advanced/web3/stats');
     },
 
     // Events
     async getEvents(status?: string): Promise<EventsResponse> {
         const url = status
-            ? `${API_URL}/admin/advanced/events?status=${status}`
-            : `${API_URL}/admin/advanced/events`;
-        const response = await fetch(url, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch events: ${response.statusText}`);
-        }
-        return response.json();
+            ? `/admin/advanced/events?status=${status}`
+            : `/admin/advanced/events`;
+        return httpClient.get<EventsResponse>(url);
     },
 
     async createEvent(event: {
@@ -439,144 +352,63 @@ export const advancedApi = {
         max_participants: number;
         is_premium?: boolean;
     }): Promise<{ status: string; event: Event }> {
-        const response = await fetch(`${API_URL}/admin/advanced/events`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(event),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to create event: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.post('/admin/advanced/events', event);
     },
 
     // Localization
     async getLocalizationStats(): Promise<LocalizationStats> {
-        const response = await fetch(`${API_URL}/admin/advanced/localization/stats`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch localization stats: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get<LocalizationStats>('/admin/advanced/localization/stats');
     },
 
     // Performance
     async getPerformanceBudget(): Promise<PerformanceBudget> {
-        const response = await fetch(`${API_URL}/admin/advanced/performance/budget`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch performance budget: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get<PerformanceBudget>('/admin/advanced/performance/budget');
     },
 
     // PWA
     async getPWAStats(): Promise<PWAStats> {
-        const response = await fetch(`${API_URL}/admin/advanced/performance/pwa`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch PWA stats: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get<PWAStats>('/admin/advanced/performance/pwa');
     },
 
     // Accessibility
     async getAccessibilityAudit(): Promise<AccessibilityAudit> {
-        const response = await fetch(`${API_URL}/admin/advanced/accessibility/audit`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch accessibility audit: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get<AccessibilityAudit>('/admin/advanced/accessibility/audit');
     },
 
     // Calls Analytics
     async getCallAnalytics(period: string = '7d'): Promise<CallAnalytics> {
-        const response = await fetch(`${API_URL}/admin/advanced/calls/analytics?period=${period}`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch call analytics: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get<CallAnalytics>(`/admin/advanced/calls/analytics?period=${period}`);
     },
 
     // Recommendations
     async getRecommendationsDashboard(): Promise<RecommendationDashboard> {
-        const response = await fetch(`${API_URL}/admin/advanced/recommendations/dashboard`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch recommendations dashboard: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get<RecommendationDashboard>('/admin/advanced/recommendations/dashboard');
     },
 
     // Icebreakers
     async getIcebreakers(category?: string): Promise<{ icebreakers: unknown[]; total: number; categories: string[]; stats: unknown }> {
         const url = category
-            ? `${API_URL}/admin/advanced/icebreakers?category=${category}`
-            : `${API_URL}/admin/advanced/icebreakers`;
-        const response = await fetch(url, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch icebreakers: ${response.statusText}`);
-        }
-        return response.json();
+            ? `/admin/advanced/icebreakers?category=${category}`
+            : `/admin/advanced/icebreakers`;
+        return httpClient.get(url);
     },
 
     async createIcebreaker(data: { text: string; category: string; tags?: string[] }): Promise<unknown> {
-        const response = await fetch(`${API_URL}/admin/advanced/icebreakers`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(data),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to create icebreaker: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.post('/admin/advanced/icebreakers', data);
     },
 
     async generateIcebreakers(category: string = 'general', count: number = 5): Promise<{ generated: string[] }> {
-        const response = await fetch(
-            `${API_URL}/admin/advanced/icebreakers/generate?category=${category}&count=${count}`,
-            {
-                method: 'POST',
-                headers: getAuthHeaders(),
-            }
-        );
-        if (!response.ok) {
-            throw new Error(`Failed to generate icebreakers: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.post(`/admin/advanced/icebreakers/generate?category=${category}&count=${count}`);
     },
 
     // Partners
     async getPartners(): Promise<PartnersResponse> {
-        const response = await fetch(`${API_URL}/admin/advanced/partners`, {
-            headers: getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch partners: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.get<PartnersResponse>('/admin/advanced/partners');
     },
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async createPartner(data: any): Promise<any> {
-        const response = await fetch(`${API_URL}/admin/advanced/partners`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(data),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to create partner: ${response.statusText}`);
-        }
-        return response.json();
+        return httpClient.post('/admin/advanced/partners', data);
     },
 };
 

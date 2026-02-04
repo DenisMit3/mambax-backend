@@ -84,7 +84,7 @@ Set the following in Railway project settings:
 | `DATABASE_URL` | PostgreSQL connection string (asyncpg format) | `postgresql+asyncpg://postgres:xxx@db.xxx.supabase.co:5432/postgres` |
 | `REDIS_URL` | Redis connection string | `redis://default:xxx@xxx.upstash.io:6379` |
 | `SECRET_KEY` | JWT secret (32+ chars, random) | `your-super-secret-key-here-min-32-chars` |
-| `ENVIRONMENT` | Environment mode | `production` |
+| `ENVIRONMENT` | Environment mode (CRITICAL: Disables debug endpoints) | `production` |
 | `ALLOWED_ORIGINS` | Comma-separated allowed origins | `https://your-app.vercel.app` |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot token from @BotFather | `123456:ABC-DEF...` |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob token | `vercel_blob_xxx` |
@@ -337,4 +337,23 @@ Required for local development:
 2. **Rotate secrets regularly** - Especially `SECRET_KEY`
 3. **Enable 2FA** - On all service dashboards
 4. **Monitor Sentry** - For security-related errors
-5. **Keep dependencies updated** - Regular `pip-audit` and `npm audit`
+
+---
+
+## 11. Security Hardening (CSP & Headers)
+
+The frontend is configured with strict **Content Security Policy (CSP)** headers in `next.config.ts`.
+
+### Allowed Domains
+By default, the app only loads resources from:
+- **Scripts**: `self`, `telegram.org`, `posthog.com`, `sentry.io`
+- **Images**: `self`, `t.me`, `cdn4.telesco.pe`, `unsplash.com`, `vercel-storage.com`
+- **Connect (API)**: `self`, `sentry.io`, `posthog.com`, `railway.app`
+
+### If adding new services (e.g. Google Analytics):
+1. Open `frontend/next.config.ts`
+2. Add the domain to `Content-Security-Policy` -> `script-src` and `connect-src`
+3. If using external images, add to `remotePatterns` AND `img-src` in CSP.
+
+### iframe Safety
+The app sends `frame-ancestors 'self' https://web.telegram.org` to allow embedding ONLY inside Telegram.

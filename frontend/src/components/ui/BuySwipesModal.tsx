@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { X, Zap, Heart, Sparkles, Star } from "lucide-react";
+import { X, Zap, Star, Sparkles, CheckCircle2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 interface BuySwipesModalProps {
     isOpen: boolean;
@@ -12,9 +14,9 @@ interface BuySwipesModalProps {
 }
 
 const PRICING = {
-    swipes: { price: 10, count: 10, label: "Swipe Pack", icon: "❤️" },
-    superlike: { price: 5, count: 1, label: "Super Like", icon: "⭐" },
-    boost: { price: 25, count: 1, label: "1 Hour Boost", icon: "🚀" }
+    swipes: { price: 10, count: 10, label: "Swipe Pack", icon: "❤️", gradient: "from-neon-pink to-neon-red" },
+    superlike: { price: 5, count: 1, label: "Super Like", icon: "⭐", gradient: "from-neon-blue to-neon-purple" },
+    boost: { price: 25, count: 1, label: "1 Hour Boost", icon: "🚀", gradient: "from-neon-orange to-primary-red" }
 };
 
 export function BuySwipesModal({
@@ -27,8 +29,6 @@ export function BuySwipesModal({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
-
-    if (!isOpen) return null;
 
     const item = PRICING[mode];
     const canAfford = currentBalance >= item.price;
@@ -75,224 +75,150 @@ export function BuySwipesModal({
     };
 
     return (
-        <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.6)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '20px'
-        }}>
-            <div style={{
-                background: 'linear-gradient(180deg, #1a1a2e 0%, #16162a 100%)',
-                borderRadius: '24px',
-                width: '100%',
-                maxWidth: '340px',
-                overflow: 'hidden',
-                boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
-            }}>
-                {/* Header */}
-                <div style={{
-                    padding: '24px',
-                    background: mode === 'swipes'
-                        ? 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)'
-                        : mode === 'superlike'
-                            ? 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)'
-                            : 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
-                    position: 'relative',
-                    textAlign: 'center'
-                }}>
-                    <button
+        <AnimatePresence>
+            {isOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                         onClick={onClose}
-                        style={{
-                            position: 'absolute',
-                            top: '16px',
-                            right: '16px',
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            background: 'rgba(0,0,0,0.2)',
-                            border: 'none',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            color: 'white'
-                        }}
+                        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+                    />
+
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="relative w-full max-w-[340px] rounded-3xl overflow-hidden bg-slate-900 border border-slate-700/50 shadow-2xl"
                     >
-                        <X size={18} />
-                    </button>
-
-                    <div style={{ fontSize: '48px', marginBottom: '12px' }}>
-                        {item.icon}
-                    </div>
-                    <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: 'white' }}>
-                        {success ? 'Success!' : `Get ${item.label}`}
-                    </h2>
-                    <p style={{ margin: '8px 0 0', fontSize: '14px', color: 'rgba(255,255,255,0.8)' }}>
-                        {success
-                            ? mode === 'swipes'
-                                ? `+${item.count} swipes added!`
-                                : mode === 'superlike'
-                                    ? 'Super Like ready to use!'
-                                    : 'Your profile is now boosted!'
-                            : mode === 'swipes'
-                                ? 'Keep swiping with extra swipes'
-                                : mode === 'superlike'
-                                    ? 'Stand out with a Super Like'
-                                    : 'Get more visibility for 1 hour'
-                        }
-                    </p>
-                </div>
-
-                {/* Content */}
-                <div style={{ padding: '24px' }}>
-                    {!success && (
-                        <>
-                            {/* Price Card */}
-                            <div style={{
-                                padding: '20px',
-                                borderRadius: '16px',
-                                background: 'rgba(255,255,255,0.05)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginBottom: '16px'
-                            }}>
-                                <div>
-                                    <div style={{
-                                        fontSize: '16px',
-                                        fontWeight: 600,
-                                        color: 'white',
-                                        marginBottom: '4px'
-                                    }}>
-                                        {mode === 'swipes' ? `${item.count} Swipes` : item.label}
-                                    </div>
-                                    <div style={{
-                                        fontSize: '13px',
-                                        color: 'rgba(255,255,255,0.5)'
-                                    }}>
-                                        {mode === 'swipes' && 'Extra swipes for today'}
-                                        {mode === 'superlike' && 'Make a lasting impression'}
-                                        {mode === 'boost' && 'Higher visibility in feed'}
-                                    </div>
-                                </div>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '24px',
-                                    fontWeight: 800,
-                                    color: '#FFD700'
-                                }}>
-                                    {item.price}
-                                    <Star size={20} fill="#FFD700" color="#FFD700" />
-                                </div>
+                        {/* Header */}
+                        <div className={cn("relative p-8 pb-12 bg-gradient-to-br text-center overflow-hidden", item.gradient)}>
+                            <div className="absolute top-0 right-0 p-4">
+                                <button
+                                    onClick={onClose}
+                                    className="p-2 rounded-full bg-black/10 hover:bg-black/20 transition-colors text-white"
+                                >
+                                    <X size={20} />
+                                </button>
                             </div>
 
-                            {/* Balance */}
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginBottom: '20px',
-                                fontSize: '14px'
-                            }}>
-                                <span style={{ color: 'rgba(255,255,255,0.6)' }}>Your Balance</span>
-                                <span style={{
-                                    color: canAfford ? '#FFD700' : '#ef4444',
-                                    fontWeight: 600
-                                }}>
-                                    {currentBalance} ⭐
-                                </span>
-                            </div>
-
-                            {error && (
-                                <div style={{
-                                    padding: '12px',
-                                    background: 'rgba(239, 68, 68, 0.1)',
-                                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                                    borderRadius: '12px',
-                                    color: '#ef4444',
-                                    fontSize: '14px',
-                                    textAlign: 'center',
-                                    marginBottom: '16px'
-                                }}>
-                                    {error}
-                                </div>
-                            )}
-
-                            {/* Purchase Button */}
-                            <button
-                                onClick={handlePurchase}
-                                disabled={!canAfford || loading}
-                                style={{
-                                    width: '100%',
-                                    padding: '16px',
-                                    borderRadius: '16px',
-                                    border: 'none',
-                                    background: canAfford
-                                        ? mode === 'swipes'
-                                            ? 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)'
-                                            : mode === 'superlike'
-                                                ? 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)'
-                                                : 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)'
-                                        : 'rgba(255,255,255,0.1)',
-                                    color: canAfford ? 'white' : 'rgba(255,255,255,0.4)',
-                                    fontSize: '16px',
-                                    fontWeight: 700,
-                                    cursor: canAfford && !loading ? 'pointer' : 'not-allowed',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '8px',
-                                    boxShadow: canAfford ? '0 8px 20px rgba(236, 72, 153, 0.3)' : 'none'
-                                }}
+                            <motion.div
+                                initial={{ scale: 0.5, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="text-6xl mb-4 drop-shadow-xl"
                             >
-                                {loading ? (
-                                    <>Processing...</>
-                                ) : canAfford ? (
-                                    <>
-                                        <Zap size={20} />
-                                        Buy Now
-                                    </>
-                                ) : (
-                                    <>Not Enough Stars</>
-                                )}
-                            </button>
+                                {item.icon}
+                            </motion.div>
 
-                            {!canAfford && (
-                                <p style={{
-                                    marginTop: '12px',
-                                    fontSize: '13px',
-                                    color: 'rgba(255,255,255,0.4)',
-                                    textAlign: 'center'
-                                }}>
-                                    Top up your Stars balance to continue
-                                </p>
-                            )}
-                        </>
-                    )}
-
-                    {success && (
-                        <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                            <Sparkles size={48} color="#22c55e" style={{ marginBottom: '16px' }} />
-                            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px' }}>
-                                {mode === 'swipes' && 'Happy swiping! 💕'}
-                                {mode === 'superlike' && 'Use it wisely! 💙'}
-                                {mode === 'boost' && 'You\'re on fire! 🔥'}
+                            <h2 className="text-2xl font-black text-white decoration-amber-400">
+                                {success ? 'Success!' : `Get ${item.label}`}
+                            </h2>
+                            <p className="text-white/80 text-sm font-medium mt-2 leading-tight">
+                                {success
+                                    ? mode === 'swipes'
+                                        ? `+${item.count} swipes added!`
+                                        : mode === 'superlike'
+                                            ? 'Super Like activated!'
+                                            : 'Your profile is now boosted!'
+                                    : mode === 'swipes'
+                                        ? 'Keep swiping with extra swipes'
+                                        : mode === 'superlike'
+                                            ? 'Stand out with a Super Like'
+                                            : 'Get more visibility for 1 hour'
+                                }
                             </p>
                         </div>
-                    )}
+
+                        {/* Content */}
+                        <div className="p-6">
+                            {!success ? (
+                                <>
+                                    {/* Price Card */}
+                                    <div className="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex justify-between items-center mb-6">
+                                        <div>
+                                            <div className="text-sm font-black text-white uppercase tracking-wider">
+                                                {mode === 'swipes' ? `${item.count} Swipes` : item.label}
+                                            </div>
+                                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                                                Instant Activation
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-2xl font-black text-amber-400">
+                                            {item.price}
+                                            <Star size={20} className="fill-current" />
+                                        </div>
+                                    </div>
+
+                                    {/* Balance */}
+                                    <div className="flex justify-between items-center mb-6 px-1">
+                                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Your Balance</span>
+                                        <span className={cn(
+                                            "text-sm font-black",
+                                            canAfford ? "text-amber-400" : "text-rose-500"
+                                        )}>
+                                            {currentBalance} ⭐
+                                        </span>
+                                    </div>
+
+                                    {error && (
+                                        <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-[10px] font-bold text-center uppercase tracking-widest">
+                                            {error}
+                                        </div>
+                                    )}
+
+                                    {/* Action Button */}
+                                    <button
+                                        onClick={handlePurchase}
+                                        disabled={!canAfford || loading}
+                                        className={cn(
+                                            "w-full py-4 rounded-2xl font-black text-white transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2",
+                                            canAfford && !loading
+                                                ? cn("bg-gradient-to-r hover:shadow-lg", item.gradient)
+                                                : "bg-slate-800 text-slate-500 cursor-not-allowed"
+                                        )}
+                                    >
+                                        {loading ? (
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        ) : canAfford ? (
+                                            <>
+                                                <Zap size={20} className="fill-current" />
+                                                BUY NOW
+                                            </>
+                                        ) : (
+                                            'NOT ENOUGH STARS'
+                                        )}
+                                    </button>
+
+                                    {!canAfford && (
+                                        <p className="mt-4 text-[10px] text-slate-500 font-bold text-center uppercase tracking-widest leading-normal">
+                                            Top up your Stars balance<br />to continue swiping
+                                        </p>
+                                    )}
+                                </>
+                            ) : (
+                                <motion.div
+                                    initial={{ scale: 0.9, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    className="text-center py-6"
+                                >
+                                    <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/30">
+                                        <CheckCircle2 size={40} className="text-emerald-500" />
+                                    </div>
+                                    <div className="flex justify-center gap-1 mb-2">
+                                        {[...Array(3)].map((_, i) => (
+                                            <Sparkles key={i} size={16} className="text-amber-400 animate-pulse" />
+                                        ))}
+                                    </div>
+                                    <p className="text-slate-300 text-sm font-black uppercase tracking-widest">
+                                        {mode === 'swipes' ? 'Happy swiping! 💕' : mode === 'superlike' ? 'Use it wisely! 💙' : 'You\'re on fire! 🔥'}
+                                    </p>
+                                </motion.div>
+                            )}
+                        </div>
+                    </motion.div>
                 </div>
-            </div>
-        </div>
+            )}
+        </AnimatePresence>
     );
 }

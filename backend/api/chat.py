@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from backend.core.security import verify_token
+from backend.core.redis import redis_manager
 # Use the advanced service manager instead of the core one
 from backend.services.chat import (
     manager,
@@ -121,12 +122,17 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
     await manager.connect(websocket, user_id)
     ACTIVE_USERS_GAUGE.inc()
 
-    
     try:
         while True:
             # Receive message
             data = await websocket.receive_text()
             
+            # Redis-based Rate Limiting (5 msgs per second)
+            if not await redis_manager.rate_limit(f"chat:ws:{user_id}", limit=5, period=1):
+                 await websocket.send_json({"type": "error", "message": "Rate limit exceeded. Slow down."})
+                 continue
+
+
             try:
                 message = json.loads(data)
                 event_type = message.get("type", "message")
@@ -192,6 +198,17 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         manager.disconnect(websocket, user_id)
         ACTIVE_USERS_GAUGE.dec()
         await manager.broadcast_online_status(user_id, False)
+        
+        # Update last_seen in database
+        try:
+            from backend.models.user import User
+            async with async_session_maker() as db:
+                user = await db.get(User, UUID(user_id))
+                if user:
+                    user.last_seen = datetime.utcnow()
+                    await db.commit()
+        except Exception as e:
+            print(f"Failed to update last_seen: {e}")
 
 
 # ============================================================================
@@ -209,8 +226,20 @@ async def handle_message(websocket: WebSocket, sender_id: str, data: dict):
     if not match_id:
         return # Skip invalid
 
+    # Anti-spam check for WebSocket
+    from backend.services.security import spam_detector
+    if text:
+        check = await spam_detector.check_message(sender_id, text)
+        if check["is_spam"]:
+            await websocket.send_json({
+                "type": "error", 
+                "detail": check["message"],
+                "reason": check["reason"]
+            })
+            return
+
     # Use DB for persistence
-    from backend.crud_pkg import chat as crud_chat
+    from backend.crud import chat as crud_chat
     from backend.models.interaction import Match
 
     async with async_session_maker() as db:
@@ -291,6 +320,77 @@ async def handle_message(websocket: WebSocket, sender_id: str, data: dict):
                 body=push_body,
                 url=f"/chat/{match_id}"
             )
+
+        # ============================================================
+        # AUTO-RESPONDER BOT (for testing)
+        # ============================================================
+        # Simulates a partner response after a short delay
+        import asyncio
+        import random
+        
+        BOT_RESPONSES = [
+            "Привет! 👋",
+            "Интересно! Расскажи подробнее 😊",
+            "О, круто! А ты чем занимаешься?",
+            "Хаха, смешно 😂",
+            "Согласна! 💯",
+            "Ммм, надо подумать... 🤔",
+            "Классно! А что ещё любишь?",
+            "Ого, вот это да!",
+            "А давай как-нибудь встретимся? ☕",
+            "Мне тоже нравится! 🥰"
+        ]
+        
+        # Capture values for the async task
+        _match_id = match_id
+        _sender_id = sender_id
+        _recipient_id = recipient_id
+        
+        async def send_bot_reply():
+            try:
+                await asyncio.sleep(random.uniform(1.5, 3.0))  # Random delay
+                
+                bot_text = random.choice(BOT_RESPONSES)
+                bot_msg_data = {
+                    "receiver_id": UUID(_sender_id),
+                    "text": bot_text,
+                    "type": "text",
+                    "audio_url": None,
+                    "duration": None,
+                    "photo_url": None
+                }
+                
+                # Create NEW database session for async task
+                async with async_session_maker() as bot_db:
+                    # Save bot message to database
+                    bot_db_msg = await crud_chat.create_message(
+                        bot_db,
+                        UUID(_match_id),
+                        UUID(_recipient_id),  # Bot sends from their ID
+                        bot_msg_data
+                    )
+                    
+                    # Send via WebSocket to original sender
+                    bot_ws_msg = {
+                        "type": "text",
+                        "id": str(bot_db_msg.id),
+                        "message_id": str(bot_db_msg.id),
+                        "match_id": str(bot_db_msg.match_id),
+                        "sender_id": str(bot_db_msg.sender_id),
+                        "receiver_id": str(bot_db_msg.receiver_id),
+                        "content": bot_db_msg.text,
+                        "text": bot_db_msg.text,
+                        "created_at": bot_db_msg.created_at.isoformat(),
+                        "timestamp": bot_db_msg.created_at.isoformat()
+                    }
+                    
+                    await manager.send_personal(_sender_id, bot_ws_msg)
+                    print(f"🤖 Bot replied to {_sender_id[:8]}...: {bot_text}")
+            except Exception as e:
+                print(f"❌ Bot reply error: {e}")
+        
+        # Run bot reply in background (fire and forget)
+        asyncio.create_task(send_bot_reply())
 
 async def handle_typing(user_id: str, data: dict):
     match_id = data.get("match_id")
@@ -446,15 +546,10 @@ async def get_history(
         if not match:
             raise HTTPException(status_code=403, detail="Conversation not found")
 
-        # Fetch messages
+        # Fetch messages using optimize match_id index
         stmt = (
             select(Message)
-            .where(
-                or_(
-                    and_(Message.sender_id == current_user_id, Message.receiver_id == partner_id),
-                    and_(Message.sender_id == partner_id, Message.receiver_id == current_user_id)
-                )
-            )
+            .where(Message.match_id == match.id)
             .order_by(Message.created_at.desc())
             .limit(limit)
         )
@@ -496,7 +591,7 @@ async def initiate_call_endpoint(
     callee_id = user2 if current_user == user1 else user1
     
     call = await initiate_call(req.match_id, current_user, callee_id, req.call_type)
-    return {"call": call.dict()}
+    return {"call": call.model_dump()}
 
 @router.post("/chat/call/answer")
 async def answer_call_endpoint(req: AnswerCallRequest, current_user: str = Depends(auth.get_current_user)):
@@ -527,7 +622,7 @@ async def send_ephemeral_endpoint(
     current_user: str = Depends(auth.get_current_user)
 ):
     msg = await create_ephemeral_message(match_id, current_user, text, media_url, seconds)
-    return {"message": msg.dict()}
+    return {"message": msg.model_dump()}
 
 @router.post("/chat/ephemeral/viewed/{message_id}")
 async def viewed_ephemeral_endpoint(message_id: str, current_user: str = Depends(auth.get_current_user)):
@@ -546,23 +641,10 @@ async def check_online_status_endpoint(user_id: str):
 
 @router.post("/chat/upload")
 async def upload_chat_media(file: UploadFile = File(...), current_user: str = Depends(auth.get_current_user)):
-    import shutil, os, uuid
-    from pathlib import Path
-    allowed_types = ["audio/webm", "audio/mp3", "audio/wav", "audio/mpeg", "image/jpeg", "image/png", "image/webp"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Invalid file type")
-    
-    upload_dir = Path("static/uploads/chat")
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    
-    ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
-    filename = f"{uuid.uuid4()}.{ext}"
-    file_path = upload_dir / filename
-    
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    url = f"/static/uploads/chat/{filename}"
+    from backend.services.storage import storage_service
+    # Reuse save_gift_image or create a generic one. For now save_gift_image handles images.
+    # Ideally storage_service.save_file(file, folder="chat")
+    url = await storage_service.save_gift_image(file)
     return {"url": url, "type": file.content_type}
 
 @router.post("/chat/send", response_model=MessageResponse)
@@ -573,12 +655,12 @@ async def send_message(
     db: AsyncSession = Depends(database.get_db)
 ):
     # Logic similar to WS handle_message but for REST
-    from backend.crud_pkg import chat as crud_chat
+    from backend.crud import chat as crud_chat
     from backend.models.interaction import Match
     from backend.services.security import spam_detector
     
     if msg.text:
-         check = spam_detector.check_message(current_user, msg.text)
+         check = await spam_detector.check_message(current_user, msg.text)
          if check["is_spam"]: raise HTTPException(400, check["message"])
 
     match_obj = await db.get(Match, UUID(msg.match_id))

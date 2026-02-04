@@ -51,13 +51,20 @@ export default function MapPage() {
                 const { latitude, longitude } = pos.coords;
                 setPosition([latitude, longitude]);
 
-                // Send to backend using the service (uses correct API_URL)
+                // Send to backend and fetch nearby users
                 await authService.updateLocation(latitude, longitude);
+
+                try {
+                    // Use authService to get real users nearby
+                    const profiles = await authService.getProfiles({ lat: latitude, lon: longitude, limit: 50 });
+                    // Filter users who have valid coordinates
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    setOthers(Array.isArray(profiles) ? profiles.filter((u: any) => u.latitude && u.longitude) : []);
+                } catch (e) {
+                    console.error("Failed to fetch nearby users", e);
+                }
             });
         }
-
-        // Fetch others (mock or real if implemented)
-        authService.getProfiles().then(setOthers);
     }, []);
 
     // Don't render map until we have the icon (client-side only)
@@ -65,7 +72,7 @@ export default function MapPage() {
         return (
             <div style={{ height: "100vh", width: "100%", display: "flex", flexDirection: "column" }}>
                 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <p>Loading map...</p>
+                    <div className="animate-pulse bg-slate-800 rounded-full h-12 w-12"></div>
                 </div>
                 <BottomNav />
             </div>
@@ -78,7 +85,8 @@ export default function MapPage() {
                 {position ? (
                     <MapContainer center={position} zoom={13} style={{ height: "100%", width: "100%" }}>
                         <TileLayer
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
                         />
 
                         {/* Me */}
@@ -86,30 +94,23 @@ export default function MapPage() {
                             <Popup>You are here</Popup>
                         </Marker>
 
-                        {/* Others - Mocking positions around me for demo */}
-                        {others.map((user, i) => {
-                            // Stable random based on ID or index to avoid hydration mismatch
-                            const offsetLat = ((i * 1337) % 20 - 10) / 1000; // Deterministic randomish
-                            const offsetLon = ((i * 7331) % 20 - 10) / 1000;
-
-                            // If user has location, use it, otherwise offset from me
-                            const lat = user.latitude || (position[0] + offsetLat);
-                            const lon = user.longitude || (position[1] + offsetLon);
-
-                            return (
-                                <Marker key={user.id || i} position={[lat, lon]} icon={leafletIcon}>
-                                    <Popup>
-                                        <div style={{ textAlign: "center" }}>
-                                            {user.photos?.[0] && (
-                                                <img src={user.photos[0]} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} alt={user.name || "User"} />
-                                            )}
-                                            <br />
-                                            <b>{user.name}, {user.age}</b>
-                                        </div>
-                                    </Popup>
-                                </Marker>
-                            )
-                        })}
+                        {/* Real Users only */}
+                        {others.map((user) => (
+                            <Marker
+                                key={user.id}
+                                position={[user.latitude, user.longitude]}
+                                icon={leafletIcon}
+                            >
+                                <Popup>
+                                    <div style={{ textAlign: "center", color: "black" }}>
+                                        {user.photos?.[0] && (
+                                            <img src={user.photos[0]} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", margin: "0 auto" }} alt={user.name} />
+                                        )}
+                                        <div style={{ fontWeight: "bold", marginTop: 5 }}>{user.name}, {user.age}</div>
+                                    </div>
+                                </Popup>
+                            </Marker>
+                        ))}
                     </MapContainer>
                 ) : (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>

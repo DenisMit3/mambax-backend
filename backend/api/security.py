@@ -10,6 +10,13 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 from backend import database, auth
+import logging
+import uuid
+from sqlalchemy import update
+from backend.db.session import get_db
+from backend.models.user import User, UserStatus
+
+logger = logging.getLogger(__name__)
 from backend.services.security import (
     # Rate limiting
     check_rate_limit,
@@ -42,10 +49,29 @@ from backend.services.security import (
     block_user,
     unblock_user,
     get_blocked_users,
-    is_blocked
+    is_blocked,
+    ban_ip
 )
 
 router = APIRouter(tags=["Security & Moderation"])
+
+@router.get("/trap", include_in_schema=False)
+async def honeypot_trap(request: Request):
+    """
+    🍯 HONEYPOT TRAP
+    Any IP accessing this endpoint will be permanently banned.
+    Hidden from API docs.
+    """
+    client_ip = request.client.host
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+        
+    await ban_ip(client_ip, reason="HoneyPot Trap Triggered")
+    
+    # Return a fake error to confuse the bot further or just hang
+    return {"status": "system_failure", "code": 0xDEADBEEF}
+
 
 # ============================================================================
 # SCHEMAS
@@ -82,7 +108,8 @@ class Verify2FARequest(BaseModel):
 @router.post("/report")
 async def report_user(
     report: ReportRequest,
-    current_user: str = Depends(auth.get_current_user)
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     🚨 Пожаловаться на пользователя
@@ -97,7 +124,8 @@ async def report_user(
     - other: Другое
     """
     try:
-        result = create_report(
+        result = await create_report(
+            db=db,
             reporter_id=current_user,
             reported_user_id=report.reported_user_id,
             reason=report.reason,
@@ -126,7 +154,7 @@ async def block_user_endpoint(
     - Не увидит ваш профиль
     - Вы не увидите его профиль
     """
-    result = block_user(current_user, request.user_id)
+    result = await block_user(current_user, request.user_id)
     return result
 
 
@@ -138,7 +166,7 @@ async def unblock_user_endpoint(
     """
     ✅ Разблокировать пользователя
     """
-    result = unblock_user(current_user, request.user_id)
+    result = await unblock_user(current_user, request.user_id)
     return result
 
 
@@ -149,7 +177,7 @@ async def get_blocked_list(
     """
     📋 Список заблокированных пользователей
     """
-    blocked_ids = get_blocked_users(current_user)
+    blocked_ids = await get_blocked_users(current_user)
     return {"blocked_users": blocked_ids, "count": len(blocked_ids)}
 
 
@@ -248,24 +276,31 @@ async def verify_2fa_endpoint(
 # ADMIN ENDPOINTS (требуется проверка прав)
 # ============================================================================
 
-async def require_admin(current_user: str = Depends(auth.get_current_user)):
-    """Проверка прав администратора"""
-    # TODO: Проверить is_admin в БД
-    # Пока разрешаем всем для разработки
-    return current_user
-
+# Admin dependency is imported from auth
+# require_admin removed - usage replaced by auth.get_current_admin
 
 @router.get("/admin/reports")
 async def admin_get_reports(
     limit: int = 50,
-    admin_user: str = Depends(require_admin)
+    admin_user: auth.User = Depends(auth.get_current_admin),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     📋 [ADMIN] Список жалоб для модерации
     """
-    reports = get_pending_reports(limit)
+    reports = await get_pending_reports(db, limit)
     return {
-        "reports": [r.dict() for r in reports],
+        "reports": [
+            {
+                "id": str(r.id),
+                "reporter_id": str(r.reporter_id),
+                "reported_user_id": str(r.reported_id),
+                "reason": r.reason,
+                "description": r.description,
+                "status": r.status,
+                "created_at": r.created_at.isoformat()
+            } for r in reports
+        ],
         "count": len(reports)
     }
 
@@ -274,7 +309,8 @@ async def admin_get_reports(
 async def admin_resolve_report(
     report_id: str,
     request: ResolveReportRequest,
-    admin_user: str = Depends(require_admin)
+    admin_user: auth.User = Depends(auth.get_current_admin),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     ✅ [ADMIN] Разрешить жалобу
@@ -286,13 +322,40 @@ async def admin_resolve_report(
     - dismiss: Отклонить жалобу
     """
     try:
-        result = resolve_report(
+        result = await resolve_report(
+            db=db,
             report_id=report_id,
-            admin_id=admin_user,
+            admin_id=str(admin_user.id),
             resolution=request.resolution,
             action=request.action
         )
-        return {"status": "resolved", "report": result.dict()}
+        
+        # Handle persistent actions that require DB access
+        if request.action == "suspend":
+            try:
+                user_uuid = uuid.UUID(result.reported_user_id)
+                await db.execute(
+                    update(User)
+                    .where(User.id == user_uuid)
+                    .values(
+                        status=UserStatus.SUSPENDED,
+                        is_active=False
+                    )
+                )
+                await db.commit()
+                logger.info(f"User {result.reported_user_id} suspended in DB by {admin_user.id}")
+            except Exception as e:
+                logger.error(f"Failed to suspend user in DB: {e}")
+                # Log error but don't fail response as report is resolved in memory
+                
+        return {
+            "status": "resolved", 
+            "report": {
+                "id": str(result.id),
+                "status": result.status,
+                "resolution": result.resolution
+            }
+        }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -302,36 +365,36 @@ async def admin_shadowban_user(
     user_id: str,
     reason: str = "Admin action",
     duration_hours: int = 24,
-    admin_user: str = Depends(require_admin)
+    admin_user: auth.User = Depends(auth.get_current_admin)
 ):
     """
     👻 [ADMIN] Shadowban пользователя
     """
-    result = shadowban_user(user_id, reason, duration_hours, admin_user)
+    result = await shadowban_user(user_id, reason, duration_hours)
     return result
 
 
 @router.post("/admin/unshadowban/{user_id}")
 async def admin_unshadowban_user(
     user_id: str,
-    admin_user: str = Depends(require_admin)
+    admin_user: auth.User = Depends(auth.get_current_admin)
 ):
     """
     ✅ [ADMIN] Снять shadowban
     """
-    result = unshadowban_user(user_id)
+    result = await unshadowban_user(user_id)
     return result
 
 
 @router.get("/admin/shadowban/{user_id}")
 async def admin_check_shadowban(
     user_id: str,
-    admin_user: str = Depends(require_admin)
+    admin_user: auth.User = Depends(auth.get_current_admin)
 ):
     """
     ℹ️ [ADMIN] Проверить статус shadowban
     """
-    info = get_shadowban_info(user_id)
+    info = await get_shadowban_info(user_id)
     if info:
         return {"is_shadowbanned": True, "info": info}
     return {"is_shadowbanned": False}
@@ -340,7 +403,7 @@ async def admin_check_shadowban(
 @router.post("/admin/ban-device")
 async def admin_ban_device(
     fingerprint_hash: str,
-    admin_user: str = Depends(require_admin)
+    admin_user: auth.User = Depends(auth.get_current_admin)
 ):
     """
     📱 [ADMIN] Забанить устройство по fingerprint

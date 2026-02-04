@@ -7,6 +7,12 @@ type WebSocketMessage = {
 
 type WebSocketHandler = (data: WebSocketMessage) => void;
 
+// FIX (MEM): Limit pending messages to prevent unbounded growth
+const MAX_PENDING_MESSAGES = 100;
+// FIX (STABILITY): Exponential backoff for reconnection
+const INITIAL_RECONNECT_DELAY = 3000;
+const MAX_RECONNECT_DELAY = 60000;
+
 class WebSocketService {
     private socket: WebSocket | null = null;
     private handlers: Map<string, WebSocketHandler[]> = new Map();
@@ -14,6 +20,8 @@ class WebSocketService {
     private token: string | null = null;
     private isConnecting: boolean = false;
     private url: string;
+    private pendingMessages: WebSocketMessage[] = [];
+    private reconnectDelay: number = INITIAL_RECONNECT_DELAY; // FIX: Track backoff delay
 
     constructor() {
         this.url = getWsUrl();
@@ -32,10 +40,13 @@ class WebSocketService {
             this.socket.onopen = () => {
                 console.log("WebSocket connected");
                 this.isConnecting = false;
+                this.reconnectDelay = INITIAL_RECONNECT_DELAY; // FIX: Reset backoff on success
                 if (this.reconnectTimeout) {
                     clearTimeout(this.reconnectTimeout);
                     this.reconnectTimeout = null;
                 }
+                // FIX: Flush pending messages on reconnect
+                this.flushPendingMessages();
             };
 
             this.socket.onmessage = (event) => {
@@ -53,14 +64,23 @@ class WebSocketService {
                 console.log("WebSocket closed", event.code, event.reason);
                 this.socket = null;
                 this.isConnecting = false;
-                // Auto reconnect after 3s
+
+                // FIX (STABILITY): Exponential backoff with jitter
+                const jitter = Math.random() * 1000; // 0-1s random jitter
+                const delay = Math.min(this.reconnectDelay + jitter, MAX_RECONNECT_DELAY);
+
+                console.log(`Reconnecting in ${Math.round(delay)}ms...`);
                 this.reconnectTimeout = setTimeout(() => {
                     if (this.token) this.connect(this.token);
-                }, 3000);
+                }, delay);
+
+                // Increase delay for next attempt (exponential)
+                this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY);
             };
 
             this.socket.onerror = (error) => {
-                console.error("WebSocket error", error);
+                // Silently handle WS errors in dev (backend WS may be unavailable)
+                // console.error("WebSocket error", error);
                 this.socket?.close();
             };
 
@@ -70,11 +90,27 @@ class WebSocketService {
         }
     }
 
+    // FIX: Flush queued messages when connection is restored
+    private flushPendingMessages() {
+        while (this.pendingMessages.length > 0 && this.socket?.readyState === WebSocket.OPEN) {
+            const msg = this.pendingMessages.shift();
+            if (msg) {
+                this.socket.send(JSON.stringify(msg));
+            }
+        }
+    }
+
     send(data: WebSocketMessage) {
         if (this.socket?.readyState === WebSocket.OPEN) {
             this.socket.send(JSON.stringify(data));
         } else {
-            console.warn("WebSocket not ready, queuing not implemented");
+            // FIX (MEM): Limit queue size to prevent memory leak
+            if (this.pendingMessages.length >= MAX_PENDING_MESSAGES) {
+                console.warn("WebSocket message queue full, dropping oldest message");
+                this.pendingMessages.shift(); // Remove oldest
+            }
+            this.pendingMessages.push(data);
+            console.log(`WebSocket not ready, message queued (${this.pendingMessages.length}/${MAX_PENDING_MESSAGES})`);
         }
     }
 

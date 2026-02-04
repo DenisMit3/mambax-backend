@@ -28,7 +28,8 @@ from enum import Enum
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from backend import models
+from backend.models.user import User
+from backend.models.interaction import Like
 
 logger = logging.getLogger(__name__)
 
@@ -333,9 +334,9 @@ async def undo_last_swipe(db: AsyncSession, user_id: str, is_vip: bool = False) 
         try:
             # Удаляем запись о лайке
             result = await db.execute(
-                select(models.Like).where(
-                    models.Like.liker_id == user_id,
-                    models.Like.liked_id == swiped_user_id
+                select(Like).where(
+                    Like.liker_id == user_id,
+                    Like.liked_id == swiped_user_id
                 )
             )
             like = result.scalars().first()
@@ -347,7 +348,7 @@ async def undo_last_swipe(db: AsyncSession, user_id: str, is_vip: bool = False) 
     
     # Получаем профиль для повторного показа
     result = await db.execute(
-        select(models.User).where(models.User.id == swiped_user_id)
+        select(User).where(User.id == swiped_user_id)
     )
     profile = result.scalars().first()
     
@@ -413,7 +414,7 @@ async def process_super_like(
     
     # Получаем информацию о лайкере для уведомления
     result = await db.execute(
-        select(models.User).where(models.User.id == liker_id)
+        select(User).where(User.id == liker_id)
     )
     liker = result.scalars().first()
     
@@ -471,7 +472,7 @@ async def request_account_deletion(
     
     # Деактивируем аккаунт
     result = await db.execute(
-        select(models.User).where(models.User.id == user_id)
+        select(User).where(User.id == user_id)
     )
     user = result.scalars().first()
     
@@ -499,7 +500,7 @@ async def cancel_account_deletion(db: AsyncSession, user_id: str) -> Dict[str, A
     
     # Реактивируем аккаунт
     result = await db.execute(
-        select(models.User).where(models.User.id == user_id)
+        select(User).where(User.id == user_id)
     )
     user = result.scalars().first()
     

@@ -10,7 +10,7 @@ from tempfile import NamedTemporaryFile
 from backend.database import AsyncSessionLocal
 from backend.models.advanced import CustomReport, AIUsageLog
 from backend.models import User
-from backend.crud_pkg import advanced as advanced_crud
+from backend.crud import advanced as advanced_crud
 
 async def generate_report_task(report_id: uuid.UUID):
     """

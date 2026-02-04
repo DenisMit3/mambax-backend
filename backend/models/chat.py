@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, Uuid, Boolean
+from sqlalchemy import String, Text, DateTime, ForeignKey, Uuid, Boolean, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.db.base import Base
@@ -15,18 +15,12 @@ class Message(Base):
     ORM модель сообщения чата.
     
     Таблица: messages
-    
-    Атрибуты:
-        id: Уникальный идентификатор сообщения
-        match_id: ID матча (диалога)
-        sender_id: ID отправителя
-        text: Текст сообщения
-        type: Тип сообщения (text, audio, image)
-        audio_url: URL аудио (если type=audio)
-        duration: Длительность (аудио)
-        created_at: Время отправки
     """
     __tablename__ = "messages"
+    __table_args__ = (
+        # FIX: Composite index for chat pagination (ORDER BY created_at)
+        Index("idx_messages_match_created", "match_id", "created_at"),
+    )
     
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid,

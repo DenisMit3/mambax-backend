@@ -4,6 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
+from decimal import Decimal
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -24,13 +25,12 @@ class UserBase(BaseModel):
     username: Optional[str] = None
     
     name: Optional[str] = Field(None, max_length=100)
-    age: Optional[int] = Field(None, ge=18, le=120)
+    age: int = Field(..., ge=18, le=120)
     gender: Optional[Gender] = None
     bio: Optional[str] = Field(None, max_length=500)
     photos: list[str] = Field(default_factory=list)
     interests: list[str] = Field(default_factory=list)
     location: Optional[Location] = None
-    is_vip: bool = False
 
 
 class UserCreate(UserBase):
@@ -65,8 +65,10 @@ class UserResponse(UserBase):
     status: UserStatus = UserStatus.ACTIVE
     subscription_tier: SubscriptionTier = SubscriptionTier.FREE
     role: UserRole = UserRole.USER
-    stars_balance: int = 0
+    stars_balance: Decimal = Decimal(0)
     gifts_received: Optional[int] = None
+    is_complete: bool = False
+    verification_selfie: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -82,4 +84,7 @@ class ProfileResponse(UserResponse):
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     age: Optional[int] = None
+    gender: Optional[Gender] = None
     bio: Optional[str] = None
+    photos: Optional[list[str]] = None
+    interests: Optional[list[str]] = None

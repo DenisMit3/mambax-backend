@@ -10,20 +10,21 @@ For XTR (Telegram Stars) payments:
 - prices must contain exactly ONE item
 """
 
-import os
 import logging
 import httpx
+from backend.core.config import settings
 from typing import Optional
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# Using settings.TELEGRAM_BOT_TOKEN
+
 
 
 def get_api_base() -> str:
     """Get Telegram Bot API base URL."""
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    token = settings.TELEGRAM_BOT_TOKEN
     if not token:
         return ""
     return f"https://api.telegram.org/bot{token}"

@@ -5,17 +5,14 @@ import { motion } from 'framer-motion';
 import {
   DollarSign,
   TrendingUp,
-  TrendingDown,
+  ArrowUpRight,
+  ArrowDownRight,
   CreditCard,
-  Users,
   Crown,
   Gift,
-  Percent,
   RefreshCw,
   Calendar,
   Download,
-  ArrowUpRight,
-  ArrowDownRight,
   Zap,
   Star,
   Target,
@@ -25,6 +22,8 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { adminApi, RevenueMetrics, TransactionListResponse } from '@/services/adminApi';
+import { GlassCard } from '@/components/ui/GlassCard';
+import styles from '../admin.module.css';
 
 interface MetricCardProps {
   title: string;
@@ -39,92 +38,28 @@ function MetricCard({ title, value, change, icon, color, loading }: MetricCardPr
   const isPositive = change >= 0;
 
   return (
-    <motion.div
-      className="metric-card"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4, boxShadow: `0 0 30px ${color}30` }}
+    <GlassCard
+      className="p-6 flex flex-col h-full hover:shadow-[0_0_30px_rgba(var(--color-rgb),0.1)] transition-all duration-300"
+      style={{ '--color-rgb': color } as any}
     >
-      <div className="metric-header">
-        <div className="metric-icon" style={{ background: `${color}20`, color }}>
-          {loading ? <Loader2 className="spinner" size={20} /> : icon}
+      <div className="flex justify-between items-start mb-4">
+        <div
+          className="w-12 h-12 rounded-2xl flex items-center justify-center"
+          style={{ background: `${color}20`, color }}
+        >
+          {loading ? <Loader2 className="animate-spin" size={20} /> : icon}
         </div>
-        <div className={`metric-change ${isPositive ? 'positive' : 'negative'}`}>
+        <div
+          className={`flex items-center gap-1 text-[13px] font-semibold px-2.5 py-1 rounded-full ${isPositive ? 'bg-neon-green/15 text-neon-green' : 'bg-primary-red/15 text-primary-red'
+            }`}
+        >
           {isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
           <span>{Math.abs(change)}%</span>
         </div>
       </div>
-      <div className="metric-value">{loading ? '...' : value}</div>
-      <div className="metric-title">{title}</div>
-
-      <style jsx>{`
-        .metric-card {
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 20px;
-          padding: 24px;
-          transition: all 0.3s ease;
-        }
-        
-        .metric-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 16px;
-        }
-        
-        .metric-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .metric-change {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 13px;
-          font-weight: 600;
-          padding: 4px 10px;
-          border-radius: 20px;
-        }
-        
-        .metric-change.positive {
-          background: rgba(16, 185, 129, 0.15);
-          color: #10b981;
-        }
-        
-        .metric-change.negative {
-          background: rgba(239, 68, 68, 0.15);
-          color: #ef4444;
-        }
-        
-        .metric-value {
-          font-size: 32px;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin-bottom: 4px;
-        }
-        
-        .metric-title {
-          font-size: 14px;
-          color: #94a3b8;
-        }
-        
-        .spinner {
-          animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </motion.div>
+      <div className="text-3xl font-bold text-[var(--admin-text-primary)] mb-1">{loading ? '...' : value}</div>
+      <div className="text-sm text-[var(--admin-text-muted)]">{title}</div>
+    </GlassCard>
   );
 }
 
@@ -132,21 +67,21 @@ function RevenueChart({ data }: { data: { day: string; value: number }[] }) {
   const maxValue = Math.max(...data.map(d => d.value), 1);
 
   return (
-    <div className="revenue-chart glass-panel">
-      <div className="chart-header">
-        <div className="chart-title">
-          <TrendingUp size={20} style={{ color: '#10b981' }} />
-          <h3>Revenue Trend</h3>
+    <GlassCard className="p-6 h-full flex flex-col">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <TrendingUp size={20} className="text-emerald-500" />
+          <h3 className="text-lg font-semibold text-[var(--admin-text-primary)]">Revenue Trend</h3>
         </div>
-        <select className="chart-select">
+        <select className="bg-slate-800/50 border border-[var(--admin-glass-border)] rounded-xl px-4 py-2 text-sm text-[var(--admin-text-primary)] outline-none cursor-pointer hover:border-[var(--admin-glass-border-hover)] transition-colors">
           <option>Last 7 days</option>
           <option>Last 30 days</option>
           <option>Last 90 days</option>
         </select>
       </div>
 
-      <div className="chart-area">
-        <svg viewBox="0 0 700 200" className="line-chart">
+      <div className="relative w-full h-[200px]">
+        <svg viewBox="0 0 700 200" className="w-full h-full overflow-visible">
           {/* Grid lines */}
           {[0, 25, 50, 75, 100].map((y) => (
             <line
@@ -201,68 +136,13 @@ function RevenueChart({ data }: { data: { day: string; value: number }[] }) {
           ))}
         </svg>
 
-        <div className="chart-labels">
+        <div className="flex justify-around mt-3">
           {data.map((d) => (
-            <span key={d.day}>{d.day}</span>
+            <span key={d.day} className="text-xs text-[var(--admin-text-secondary)]">{d.day}</span>
           ))}
         </div>
       </div>
-
-      <style jsx>{`
-        .revenue-chart {
-          padding: 24px;
-        }
-        
-        .chart-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 24px;
-        }
-        
-        .chart-title {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        
-        .chart-title h3 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-        }
-        
-        .chart-select {
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          padding: 8px 16px;
-          color: #f1f5f9;
-          font-size: 13px;
-          cursor: pointer;
-        }
-        
-        .chart-area {
-          position: relative;
-        }
-        
-        .line-chart {
-          width: 100%;
-          height: 200px;
-        }
-        
-        .chart-labels {
-          display: flex;
-          justify-content: space-around;
-          margin-top: 12px;
-        }
-        
-        .chart-labels span {
-          font-size: 12px;
-          color: #64748b;
-        }
-      `}</style>
-    </div>
+    </GlassCard>
   );
 }
 
@@ -279,23 +159,23 @@ function SubscriptionDistribution({ subscriptions, loading }: {
   const total = stats.free.count + stats.gold.count + stats.platinum.count;
 
   return (
-    <div className="distribution-chart glass-panel">
-      <div className="chart-header">
-        <div className="chart-title">
-          <PieChart size={20} style={{ color: '#a855f7' }} />
-          <h3>Subscription Tiers</h3>
+    <GlassCard className="p-6 h-full flex flex-col">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <PieChart size={20} className="text-purple-500" />
+          <h3 className="text-lg font-semibold text-[var(--admin-text-primary)]">Subscription Tiers</h3>
         </div>
       </div>
 
-      <div className="distribution-content">
-        <div className="donut-chart">
+      <div className="flex items-center gap-8 h-full">
+        <div className="relative w-40 h-40 shrink-0">
           {loading ? (
-            <div className="loading-donut">
-              <Loader2 className="spinner" size={32} />
+            <div className="w-full h-full flex items-center justify-center">
+              <Loader2 className="animate-spin text-purple-500" size={32} />
             </div>
           ) : (
             <>
-              <svg viewBox="0 0 100 100">
+              <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
                 <circle
                   cx="50"
                   cy="50"
@@ -305,7 +185,6 @@ function SubscriptionDistribution({ subscriptions, loading }: {
                   strokeWidth="8"
                   strokeDasharray={`${stats.free.percentage * 2.51} 251.2`}
                   strokeDashoffset="0"
-                  transform="rotate(-90 50 50)"
                 />
                 <circle
                   cx="50"
@@ -316,7 +195,6 @@ function SubscriptionDistribution({ subscriptions, loading }: {
                   strokeWidth="8"
                   strokeDasharray={`${stats.gold.percentage * 2.51} 251.2`}
                   strokeDashoffset={`-${stats.free.percentage * 2.51}`}
-                  transform="rotate(-90 50 50)"
                 />
                 <circle
                   cx="50"
@@ -327,168 +205,44 @@ function SubscriptionDistribution({ subscriptions, loading }: {
                   strokeWidth="8"
                   strokeDasharray={`${stats.platinum.percentage * 2.51} 251.2`}
                   strokeDashoffset={`-${(stats.free.percentage + stats.gold.percentage) * 2.51}`}
-                  transform="rotate(-90 50 50)"
                 />
               </svg>
-              <div className="donut-center">
-                <span className="donut-total">{(total / 1000).toFixed(0)}K</span>
-                <span className="donut-label">Total</span>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+                <span className="block text-2xl font-bold text-[var(--admin-text-primary)]">{(total / 1000).toFixed(0)}K</span>
+                <span className="text-xs text-[var(--admin-text-muted)]">Total</span>
               </div>
             </>
           )}
         </div>
 
-        <div className="distribution-legend">
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#94a3b8' }} />
-            <div className="legend-info">
-              <span className="legend-label">Free</span>
-              <span className="legend-value">{stats.free.count.toLocaleString()}</span>
+        <div className="flex-1 flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded bg-slate-400" />
+            <div className="flex-1">
+              <div className="text-sm font-medium text-[var(--admin-text-primary)]">Free</div>
+              <div className="text-xs text-[var(--admin-text-muted)]">{stats.free.count.toLocaleString()}</div>
             </div>
-            <span className="legend-percentage">{stats.free.percentage.toFixed(1)}%</span>
+            <span className="text-sm font-semibold text-[var(--admin-text-muted)]">{stats.free.percentage.toFixed(1)}%</span>
           </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#f97316' }} />
-            <div className="legend-info">
-              <span className="legend-label">Gold</span>
-              <span className="legend-value">{stats.gold.count.toLocaleString()}</span>
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded bg-neon-orange" />
+            <div className="flex-1">
+              <div className="text-sm font-medium text-[var(--admin-text-primary)]">Gold</div>
+              <div className="text-xs text-[var(--admin-text-muted)]">{stats.gold.count.toLocaleString()}</div>
             </div>
-            <span className="legend-percentage">{stats.gold.percentage.toFixed(1)}%</span>
+            <span className="text-sm font-semibold text-[var(--admin-text-muted)]">{stats.gold.percentage.toFixed(1)}%</span>
           </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#a855f7' }} />
-            <div className="legend-info">
-              <span className="legend-label">Platinum</span>
-              <span className="legend-value">{stats.platinum.count.toLocaleString()}</span>
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded bg-neon-purple" />
+            <div className="flex-1">
+              <div className="text-sm font-medium text-[var(--admin-text-primary)]">Platinum</div>
+              <div className="text-xs text-[var(--admin-text-muted)]">{stats.platinum.count.toLocaleString()}</div>
             </div>
-            <span className="legend-percentage">{stats.platinum.percentage.toFixed(1)}%</span>
+            <span className="text-sm font-semibold text-[var(--admin-text-muted)]">{stats.platinum.percentage.toFixed(1)}%</span>
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        .distribution-chart {
-          padding: 24px;
-        }
-        
-        .chart-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 24px;
-        }
-        
-        .chart-title {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        
-        .chart-title h3 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-        }
-        
-        .distribution-content {
-          display: flex;
-          align-items: center;
-          gap: 32px;
-        }
-        
-        .donut-chart {
-          position: relative;
-          width: 160px;
-          height: 160px;
-          flex-shrink: 0;
-        }
-        
-        .donut-chart svg {
-          width: 100%;
-          height: 100%;
-        }
-        
-        .loading-donut {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .donut-center {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          text-align: center;
-        }
-        
-        .donut-total {
-          display: block;
-          font-size: 28px;
-          font-weight: 700;
-          color: #f1f5f9;
-        }
-        
-        .donut-label {
-          font-size: 12px;
-          color: #64748b;
-        }
-        
-        .distribution-legend {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-        
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        
-        .legend-color {
-          width: 12px;
-          height: 12px;
-          border-radius: 4px;
-        }
-        
-        .legend-info {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .legend-label {
-          font-size: 14px;
-          color: #f1f5f9;
-          font-weight: 500;
-        }
-        
-        .legend-value {
-          font-size: 12px;
-          color: #64748b;
-        }
-        
-        .legend-percentage {
-          font-size: 14px;
-          font-weight: 600;
-          color: #94a3b8;
-        }
-        
-        .spinner {
-          animation: spin 1s linear infinite;
-          color: #a855f7;
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
+    </GlassCard>
   );
 }
 
@@ -497,154 +251,51 @@ function RecentTransactions({ sources, loading }: {
   loading: boolean;
 }) {
   const typeIcons: Record<string, React.ReactNode> = {
-    'Subscriptions': <Crown size={14} style={{ color: '#a855f7' }} />,
-    'Boosts': <Zap size={14} style={{ color: '#f97316' }} />,
-    'Super Likes': <Star size={14} style={{ color: '#ec4899' }} />,
-    'Gifts': <Gift size={14} style={{ color: '#10b981' }} />,
+    'Subscriptions': <Crown size={14} className="text-neon-purple" />,
+    'Boosts': <Zap size={14} className="text-neon-orange" />,
+    'Super Likes': <Star size={14} className="text-neon-pink" />,
+    'Gifts': <Gift size={14} className="text-neon-green" />,
   };
 
   return (
-    <div className="transactions glass-panel">
-      <div className="transactions-header">
-        <div className="transactions-title">
-          <CreditCard size={20} style={{ color: '#3b82f6' }} />
-          <h3>Revenue Sources</h3>
+    <GlassCard className="p-6 h-full flex flex-col">
+      <div className="flex justify-between items-center mb-5">
+        <div className="flex items-center gap-3">
+          <CreditCard size={20} className="text-neon-blue" />
+          <h3 className="text-lg font-semibold text-[var(--admin-text-primary)]">Revenue Sources</h3>
         </div>
       </div>
 
-      <div className="transactions-list">
+      <div className="flex flex-col gap-3">
         {loading ? (
-          <div className="loading-state">
-            <Loader2 className="spinner" size={24} />
+          <div className="flex items-center justify-center gap-3 py-10 text-[var(--admin-text-muted)]">
+            <Loader2 className="animate-spin" size={24} />
             <span>Loading...</span>
           </div>
         ) : (
           sources.map((source, index) => (
             <motion.div
               key={source.source}
-              className="transaction-item"
+              className="flex items-center gap-3.5 p-3.5 bg-slate-800/40 rounded-xl border border-[var(--admin-glass-border)] hover:bg-slate-800/60 transition-colors"
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.05 }}
             >
-              <div className="tx-icon">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-slate-800/50 border border-[var(--admin-glass-border)]">
                 {typeIcons[source.source] || <DollarSign size={14} />}
               </div>
-              <div className="tx-info">
-                <span className="tx-user">{source.source}</span>
-                <span className="tx-plan">{source.percentage}% of total</span>
+              <div className="flex-1 flex flex-col">
+                <span className="text-sm font-medium text-[var(--admin-text-primary)]">{source.source}</span>
+                <span className="text-xs text-[var(--admin-text-muted)]">{source.percentage}% of total</span>
               </div>
-              <div className="tx-details">
-                <span className="tx-amount">${source.amount.toLocaleString()}</span>
+              <div className="text-sm font-semibold text-neon-green">
+                ${source.amount.toLocaleString()}
               </div>
             </motion.div>
           ))
         )}
       </div>
-
-      <style jsx>{`
-        .transactions {
-          padding: 24px;
-        }
-        
-        .transactions-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 20px;
-        }
-        
-        .transactions-title {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        
-        .transactions-title h3 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-        }
-        
-        .transactions-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-        
-        .loading-state {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          padding: 40px;
-          color: #94a3b8;
-        }
-        
-        .spinner {
-          animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        
-        .transaction-item {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          padding: 14px;
-          background: rgba(30, 41, 59, 0.4);
-          border-radius: 12px;
-          border: 1px solid rgba(148, 163, 184, 0.1);
-          transition: all 0.2s;
-        }
-        
-        .transaction-item:hover {
-          background: rgba(30, 41, 59, 0.6);
-          border-color: rgba(148, 163, 184, 0.2);
-        }
-        
-        .tx-icon {
-          width: 36px;
-          height: 36px;
-          background: rgba(30, 41, 59, 0.5);
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .tx-info {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .tx-user {
-          font-size: 14px;
-          font-weight: 500;
-          color: #f1f5f9;
-        }
-        
-        .tx-plan {
-          font-size: 12px;
-          color: #64748b;
-        }
-        
-        .tx-details {
-          text-align: right;
-        }
-        
-        .tx-amount {
-          display: block;
-          font-size: 14px;
-          font-weight: 600;
-          color: #10b981;
-        }
-      `}</style>
-    </div>
+    </GlassCard>
   );
 }
 
@@ -684,80 +335,81 @@ function TransactionsTable() {
   };
 
   return (
-    <div className="glass-panel" style={{ marginTop: 24, padding: 24 }}>
-      <h3 style={{ color: '#f1f5f9', marginBottom: 16 }}>Transactions</h3>
-      <table style={{ width: '100%', color: '#94a3b8', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '1px solid rgba(148,163,184,0.1)' }}>
-            <th style={{ padding: 8 }}>Date</th>
-            <th style={{ padding: 8 }}>User</th>
-            <th style={{ padding: 8 }}>Amount</th>
-            <th style={{ padding: 8 }}>Type</th>
-            <th style={{ padding: 8 }}>Status</th>
-            <th style={{ padding: 8 }}>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data?.items.map(tx => (
-            <tr key={tx.id} style={{ borderBottom: '1px solid rgba(148,163,184,0.1)' }}>
-              <td style={{ padding: 8 }}>{new Date(tx.created_at).toLocaleDateString()}</td>
-              <td style={{ padding: 8 }}>{tx.user_id.substring(0, 8)}...</td>
-              <td style={{ padding: 8, color: '#10b981' }}>{tx.amount} {tx.currency}</td>
-              <td style={{ padding: 8 }}>{tx.metadata?.transaction_type || 'Unknown'}</td>
-              <td style={{ padding: 8 }}>
-                <span style={{
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  fontSize: 12,
-                  background: tx.status === 'completed' ? 'rgba(16,185,129,0.2)' : tx.status === 'refunded' ? 'rgba(239,68,68,0.2)' : 'rgba(148,163,184,0.2)',
-                  color: tx.status === 'completed' ? '#10b981' : tx.status === 'refunded' ? '#ef4444' : '#94a3b8'
-                }}>
-                  {tx.status}
-                </span>
-              </td>
-              <td style={{ padding: 8 }}>
-                {tx.status === 'completed' && (
-                  <button
-                    onClick={() => { setRefundId(tx.id); setRefundReason("Requested by User"); }}
-                    style={{
-                      background: 'rgba(239,68,68,0.2)',
-                      color: '#ef4444',
-                      border: 'none',
-                      padding: '4px 8px',
-                      borderRadius: 4,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Refund
-                  </button>
-                )}
-              </td>
+    <GlassCard className="mt-6 p-6 overflow-hidden">
+      <h3 className="text-lg font-semibold text-[var(--admin-text-primary)] mb-4">Transactions</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="text-left border-b border-[var(--admin-glass-border)] text-[var(--admin-text-muted)] text-sm">
+              <th className="p-3 font-medium">Date</th>
+              <th className="p-3 font-medium">User</th>
+              <th className="p-3 font-medium">Amount</th>
+              <th className="p-3 font-medium">Type</th>
+              <th className="p-3 font-medium">Status</th>
+              <th className="p-3 font-medium">Action</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data?.items.map(tx => (
+              <tr key={tx.id} className="border-b border-[var(--admin-glass-border)] text-sm text-[var(--admin-text-secondary)] hover:bg-slate-800/30">
+                <td className="p-3">{new Date(tx.created_at).toLocaleDateString()}</td>
+                <td className="p-3">{tx.user_id.substring(0, 8)}...</td>
+                <td className="p-3 font-medium text-neon-green">{tx.amount} {tx.currency}</td>
+                <td className="p-3">{tx.metadata?.transaction_type || 'Unknown'}</td>
+                <td className="p-3">
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-medium ${tx.status === 'completed' ? 'bg-neon-green/20 text-neon-green' :
+                      tx.status === 'refunded' ? 'bg-primary-red/20 text-primary-red' :
+                        'bg-slate-500/20 text-slate-400'
+                      }`}
+                  >
+                    {tx.status}
+                  </span>
+                </td>
+                <td className="p-3">
+                  {tx.status === 'completed' && (
+                    <button
+                      onClick={() => { setRefundId(tx.id); setRefundReason("Requested by User"); }}
+                      className="px-2 py-1 rounded text-xs font-medium bg-primary-red/10 text-primary-red hover:bg-primary-red/20 transition-colors"
+                    >
+                      Refund
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {refundId && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-        }}>
-          <div className="glass-panel" style={{ padding: 24, width: 400, background: '#1e293b', border: '1px solid #334155', borderRadius: 12 }}>
-            <h3 style={{ color: '#fff', marginBottom: 12 }}>Refund Transaction</h3>
-            <p style={{ color: '#94a3b8', margin: '0 0 8px 0' }}>Reason for refund:</p>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm">
+          <GlassCard className="w-full max-w-md p-6 bg-[#1e293b] border-slate-700">
+            <h3 className="text-lg font-bold text-white mb-3">Refund Transaction</h3>
+            <p className="text-sm text-slate-400 mb-2">Reason for refund:</p>
             <input
               value={refundReason}
               onChange={e => setRefundReason(e.target.value)}
-              style={{ width: '100%', padding: 8, background: '#0f172a', border: '1px solid #334155', color: '#fff', marginBottom: 16, borderRadius: 6 }}
+              className="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white mb-4 focus:border-blue-500 outline-none transition-colors"
             />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-              <button onClick={() => setRefundId(null)} className="btn-secondary" style={{ padding: '8px 16px', borderRadius: 6, background: 'transparent', border: '1px solid #334155', color: '#fff', cursor: 'pointer' }}>Cancel</button>
-              <button onClick={handleRefund} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6, cursor: 'pointer' }}>Confirm Refund</button>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setRefundId(null)}
+                className="px-4 py-2 rounded-lg border border-slate-700 text-white hover:bg-slate-800 transition-colors text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRefund}
+                className="px-4 py-2 rounded-lg bg-primary-red text-white hover:bg-primary-red/90 transition-colors text-sm font-medium border border-transparent"
+              >
+                Confirm Refund
+              </button>
             </div>
-          </div>
+          </GlassCard>
         </div>
       )}
-    </div>
+    </GlassCard>
   )
 }
 
@@ -765,61 +417,73 @@ export default function MonetizationPage() {
   const [revenueMetrics, setRevenueMetrics] = useState<RevenueMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [trendData, setTrendData] = useState<any[]>([]);
+  const [period, setPeriod] = useState("30d");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const metrics = await adminApi.monetization.getRevenue();
+      const [metrics, trend] = await Promise.all([
+        adminApi.monetization.getRevenue(),
+        adminApi.monetization.getTrend(period)
+      ]);
       setRevenueMetrics(metrics);
+      setTrendData(trend.trend);
     } catch (err) {
       console.error('Error fetching monetization data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load monetization data');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [period]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
   // Generate chart data from metrics
-  const chartData = [
-    { day: 'Mon', value: (revenueMetrics?.today || 0) * 0.8 },
-    { day: 'Tue', value: (revenueMetrics?.today || 0) * 0.9 },
-    { day: 'Wed', value: (revenueMetrics?.today || 0) * 0.75 },
-    { day: 'Thu', value: (revenueMetrics?.today || 0) * 1.1 },
-    { day: 'Fri', value: (revenueMetrics?.today || 0) * 1.2 },
-    { day: 'Sat', value: (revenueMetrics?.today || 0) * 1.3 },
-    { day: 'Sun', value: revenueMetrics?.today || 0 },
-  ];
-
-  // Charts Row 
+  const chartData = trendData.length > 0
+    ? trendData.map(d => ({
+      day: new Date(d.date).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+      value: d.revenue
+    })).slice(-7) // Show last 7 for the simple chart, or keep all
+    : [
+      { day: 'Mon', value: 0 },
+      { day: 'Tue', value: 0 },
+      { day: 'Wed', value: 0 },
+      { day: 'Thu', value: 0 },
+      { day: 'Fri', value: 0 },
+      { day: 'Sat', value: 0 },
+      { day: 'Sun', value: 0 },
+    ];
 
   return (
-    <div className="monetization-page">
+    <div className={styles.pageContainer}>
       {/* Header */}
-      <div className="page-header">
-        <div>
-          <h1>Revenue Dashboard</h1>
-          <p>Track your platform's financial performance</p>
+      <div className={styles.headerSection}>
+        <div className={styles.headerContent}>
+          <h1 className={styles.headerTitle}>Revenue Dashboard</h1>
+          <p className={styles.headerDescription}>Track your platform's financial performance</p>
         </div>
-        <div className="header-actions">
-          <div className="date-selector">
-            <Calendar size={16} />
-            <select>
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-              <option>Last 90 Days</option>
-              <option>Year to Date</option>
+        <div className="flex gap-3">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border border-[var(--admin-glass-border)] rounded-xl text-[var(--admin-text-primary)]">
+            <Calendar size={16} className="text-[var(--admin-text-muted)]" />
+            <select
+              className="bg-transparent border-none text-sm outline-none cursor-pointer"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+            >
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+              <option value="90d">Last 90 Days</option>
             </select>
           </div>
-          <button className="btn-secondary" onClick={fetchData}>
+          <button className={styles.secondaryButton} onClick={fetchData}>
             <RefreshCw size={16} />
             Refresh
           </button>
-          <button className="btn-secondary">
+          <button className={styles.secondaryButton}>
             <Download size={16} />
             Export
           </button>
@@ -828,15 +492,20 @@ export default function MonetizationPage() {
 
       {/* Error State */}
       {error && (
-        <div className="error-banner">
+        <GlassCard className="flex items-center gap-3 p-4 mb-6 border-primary-red/30 text-primary-red">
           <AlertTriangle size={20} />
           <span>{error}</span>
-          <button onClick={fetchData}>Retry</button>
-        </div>
+          <button
+            onClick={fetchData}
+            className="ml-auto px-3 py-1.5 bg-primary-red/10 border border-primary-red/20 rounded-lg text-sm hover:bg-primary-red/20 transition-colors"
+          >
+            Retry
+          </button>
+        </GlassCard>
       )}
 
       {/* Metrics Grid */}
-      <div className="metrics-grid">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
         <MetricCard
           title="Today's Revenue"
           value={`$${(revenueMetrics?.today || 0).toLocaleString()}`}
@@ -872,226 +541,50 @@ export default function MonetizationPage() {
       </div>
 
       {/* Charts Row */}
-      <div className="charts-row">
-        <RevenueChart data={chartData} />
-        <SubscriptionDistribution
-          subscriptions={revenueMetrics?.subscription_breakdown || null}
-          loading={loading}
-        />
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+        <div className="xl:col-span-2 h-[350px]">
+          <RevenueChart data={chartData} />
+        </div>
+        <div className="h-[350px]">
+          <SubscriptionDistribution
+            subscriptions={revenueMetrics?.subscription_breakdown || null}
+            loading={loading}
+          />
+        </div>
       </div>
 
       {/* Bottom Row */}
-      <div className="bottom-row">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RecentTransactions
           sources={revenueMetrics?.revenue_sources || []}
           loading={loading}
         />
 
         {/* Key Metrics */}
-        <div className="key-metrics glass-panel">
-          <h3>Key Metrics</h3>
-          <div className="metrics-list">
-            <div className="metric-row">
-              <span className="metric-label">ARPU</span>
-              <span className="metric-val">${(revenueMetrics?.arpu || 0).toFixed(2)}</span>
+        <GlassCard className="p-6 h-full">
+          <h3 className="text-lg font-semibold text-[var(--admin-text-primary)] mb-5">Key Metrics</h3>
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-center p-3.5 bg-slate-800/40 rounded-xl border border-[var(--admin-glass-border)]">
+              <span className="text-sm text-[var(--admin-text-muted)]">ARPU (Average Revenue Per User)</span>
+              <span className="text-lg font-semibold text-[var(--admin-text-primary)]">${(revenueMetrics?.arpu || 0).toFixed(2)}</span>
             </div>
-            <div className="metric-row">
-              <span className="metric-label">ARPPU</span>
-              <span className="metric-val">${(revenueMetrics?.arppu || 0).toFixed(2)}</span>
+            <div className="flex justify-between items-center p-3.5 bg-slate-800/40 rounded-xl border border-[var(--admin-glass-border)]">
+              <span className="text-sm text-[var(--admin-text-muted)]">ARPPU (Average Revenue Per Paying User)</span>
+              <span className="text-lg font-semibold text-[var(--admin-text-primary)]">${(revenueMetrics?.arppu || 0).toFixed(2)}</span>
             </div>
-            <div className="metric-row">
-              <span className="metric-label">Conversion Rate</span>
-              <span className="metric-val">
+            <div className="flex justify-between items-center p-3.5 bg-slate-800/40 rounded-xl border border-[var(--admin-glass-border)]">
+              <span className="text-sm text-[var(--admin-text-muted)]">Conversion Rate (to Paid)</span>
+              <span className="text-lg font-semibold text-[var(--admin-text-primary)]">
                 {revenueMetrics?.subscription_breakdown?.gold?.percentage !== undefined
                   ? (revenueMetrics.subscription_breakdown.gold.percentage + revenueMetrics.subscription_breakdown.platinum.percentage).toFixed(1)
                   : '0'}%
               </span>
             </div>
           </div>
-        </div>
+        </GlassCard>
       </div>
 
       <TransactionsTable />
-
-      <style jsx>{`
-        .monetization-page {
-          max-width: 1600px;
-          margin: 0 auto;
-        }
-        
-        .page-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 24px;
-        }
-        
-        .page-header h1 {
-          font-size: 28px;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin-bottom: 4px;
-        }
-        
-        .page-header p {
-          font-size: 15px;
-          color: #94a3b8;
-        }
-        
-        .header-actions {
-          display: flex;
-          gap: 12px;
-          align-items: center;
-        }
-        
-        .date-selector {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #f1f5f9;
-        }
-        
-        .date-selector select {
-          background: transparent;
-          border: none;
-          color: #f1f5f9;
-          font-size: 14px;
-          cursor: pointer;
-          outline: none;
-        }
-        
-        .btn-secondary {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #f1f5f9;
-          font-size: 14px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .btn-secondary:hover {
-          background: rgba(30, 41, 59, 0.8);
-        }
-        
-        .error-banner {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 16px 20px;
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          border-radius: 12px;
-          margin-bottom: 24px;
-          color: #ef4444;
-        }
-        
-        .error-banner button {
-          margin-left: auto;
-          padding: 6px 12px;
-          background: rgba(239, 68, 68, 0.2);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          border-radius: 6px;
-          color: #ef4444;
-          cursor: pointer;
-        }
-        
-        .metrics-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 20px;
-          margin-bottom: 24px;
-        }
-        
-        @media (max-width: 1200px) {
-          .metrics-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        
-        @media (max-width: 600px) {
-          .metrics-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-        
-        .charts-row {
-          display: grid;
-          grid-template-columns: 2fr 1fr;
-          gap: 24px;
-          margin-bottom: 24px;
-        }
-        
-        @media (max-width: 1100px) {
-          .charts-row {
-            grid-template-columns: 1fr;
-          }
-        }
-        
-        .bottom-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 24px;
-        }
-        
-        @media (max-width: 900px) {
-          .bottom-row {
-            grid-template-columns: 1fr;
-          }
-        }
-        
-        .glass-panel {
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 20px;
-        }
-        
-        .key-metrics {
-          padding: 24px;
-        }
-        
-        .key-metrics h3 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-          margin-bottom: 20px;
-        }
-        
-        .metrics-list {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-        
-        .metric-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 14px;
-          background: rgba(30, 41, 59, 0.4);
-          border-radius: 12px;
-        }
-        
-        .metric-label {
-          font-size: 14px;
-          color: #94a3b8;
-        }
-        
-        .metric-val {
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-        }
-      `}</style>
     </div>
   );
 }

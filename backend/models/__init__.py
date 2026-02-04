@@ -16,6 +16,7 @@ from .analytics import DailyMetric, RetentionCohort, AnalyticsEvent
 from .marketing import MarketingCampaign, PushCampaign, EmailCampaign
 from .system import AuditLog, FeatureFlag, SecurityAlert, BackupStatus
 from .user_management import FraudScore, UserSegment, UserNote, VerificationRequest
+from .profile_enrichment import UserPrompt, UserPreference
 
 __all__ = [
     "User",
@@ -62,5 +63,7 @@ __all__ = [
     "UserSegment",
     "UserNote",
     "VerificationRequest",
+    "UserPrompt",
+    "UserPreference",
 ]
 

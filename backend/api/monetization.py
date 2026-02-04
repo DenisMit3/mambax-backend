@@ -8,12 +8,15 @@ Comprehensive API for revenue management including:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body, BackgroundTasks, UploadFile, File
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, and_, or_, extract, select
+from sqlalchemy import func, desc, and_, or_, extract, select, update, delete
 from typing import List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
 import uuid
+import os
+import httpx
 
 # Use AsyncSession
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,8 +31,10 @@ from backend.models.monetization import (
 from backend.schemas.monetization import (
     SubscriptionPlanCreate, SubscriptionPlanResponse, 
     TelegramPaymentRequest, TelegramStarsInvoice, TransactionResponse,
-    TransactionListResponse, RefundRequest, SendGiftRequest
+    TransactionListResponse, RefundRequest, SendGiftRequest,
+    SubscriptionPlanUpdate
 )
+from backend.core.redis import redis_manager
 
 
 router = APIRouter(prefix="/admin/monetization", tags=["monetization"])
@@ -61,25 +66,71 @@ async def create_subscription_plan(
     current_user: User = Depends(get_current_admin)
 ):
     """Create a new subscription plan"""
-    # 1. Create Plan in DB
     db_plan = SubscriptionPlan(
         name=plan.name,
         tier=plan.tier,
         price=plan.price,
-        currency=plan.currency, # Should be 'XTR' for Telegram Stars
-        duration_days=plan.duration_days,
-        # Map features from dict to columns if needed, or store in JSON?
-        # Our model has specific columns, let's map common ones
-        unlimited_swipes=plan.features.get("unlimited_swipes", False),
-        see_who_likes_you=plan.features.get("see_who_likes_you", False),
-        incognito_mode=plan.features.get("incognito_mode", False),
-        # ... map others ...
+        currency=plan.currency,
+        duration_days=plan.duration_days
     )
+    
+    # Map features
+    if plan.features:
+        for key, value in plan.features.items():
+            if hasattr(db_plan, key):
+                setattr(db_plan, key, value)
+                
     db.add(db_plan)
     await db.commit()
     await db.refresh(db_plan)
     
     return {"status": "success", "plan": db_plan}
+
+@router.patch("/plans/{plan_id}", response_model=dict)
+async def update_subscription_plan(
+    plan_id: uuid.UUID,
+    plan_update: SubscriptionPlanUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Update an existing subscription plan"""
+    db_plan = await db.get(SubscriptionPlan, plan_id)
+    if not db_plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+        
+    update_data = plan_update.dict(exclude_unset=True)
+    
+    # Handle direct fields
+    for key in ["name", "tier", "price", "currency", "duration_days", "is_active", "is_popular"]:
+        if key in update_data:
+            setattr(db_plan, key, update_data[key])
+            
+    # Handle features
+    if "features" in update_data and update_data["features"]:
+        for key, value in update_data["features"].items():
+            if hasattr(db_plan, key):
+                setattr(db_plan, key, value)
+                
+    await db.commit()
+    await db.refresh(db_plan)
+    
+    return {"status": "success", "plan": db_plan}
+
+@router.delete("/plans/{plan_id}")
+async def delete_subscription_plan(
+    plan_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Delete a subscription plan (soft delete logic could be added instead)"""
+    db_plan = await db.get(SubscriptionPlan, plan_id)
+    if not db_plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+        
+    await db.delete(db_plan)
+    await db.commit()
+    
+    return {"status": "success", "message": "Plan deleted"}
 
 # ============================================
 # TELEGRAM STARS PAYMENT FLOW
@@ -113,16 +164,38 @@ async def create_telegram_invoice(
     await db.commit()
     await db.refresh(transaction)
 
-    # 3. Generate Link (Mock generation for now, real one uses Bot API)
-    # In real world: call `createInvoiceLink` method of Telegram Bot API
-    invoice_link = f"https://t.me/MambaXBot?start=invoice_{transaction.id}"
+    # 3. Generate Link (Real using Bot API)
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     
-    return TelegramStarsInvoice(
-        invoice_link=invoice_link,
-        amount=int(plan.price),
-        currency="XTR",
-        transaction_id=transaction.id
-    )
+    if not bot_token:
+        # Fallback for dev without token
+        invoice_link = f"https://t.me/MambaXBot?start=invoice_{transaction.id}"
+    else:
+        # Call Telegram API
+        async with httpx.AsyncClient() as client:
+            payload = {
+                "title": f"MambaX {plan.name}",
+                "description": f"{plan.duration_days} days premium access",
+                "payload": str(transaction.id),
+                "currency": "XTR",
+                "prices": [{"label": plan.name, "amount": int(plan.price)}],
+                "provider_token": "" # Empty for Telegram Stars
+            }
+            try:
+                resp = await client.post(
+                    f"https://api.telegram.org/bot{bot_token}/createInvoiceLink",
+                    json=payload
+                )
+                data = resp.json()
+                if data.get("ok"):
+                    invoice_link = data["result"]
+                else:
+                    # Log error but return fallback if needed or raise
+                    print(f"Telegram API Error: {data}")
+                    raise HTTPException(status_code=500, detail=f"Telegram Error: {data.get('description')}")
+            except Exception as e:
+                print(f"Invoice Gen Failed: {e}")
+                raise HTTPException(status_code=500, detail="Failed to connect to Telegram API")
 
     return TelegramStarsInvoice(
         invoice_link=invoice_link,
@@ -338,9 +411,19 @@ async def telegram_refund_transaction(
     if not success:
         raise HTTPException(status_code=500, detail="Telegram API refund failed")
         
-    # Deduct balance (force deduction even if negative)
-    old_balance = user.stars_balance or Decimal("0")
-    user.stars_balance = old_balance - tx.amount
+    # Deduct balance (Atomic Update to prevent Race Condition)
+    # user.stars_balance = User.stars_balance - tx.amount
+    # However, SQLAlchemy async session handling of expression updates on ORM objects can be tricky.
+    # Safe way: Execute an update statement.
+    
+    await db.execute(
+        update(User)
+        .where(User.id == user.id)
+        .values(stars_balance=User.stars_balance - tx.amount)
+    )
+    
+    # We need to refresh user to get new balance if needed, or just expire it
+    # But here we don't return the balance, so it's fine.
     
     tx.status = "refunded"
     tx.custom_metadata = {**(tx.custom_metadata or {}), "refunded_by": str(current_user.id)}
@@ -354,71 +437,204 @@ async def telegram_refund_transaction(
 # REVENUE ANALYTICS (Real DB)
 # ============================================
 
-@router.get("/revenue/metrics")
+class RevenueSourceItem(BaseModel):
+    source: str
+    amount: float
+    percentage: float
+
+class SubscriptionBreakdownItem(BaseModel):
+    count: int
+    percentage: float
+
+class SubscriptionBreakdown(BaseModel):
+    free: SubscriptionBreakdownItem
+    gold: SubscriptionBreakdownItem
+    platinum: SubscriptionBreakdownItem
+
+class RevenueMetricsResponse(BaseModel):
+    today: float
+    week: float
+    month: float
+    year: float
+    arpu: float
+    arppu: float
+    subscription_breakdown: SubscriptionBreakdown
+    revenue_sources: List[RevenueSourceItem]
+
+
+@router.get("/revenue/metrics", response_model=RevenueMetricsResponse)
 async def get_revenue_metrics(
     period: str = "month",
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
     """Get comprehensive revenue metrics from Real DB"""
-    
-    # Calculate Total Revenue
-    total_revenue = await db.scalar(
-        select(func.sum(RevenueTransaction.amount))
-        .where(RevenueTransaction.status == "completed")
-    ) or 0
-    
-    # Calculate MRR (Simplified: Sum of active subscriptions / months)
-    active_subs_count = await db.scalar(
-        select(func.count(UserSubscription.id))
-        .where(UserSubscription.status == "active")
-    ) or 0
-    
-    # Calculate ARPU
-    total_users = await db.scalar(select(func.count(User.id))) or 1
-    arpu = float(total_revenue) / total_users
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = now - timedelta(days=7)
+    month_start = now - timedelta(days=30)
+    year_start = now - timedelta(days=365)
 
-    return {
-        "revenue": {
-            "total_lifetime": float(total_revenue),
-            "currency": "XTR"
-        },
-        "metrics": {
-            "mrr": float(total_revenue) / 12, # Rough approximation
-            "active_subscribers": active_subs_count,
-            "arpu": round(arpu, 2)
-        }
+    # Helper to sum revenue
+    async def get_revenue(start_date: datetime):
+        result = await db.execute(
+            select(func.sum(RevenueTransaction.amount)).where(
+                and_(
+                    RevenueTransaction.status == 'completed',
+                    RevenueTransaction.created_at >= start_date
+                )
+            )
+        )
+        return float(result.scalar() or 0.0)
+
+    revenue_today = await get_revenue(today_start)
+    revenue_week = await get_revenue(week_start)
+    revenue_month = await get_revenue(month_start)
+    revenue_year = await get_revenue(year_start)
+
+    # User Counts for ARPU
+    total_users_res = await db.execute(select(func.count(User.id)))
+    total_users = total_users_res.scalar() or 1
+    
+    # Paying Users
+    paying_users_res = await db.execute(
+        select(func.count(func.distinct(RevenueTransaction.user_id))).where(
+            RevenueTransaction.status == 'completed'
+        )
+    )
+    paying_users = paying_users_res.scalar() or 0
+
+    arpu = revenue_month / total_users if total_users > 0 else 0
+    arppu = revenue_month / paying_users if paying_users > 0 else 0
+
+    # Subscription Breakdown
+    from backend.models.user import SubscriptionTier # Import locally to avoid circulars if any
+    
+    async def get_sub_count(tier_name: str):
+        # Count by checking user.subscription_tier
+        # Note: This requires the User model to have subscription_tier populated
+        res = await db.execute(select(func.count(User.id)).where(User.subscription_tier == tier_name))
+        return res.scalar() or 0
+
+    # Assuming 'free', 'gold', 'platinum' values in DB. 
+    # If enum is used, use .value
+    free_count = await get_sub_count('free')
+    gold_count = await get_sub_count('gold')
+    platinum_count = await get_sub_count('platinum')
+    
+    total_subs = free_count + gold_count + platinum_count or 1
+
+    sub_breakdown = SubscriptionBreakdown(
+        free=SubscriptionBreakdownItem(count=free_count, percentage=(free_count/total_subs)*100),
+        gold=SubscriptionBreakdownItem(count=gold_count, percentage=(gold_count/total_subs)*100),
+        platinum=SubscriptionBreakdownItem(count=platinum_count, percentage=(platinum_count/total_subs)*100),
+    )
+
+    # Revenue Sources
+    sources_res = await db.execute(
+        select(
+            RevenueTransaction.transaction_type, 
+            func.sum(RevenueTransaction.amount)
+        ).where(
+            RevenueTransaction.status == 'completed'
+        ).group_by(RevenueTransaction.transaction_type)
+    )
+    sources_data = sources_res.all()
+    total_rev_all_time = sum(float(r[1]) for r in sources_data) or 1.0
+    
+    revenue_sources = []
+    source_map = {
+        'subscription': 'Subscriptions',
+        'gift_purchase': 'Gifts',
+        'boost': 'Boosts',
+        'super_like': 'Super Likes'
     }
+    
+    for r in sources_data:
+        r_type = r[0]
+        r_amount = float(r[1])
+        display_name = source_map.get(r_type, r_type.title())
+        revenue_sources.append(RevenueSourceItem(
+            source=display_name,
+            amount=r_amount,
+            percentage=(r_amount / total_rev_all_time) * 100
+        ))
 
+    # Sort by amount desc
+    revenue_sources.sort(key=lambda x: x.amount, reverse=True)
 
-
+    return RevenueMetricsResponse(
+        today=revenue_today,
+        week=revenue_week,
+        month=revenue_month,
+        year=revenue_year,
+        arpu=arpu,
+        arppu=arppu,
+        subscription_breakdown=sub_breakdown,
+        revenue_sources=revenue_sources
+    )
 @router.get("/revenue/trend")
 async def get_revenue_trend(
     period: str = "30d",
     granularity: str = "day",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get revenue trend data for charts"""
+    """Get revenue trend data for charts (Real DB)"""
     
-    # Generate mock trend data
-    days = 30 if period == "30d" else 7 if period == "7d" else 90
+    # Verify period
+    days = 30
+    if period == "7d":
+        days = 7
+    elif period == "90d":
+        days = 90
+        
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    # Query: Sum amount by date
+    # SQLite/Postgres compatibility note: assuming Postgres 'date_trunc' or simple date casting
+    # For general compatibility:
+    
+    stmt = (
+        select(
+            func.date(RevenueTransaction.created_at).label('date'),
+            func.sum(RevenueTransaction.amount).label('revenue'),
+            func.count(RevenueTransaction.id).label('transactions')
+        )
+        .where(
+            and_(
+                RevenueTransaction.created_at >= start_date,
+                RevenueTransaction.status == 'completed'
+            )
+        )
+        .group_by(func.date(RevenueTransaction.created_at))
+        .order_by(func.date(RevenueTransaction.created_at))
+    )
+    
+    result = await db.execute(stmt)
+    rows = result.all()
+    
+    # Convert to dict lookup
+    data_map = {str(row.date): {"revenue": float(row.revenue or 0), "transactions": row.transactions} for row in rows}
+    
+    # Fill gaps
+    categories = []
     trend_data = []
     
     for i in range(days):
-        date = datetime.utcnow() - timedelta(days=days - 1 - i)
-        base_revenue = 10000 + (i * 50)
-        variation = hash(date.isoformat()) % 2000
+        date_obj = datetime.utcnow() - timedelta(days=days - 1 - i)
+        date_str = date_obj.strftime("%Y-%m-%d")
+        
+        day_data = data_map.get(date_str, {"revenue": 0, "transactions": 0})
         
         trend_data.append({
-            "date": date.strftime("%Y-%m-%d"),
-            "revenue": base_revenue + variation,
-            "transactions": 300 + (hash(date.isoformat()) % 100),
-            "new_subscribers": 50 + (hash(date.isoformat()) % 30)
+            "date": date_str,
+            "revenue": day_data["revenue"],
+            "transactions": day_data["transactions"],
+            "new_subscribers": 0 # Placeholder for now, requires Subscription query
         })
-    
+        
     return {"trend": trend_data}
-
 
 @router.get("/revenue/by-channel")
 async def get_revenue_by_channel(
@@ -769,7 +985,26 @@ async def get_gift_catalog(
     Filtering options:
     - category_id: Filter by specific category
     - include_premium: Include premium gifts (default: True)
+    
+    NOTE: Cached for 1 hour to reduce DB load.
     """
+    import json
+    
+    # FIX (CACHE): Try Redis cache first
+    cache_key = f"gifts_catalog:{category_id or 'all'}:{include_premium}"
+    cached = None
+    try:
+        cached = await redis_manager.get_value(cache_key)
+    except Exception:
+        pass  # Redis not available, skip cache
+    
+    if cached:
+        try:
+            data = json.loads(cached)
+            return GiftCatalogResponse(**data)
+        except Exception:
+            pass  # Cache miss or corrupt data, continue to DB
+    
     # Get categories
     cat_stmt = select(GiftCategory).where(GiftCategory.is_active == True).order_by(GiftCategory.sort_order)
     cat_result = await db.execute(cat_stmt)
@@ -796,11 +1031,19 @@ async def get_gift_catalog(
     gift_result = await db.execute(gift_stmt)
     gifts = gift_result.scalars().all()
     
-    return GiftCatalogResponse(
+    response = GiftCatalogResponse(
         categories=[GiftCategoryResponse.model_validate(c) for c in categories],
         gifts=[VirtualGiftResponse.model_validate(g) for g in gifts],
         total_gifts=len(gifts)
     )
+    
+    # Store in cache for 1 hour
+    try:
+        await redis_manager.set_value(cache_key, response.model_dump_json(), expire=3600)
+    except Exception:
+        pass  # Don't fail if cache write fails
+    
+    return response
 
 
 @gifts_router.post("/send", response_model=GiftTransactionResponse)
@@ -832,76 +1075,89 @@ async def send_gift(
         raise HTTPException(status_code=400, detail="This gift is no longer available")
     
     # Check max quantity
-    if gift.max_quantity and gift.times_sent >= gift.max_quantity:
-        raise HTTPException(status_code=400, detail="This gift has reached its maximum quantity")
-    
-    # 2. Validate receiver exists
-    receiver = await db.get(User, request.receiver_id)
-    if not receiver:
-        raise HTTPException(status_code=404, detail="Receiver not found")
-    
-    # Prevent sending to self
-    if sender_id == request.receiver_id:
-        raise HTTPException(status_code=400, detail="Cannot send gift to yourself")
-    
-    # 3. Fetch sender and validate balance
-    sender = await db.get(User, sender_id)
-    if not sender:
-        raise HTTPException(status_code=404, detail="Sender not found")
-    
-    # Check if sender has sufficient balance
-    if sender.stars_balance < gift.price:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Insufficient balance. Required: {gift.price} XTR, Available: {sender.stars_balance} XTR"
-        )
-    
-    # 4. Deduct balance atomically from sender
-    sender.stars_balance = sender.stars_balance - gift.price
-    
-    # 4b. Credit receiver with 10% bonus
-    receiver_bonus = int(gift.price * 0.1)  # 10% of gift price
-    if receiver_bonus > 0:
-        receiver.stars_balance = (receiver.stars_balance or 0) + receiver_bonus
-    
-    # 5. Create gift transaction
-    transaction = GiftTransaction(
-        sender_id=sender_id,
-        receiver_id=request.receiver_id,
-        gift_id=gift.id,
-        price_paid=gift.price,
-        currency=gift.currency,
-        message=request.message,
-        status="completed",  # In production, this might start as "pending"
-        is_anonymous=request.is_anonymous
-    )
-    db.add(transaction)
-    
-    # 6. Update gift stats
-    gift.times_sent += 1
-    
-    # 7. Create revenue transaction for tracking
-    revenue_tx = RevenueTransaction(
-        user_id=sender_id,
-        transaction_type="gift",
-        amount=gift.price,
-        currency=gift.currency,
-        status="completed",
-        payment_gateway="telegram_stars",
-        custom_metadata={
-            "gift_id": str(gift.id),
-            "gift_name": gift.name,
-            "receiver_id": str(request.receiver_id)
-        }
-    )
-    db.add(revenue_tx)
-    
-    await db.commit()
-    await db.refresh(transaction)
-    
-    # 8. Link transactions
-    transaction.payment_transaction_id = revenue_tx.id
-    await db.commit()
+    # Wrap everything in an ATOMIC TRANSACTION
+    try:
+        async with db.begin():
+            # 1. Validate gift still available
+            # Use with_for_update() on gift to prevent over-selling limited items
+            result = await db.execute(select(VirtualGift).where(VirtualGift.id == request.gift_id).with_for_update())
+            gift = result.scalar_one_or_none()
+            if not gift:
+                raise HTTPException(status_code=404, detail="Gift not found")
+            if not gift.is_active:
+                raise HTTPException(status_code=400, detail="This gift is no longer available")
+            if gift.max_quantity and gift.times_sent >= gift.max_quantity:
+                raise HTTPException(status_code=400, detail="This gift has reached its maximum quantity")
+
+            # 2. Lock Sender and Receiver to prevent race conditions (Lost Update)
+            # Crucial: Always lock user rows in the same order (e.g. by ID) to prevent deadlocks
+            user_ids = sorted([sender_id, request.receiver_id])
+            result = await db.execute(
+                select(User).where(User.id.in_(user_ids)).with_for_update()
+            )
+            users_map = {str(u.id): u for u in result.scalars().all()}
+            
+            sender = users_map.get(str(sender_id))
+            receiver = users_map.get(str(request.receiver_id))
+            
+            if not sender: raise HTTPException(status_code=404, detail="Sender not found")
+            if not receiver: raise HTTPException(status_code=404, detail="Receiver not found")
+            if sender_id == request.receiver_id:
+                raise HTTPException(status_code=400, detail="Cannot send gift to yourself")
+
+            # 3. Budget Check and Deduct
+            if sender.stars_balance < gift.price:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Insufficient balance. Required: {gift.price} XTR, Available: {sender.stars_balance} XTR"
+                )
+            
+            # ATOMIC UPDATES via locked records
+            sender.stars_balance = sender.stars_balance - gift.price
+            
+            receiver_bonus = int(gift.price * 0.1)
+            if receiver_bonus > 0:
+                receiver.stars_balance = (receiver.stars_balance or 0) + receiver_bonus
+            
+            # 5. Create transactions
+            transaction = GiftTransaction(
+                sender_id=sender_id,
+                receiver_id=request.receiver_id,
+                gift_id=gift.id,
+                price_paid=gift.price,
+                currency=gift.currency,
+                message=request.message,
+                status="completed",
+                is_anonymous=request.is_anonymous
+            )
+            db.add(transaction)
+            
+            gift.times_sent += 1
+            
+            revenue_tx = RevenueTransaction(
+                user_id=sender_id,
+                transaction_type="gift",
+                amount=gift.price,
+                currency=gift.currency,
+                status="completed",
+                payment_gateway="telegram_stars",
+                custom_metadata={
+                    "gift_id": str(gift.id),
+                    "gift_name": gift.name,
+                    "receiver_id": str(request.receiver_id)
+                }
+            )
+            db.add(revenue_tx)
+            await db.flush()
+            transaction.payment_transaction_id = revenue_tx.id
+            
+            # Success! Transaction is committed automatically at end of block
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Atomic gift delivery failed: {e}")
+        raise HTTPException(status_code=500, detail="Transaction failed")
+
     
     # 9. Send WebSocket notification to receiver
     notification = {
@@ -917,6 +1173,10 @@ async def send_gift(
         "bonus_received": receiver_bonus,  # 10% bonus for receiver
         "timestamp": transaction.created_at.isoformat()
     }
+    
+    # Trigger Admin update via Pub/Sub
+    await redis_manager.publish("admin_updates", {"type": "gift_sent", "amount": gift.price})
+
     
     # Check if receiver is online and send via WebSocket
     is_receiver_online = manager.is_user_online(str(request.receiver_id))
@@ -1001,7 +1261,7 @@ async def send_gift(
         is_read=transaction.is_read,
         read_at=transaction.read_at,
         created_at=transaction.created_at,
-        gift=VirtualGiftResponse.model_validate(gift)
+        gift=VirtualGiftResponse.model_validate(gift) # Pydantic v2 recommendation
     )
     
     return response
@@ -1286,24 +1546,9 @@ async def upload_gift_image(
     if file.content_type not in allowed_types:
         raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {allowed_types}")
     
-    # Create upload directory
-    upload_dir = Path("static/gifts")
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Generate unique filename
-    ext = file.filename.split(".")[-1] if "." in file.filename else "png"
-    filename = f"{uuid.uuid4()}.{ext}"
-    file_path = upload_dir / filename
-    
-    # Save file
-    try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        url = f"/static/gifts/{filename}"
-        return {"url": url, "filename": filename}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    from backend.services.storage import storage_service
+    url = await storage_service.save_gift_image(file)
+    return {"url": url, "filename": url.split("/")[-1]}
 
 @router.get("/gifts/analytics")
 async def get_gift_analytics(
@@ -1401,48 +1646,53 @@ async def create_top_up_invoice(
             detail=f"Invalid amount. Choose from: {valid_amounts}"
         )
     
-    # Create pending transaction
-    transaction = RevenueTransaction(
-        user_id=user_id,
-        transaction_type="top_up",
-        amount=request.amount,
-        currency="XTR",
-        status="pending",
-        payment_gateway="telegram_stars",
-        custom_metadata={"purchase_type": "stars_top_up"}
-    )
-    db.add(transaction)
-    await db.commit()
-    await db.refresh(transaction)
-    
-    # Generate real invoice link via Telegram Bot API
+    # 1. Create pending transaction and COMMIT immediately to release the DB connection
+    transaction_id = None
+    async with db.begin():
+        transaction = RevenueTransaction(
+            user_id=user_id,
+            transaction_type="top_up",
+            amount=request.amount,
+            currency="XTR",
+            status="pending",
+            payment_gateway="telegram_stars",
+            custom_metadata={"purchase_type": "stars_top_up"}
+        )
+        db.add(transaction)
+        await db.flush()
+        transaction_id = transaction.id
+
+    # 2. Network call (outside DB transaction block)
     from backend.services.telegram_payments import create_stars_invoice
     
     invoice_link = await create_stars_invoice(
         title=f"{request.amount} Telegram Stars",
-        description=f"Top up your balance with {request.amount} Stars for sending gifts and unlocking features",
-        payload=str(transaction.id),  # Transaction ID as payload for webhook
+        description=f"Top up your balance with {request.amount} Stars",
+        payload=str(transaction_id),
         amount=request.amount
     )
     
+    # 3. Handle failure (New transaction block if we need to update status)
     if not invoice_link:
-        # Fallback to mock for development without bot token
-        import os
-        if os.getenv("ENVIRONMENT", "development") == "development":
-            invoice_link = f"https://t.me/$stars_topup_{transaction.id}"
+        if settings.ENVIRONMENT == "development":
+            invoice_link = f"https://t.me/$stars_topup_{transaction_id}"
         else:
-            # In production, fail if we can't create invoice
-            transaction.status = "failed"
-            await db.commit()
+            async with db.begin():
+                tx = await db.get(RevenueTransaction, transaction_id)
+                if tx: tx.status = "failed"
             raise HTTPException(
                 status_code=500,
                 detail="Failed to create payment invoice. Please try again."
             )
     
+    # Trigger Admin update
+    await redis_manager.publish("admin_updates", {"type": "invoice_created", "amount": request.amount})
+    
     return TopUpResponse(
+
         invoice_url=invoice_link,
         amount=request.amount,
-        transaction_id=transaction.id
+        transaction_id=transaction_id
     )
 
 
@@ -1521,26 +1771,26 @@ class BoostResponse(PydanticBaseModel):
 @payments_router.post("/buy-swipes", response_model=BuySwipesResponse)
 async def buy_swipes(
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_user_from_token)
 ):
     """
     Купить пакет из 10 свайпов за 10 Telegram Stars.
     
     Используется когда дневной лимит исчерпан.
     """
-    result = await buy_swipes_with_stars(db, current_user)
+    result = await buy_swipes_with_stars(db, str(current_user.id))
     return BuySwipesResponse(**result)
 
 
 @payments_router.post("/buy-superlike", response_model=BuySwipesResponse)
 async def buy_superlike(
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_user_from_token)
 ):
     """
     Купить 1 супер-лайк за 5 Telegram Stars.
     """
-    result = await buy_superlike_with_stars(db, current_user)
+    result = await buy_superlike_with_stars(db, str(current_user.id))
     return BuySwipesResponse(**result)
 
 
@@ -1548,7 +1798,7 @@ async def buy_superlike(
 async def activate_boost(
     request: BoostRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_user_from_token)
 ):
     """
     Активировать буст профиля за Telegram Stars.
@@ -1556,14 +1806,14 @@ async def activate_boost(
     Стоимость: 25 Stars за 1 час буста.
     Буст увеличивает видимость профиля в ленте.
     """
-    result = await activate_boost_with_stars(db, current_user, request.duration_hours)
+    result = await activate_boost_with_stars(db, str(current_user.id), request.duration_hours)
     return BoostResponse(**result)
 
 
 @payments_router.get("/swipe-status")
 async def get_swipe_status_endpoint(
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_user_from_token)
 ):
     """
     Получить текущий статус свайпов пользователя.
@@ -1575,7 +1825,8 @@ async def get_swipe_status_endpoint(
     - Возможность купить свайпы/супер-лайки
     - Цены
     """
-    return await get_swipe_status(db, current_user)
+    return await get_swipe_status(db, str(current_user.id))
+
 
 
 @payments_router.get("/pricing")

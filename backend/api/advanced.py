@@ -25,7 +25,7 @@ from backend.auth import get_current_user
 from backend.models import User
 from backend.models.advanced import AlgorithmSettings, Icebreaker, DatingEvent, Partner, CustomReport, AIUsageLog
 from backend import crud
-from backend.crud_pkg import advanced as advanced_crud
+from backend.crud import advanced as advanced_crud
 from backend.services.ai import ai_service
 from backend.services.analytics import analytics_service
 from backend.services.reporting import generate_report_task
