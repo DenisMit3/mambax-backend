@@ -7,7 +7,9 @@ export interface Profile {
     age: number;
     bio?: string;
     photos: string[];
-    // Add other fields as they appear in the API
+    common_interests?: string[];
+    compatibility_score?: number;
+    ai_reasoning?: string;
 }
 
 export interface SwipeStatus {
@@ -108,5 +110,36 @@ export function useUndoSwipe() {
             queryClient.invalidateQueries({ queryKey: ['profiles'] });
             queryClient.invalidateQueries({ queryKey: ['swipe-status'] });
         }
+    });
+}
+
+export function useDailyPicks() {
+    return useQuery({
+        queryKey: ['daily-picks'],
+        queryFn: async () => {
+            const token = localStorage.getItem("token");
+            const res = await fetch("/api_proxy/discover/daily-picks", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error("Failed to fetch daily picks");
+            const data = await res.json();
+            return data.picks as Profile[];
+        },
+        staleTime: 1000 * 60 * 60 * 24, // 24 часа
+    });
+}
+
+export function useSmartFilters() {
+    return useQuery({
+        queryKey: ['smart-filters'],
+        queryFn: async () => {
+            const token = localStorage.getItem("token");
+            const res = await fetch("/api_proxy/discover/smart-filters", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error("Failed to fetch smart filters");
+            return res.json();
+        },
+        staleTime: 1000 * 60 * 30, // 30 минут
     });
 }

@@ -10,7 +10,7 @@ Comprehensive API for revenue management including:
 from fastapi import APIRouter, Depends, HTTPException, Query, Body, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, and_, or_, extract, select, update, delete
+from sqlalchemy import func, desc, and_, or_, extract, select, update, delete, cast, Date
 from typing import List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -26,7 +26,7 @@ from backend.models.user import User
 from backend.models.monetization import (
     SubscriptionPlan, UserSubscription, RevenueTransaction, 
     PromoCode, PromoRedemption, Refund, PricingTest, PaymentGatewayLog,
-    VirtualGift
+    VirtualGift, GiftCategory
 )
 from backend.schemas.monetization import (
     SubscriptionPlanCreate, SubscriptionPlanResponse, 
@@ -597,7 +597,7 @@ async def get_revenue_trend(
     
     stmt = (
         select(
-            func.date(RevenueTransaction.created_at).label('date'),
+            cast(RevenueTransaction.created_at, Date).label('date'),
             func.sum(RevenueTransaction.amount).label('revenue'),
             func.count(RevenueTransaction.id).label('transactions')
         )
@@ -607,8 +607,8 @@ async def get_revenue_trend(
                 RevenueTransaction.status == 'completed'
             )
         )
-        .group_by(func.date(RevenueTransaction.created_at))
-        .order_by(func.date(RevenueTransaction.created_at))
+        .group_by(cast(RevenueTransaction.created_at, Date))
+        .order_by(cast(RevenueTransaction.created_at, Date))
     )
     
     result = await db.execute(stmt)

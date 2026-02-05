@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from enum import Enum
 
 from backend.database import get_db, async_session_maker
-from backend.auth import get_current_user_from_token
+from backend.auth import get_current_user_from_token, get_current_admin
 from backend.models.user import User
 from backend.models.interaction import Match, Swipe
 from backend.models.system import AuditLog, FeatureFlag, SecurityAlert, BackupStatus
@@ -61,7 +61,7 @@ async def get_metrics():
 @router.get("/health")
 async def get_system_health(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Get comprehensive system health metrics (REAL)"""
     
@@ -125,25 +125,25 @@ async def get_system_health(
 @router.get("/health/database")
 async def get_database_performance(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
-    """Get database performance metrics (REAL)"""
-    # Try to get PG stats if available
-    
+    """Get database performance metrics (Dialect Agnostic)"""
     try:
-        # DB Size (Postgres specific)
-        db_size = "Unknown"
-        # version
-        version_res = await db.execute(text("SHOW server_version"))
-        version = version_res.scalar()
+        # Detect database type
+        db_type = db.bind.dialect.name if db.bind else "unknown"
         
-        # connection count approximation (requires pg_stat_activity permission usually)
-        # fallback to simple "healthy"
+        version = "Unknown"
+        if db_type == 'postgresql':
+            version_res = await db.execute(text("SHOW server_version"))
+            version = version_res.scalar()
+        elif db_type == 'sqlite':
+            version_res = await db.execute(text("SELECT sqlite_version()"))
+            version = version_res.scalar()
         
         return {
             "status": "healthy",
             "version": version,
-            "type": "PostgreSQL",
+            "type": db_type.title(),
             "connection_pool": "Managed by SQLAlchemy (AsyncEngine)"
         }
     except Exception as e:
@@ -152,10 +152,40 @@ async def get_database_performance(
             "error": str(e)
         }
 
+
+@router.get("/logs")
+async def get_system_logs(
+    limit: int = 100,
+    current_user: User = Depends(get_current_admin)
+):
+    """
+    Get recent system logs.
+    In a real system, this would read from a log file or a logging service (ELK/Sentry).
+    """
+    log_file = "app.log"
+    logs = []
+    
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, "r", encoding="utf-8") as f:
+                # Read last N lines
+                lines = f.readlines()
+                logs = lines[-limit:]
+        except Exception as e:
+            logs = [f"Error reading log file: {e}"]
+    else:
+        logs = ["Log file not found. Ensure logging is configured to write to app.log"]
+        
+    return {
+        "logs": logs,
+        "count": len(logs),
+        "file": log_file
+    }
+
 @router.get("/health/api-stats")
 async def get_api_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """
     API Usage Stats.
@@ -198,7 +228,7 @@ async def get_audit_logs(
     admin_id: Optional[str] = None,
     action: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Get audit logs with filtering (REAL)"""
     stmt = select(AuditLog).order_by(AuditLog.created_at.desc())
@@ -228,7 +258,7 @@ async def get_audit_logs(
 @router.get("/audit-logs/summary")
 async def get_audit_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Get audit log summary (REAL)"""
     # Group by action
@@ -249,7 +279,7 @@ async def get_security_alerts(
     severity: Optional[str] = None,
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Get security alerts (REAL)"""
     stmt = select(SecurityAlert).order_by(SecurityAlert.created_at.desc())
@@ -275,7 +305,7 @@ async def resolve_alert(
     alert_id: str,
     resolution: str = Query(..., description="Resolution notes"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Resolve a security alert (REAL)"""
     alert = await db.get(SecurityAlert, alert_id)
@@ -297,7 +327,7 @@ async def resolve_alert(
 @router.get("/team/members")
 async def get_team_members(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Get admin team members (REAL)"""
     # Assuming roles are stored in user table or metadata
@@ -319,7 +349,7 @@ async def get_team_members(
 @router.get("/team/activity")
 async def get_team_activity(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Get team member activity (REAL)"""
     # Count audit logs by admin
@@ -340,7 +370,7 @@ async def get_team_activity(
 @router.get("/backups")
 async def get_backup_status(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Get backup status (REAL)"""
     stmt = select(BackupStatus).order_by(BackupStatus.started_at.desc()).limit(10)
@@ -353,7 +383,7 @@ async def get_backup_status(
 async def trigger_backup(
     backup_type: str = Query("full"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Trigger a real database backup (pg_dump → S3)"""
     from backend.services.backup import trigger_backup as run_backup
@@ -396,7 +426,7 @@ async def trigger_backup(
 @router.get("/feature-flags")
 async def get_feature_flags(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Get feature flags (REAL)"""
     stmt = select(FeatureFlag)
@@ -423,7 +453,7 @@ async def update_feature_flag(
     flag_key: str,
     update: FeatureFlagUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Update a feature flag (REAL)"""
     stmt = select(FeatureFlag).where(FeatureFlag.key == flag_key)
@@ -453,7 +483,7 @@ async def update_flag_rollout(
     flag_key: str,
     percentage: int = Query(..., ge=0, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Update feature flag rollout percentage (REAL)"""
     stmt = select(FeatureFlag).where(FeatureFlag.key == flag_key)
@@ -481,7 +511,7 @@ async def update_flag_rollout(
 
 @router.get("/config")
 async def get_system_config(
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(get_current_admin)
 ):
     """Get system configuration (REAL from settings)"""
     from backend.config.settings import settings

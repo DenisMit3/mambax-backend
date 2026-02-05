@@ -17,6 +17,12 @@ class Location(BaseModel):
     lon: float
 
 
+class UXPreferences(BaseModel):
+    sounds_enabled: bool = True
+    haptic_enabled: bool = True
+    reduced_motion: bool = False
+
+
 class UserBase(BaseModel):
     """Базовые поля пользователя"""
     email: Optional[EmailStr] = None
@@ -47,6 +53,7 @@ class UserUpdate(BaseModel):
     interests: Optional[list[str]] = None
     location: Optional[Location] = None
     is_vip: Optional[bool] = None
+    ux_preferences: Optional[UXPreferences] = None
 
 
 class UserInDB(UserBase):
@@ -69,6 +76,8 @@ class UserResponse(UserBase):
     gifts_received: Optional[int] = None
     is_complete: bool = False
     verification_selfie: Optional[str] = None
+    ux_preferences: Optional[UXPreferences] = None
+    onboarding_completed_steps: Optional[dict] = None
     
     class Config:
         from_attributes = True

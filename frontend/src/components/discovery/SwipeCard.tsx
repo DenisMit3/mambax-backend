@@ -1,10 +1,11 @@
 'use client';
 
 import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Heart, X, Star, MapPin, Verified } from 'lucide-react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
-import { useTelegram } from '@/lib/telegram';
+import { useHaptic } from '@/hooks/useHaptic';
 import { GlassCard } from '@/components/ui/GlassCard';
 
 interface Profile {
@@ -24,10 +25,19 @@ interface SwipeCardProps {
     profile: Profile;
     onSwipe: (direction: 'left' | 'right' | 'up', profileId: string) => void;
     isTop?: boolean;
+    compatibilityScore?: number;
+    commonInterests?: string[];
 }
 
-export const SwipeCard = ({ profile, onSwipe, isTop = false }: SwipeCardProps) => {
-    const { hapticFeedback } = useTelegram();
+export const SwipeCard = ({
+    profile,
+    onSwipe,
+    isTop = false,
+    compatibilityScore,
+    commonInterests
+}: SwipeCardProps) => {
+    const haptic = useHaptic();
+    const prefersReducedMotion = useReducedMotion();
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const cardRef = useRef<HTMLDivElement>(null);
@@ -44,7 +54,7 @@ export const SwipeCard = ({ profile, onSwipe, isTop = false }: SwipeCardProps) =
 
     const handleDragStart = () => {
         setIsDragging(true);
-        hapticFeedback.selection();
+        haptic.selection();
     };
 
     const handleDragEnd = (event: any, info: PanInfo) => {
@@ -53,10 +63,10 @@ export const SwipeCard = ({ profile, onSwipe, isTop = false }: SwipeCardProps) =
 
         if (Math.abs(info.offset.x) > threshold) {
             const direction = info.offset.x > 0 ? 'right' : 'left';
-            hapticFeedback.medium();
+            haptic.medium();
             onSwipe(direction, profile.id);
         } else if (info.offset.y < -threshold) {
-            hapticFeedback.heavy();
+            haptic.heavy();
             onSwipe('up', profile.id);
         } else {
             // Snap back
@@ -69,14 +79,14 @@ export const SwipeCard = ({ profile, onSwipe, isTop = false }: SwipeCardProps) =
         setCurrentPhotoIndex((prev) =>
             prev < profile.photos.length - 1 ? prev + 1 : 0
         );
-        hapticFeedback.light();
+        haptic.light();
     };
 
     const prevPhoto = () => {
         setCurrentPhotoIndex((prev) =>
             prev > 0 ? prev - 1 : profile.photos.length - 1
         );
-        hapticFeedback.light();
+        haptic.light();
     };
 
     return (
@@ -89,8 +99,8 @@ export const SwipeCard = ({ profile, onSwipe, isTop = false }: SwipeCardProps) =
             dragElastic={0.2}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
-            whileHover={!isDragging ? { scale: 1.02 } : {}}
-            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+            whileHover={(!isDragging && !prefersReducedMotion) ? { scale: 1.02 } : {}}
+            transition={{ type: 'spring', stiffness: prefersReducedMotion ? 0 : 300, damping: 20 }}
         >
             <GlassCard className="h-full w-full overflow-hidden">
                 {/* Photo Container */}
@@ -219,6 +229,29 @@ export const SwipeCard = ({ profile, onSwipe, isTop = false }: SwipeCardProps) =
                             </span>
                         )}
                     </div>
+
+                    {(compatibilityScore || profile.aiCompatibility) && (
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="bg-green-500/20 px-3 py-1 rounded-full">
+                                <span className="text-green-400 text-xs font-black">
+                                    {Math.round(compatibilityScore || profile.aiCompatibility || 0)}% совместимость
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {commonInterests && commonInterests.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            {commonInterests.map((interest) => (
+                                <span
+                                    key={interest}
+                                    className="bg-pink-500/20 text-pink-300 px-3 py-1 rounded-full text-[10px] font-bold"
+                                >
+                                    ✨ {interest}
+                                </span>
+                            ))}
+                        </div>
+                    )}
 
                     <p className="text-gray-300 text-sm leading-relaxed line-clamp-3">
                         {profile.bio}

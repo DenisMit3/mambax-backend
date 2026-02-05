@@ -415,16 +415,17 @@ async def handle_read(user_id: str, data: dict):
     sender_id = data.get("sender_id") # Legacy
     
     if match_id:
-        await mark_as_read(match_id, user_id, message_ids)
+        res = await mark_as_read(match_id, user_id, message_ids)
+        broadcast_ids = res.get("updated_ids") or message_ids
         
         # Notify sender
         recipient_id = data.get("recipient_id") or sender_id
-        if recipient_id:
+        if recipient_id and broadcast_ids:
             await manager.send_personal(recipient_id, {
                 "type": "read",
                 "match_id": match_id,
                 "reader_id": user_id,
-                "message_ids": message_ids
+                "message_ids": broadcast_ids
             })
 
 async def handle_reaction(user_id: str, data: dict):
@@ -646,6 +647,43 @@ async def upload_chat_media(file: UploadFile = File(...), current_user: str = De
     # Ideally storage_service.save_file(file, folder="chat")
     url = await storage_service.save_gift_image(file)
     return {"url": url, "type": file.content_type}
+
+@router.post("/chat/voice")
+async def upload_voice_message(
+    file: UploadFile = File(...),
+    current_user: str = Depends(auth.get_current_user)
+):
+    from backend.services.storage import storage_service
+    url, duration = await storage_service.save_voice_message(file)
+    return {"url": url, "duration": duration}
+
+@router.post("/messages/{message_id}/read")
+async def mark_message_read(
+    message_id: UUID,
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db)
+):
+    from backend.crud import chat as crud_chat
+    from backend.models.chat import Message
+    
+    # Verify/Get sender to notify
+    msg = await db.get(Message, message_id)
+    if not msg:
+        raise HTTPException(404, "Message not found")
+        
+    await crud_chat.mark_messages_as_read(db, [message_id], UUID(current_user))
+    
+    # Broadcast
+    sender_id = str(msg.sender_id)
+    if sender_id != current_user:
+         await manager.send_personal(sender_id, {
+            "type": "read",
+            "message_ids": [str(message_id)],
+            "reader_id": current_user,
+            "match_id": str(msg.match_id)
+         })
+         
+    return {"status": "ok", "message_id": str(message_id)}
 
 @router.post("/chat/send", response_model=MessageResponse)
 @router.post("/chat/send_message") # Alias for compatibility

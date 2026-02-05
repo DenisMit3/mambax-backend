@@ -43,6 +43,9 @@ class ChatEvent(str, Enum):
 # ============================================================================
 # REDIS STATE MANAGEMENT
 # ============================================================================
+from backend.db.session import async_session_maker
+from backend.crud import chat as crud_chat
+
 
 class ChatStateManager:
     """Manages chat state in Redis (online, typing, unread)"""
@@ -192,7 +195,36 @@ async def get_typing_users(match_id: str, exclude_user_id: str = None) -> List[s
 
 async def mark_as_read(match_id: str, user_id: str, message_ids: List[str] = None):
     await state_manager.clear_unread(user_id, match_id)
-    return {"status": "ok"}
+    
+    updated_ids = []
+    async with async_session_maker() as db:
+        reader_uuid = uuid.UUID(user_id)
+        
+        if message_ids:
+            msg_uuids = [uuid.UUID(mid) for mid in message_ids]
+            count = await crud_chat.mark_messages_as_read(db, msg_uuids, reader_uuid)
+            if count > 0:
+                updated_ids = message_ids
+        else:
+            # Mark all unread in match as read
+            from sqlalchemy import select
+            from backend.models.chat import Message
+            
+            stmt = select(Message.id).where(
+                Message.match_id == uuid.UUID(match_id),
+                Message.receiver_id == reader_uuid,
+                Message.is_read == False
+            )
+            result = await db.execute(stmt)
+            unread_ids = [str(row) for row in result.scalars().all()]
+            
+            if unread_ids:
+                msg_uuids = [uuid.UUID(mid) for mid in unread_ids]
+                count = await crud_chat.mark_messages_as_read(db, msg_uuids, reader_uuid)
+                if count > 0:
+                    updated_ids = unread_ids
+
+    return {"status": "ok", "updated_ids": updated_ids}
 
 async def add_reaction(message_id: str, user_id: str, emoji: str) -> dict:
     """Add reaction to a message"""

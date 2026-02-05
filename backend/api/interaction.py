@@ -154,7 +154,13 @@ async def swipe(
         }
     )
 
-    
+    # Redis Persistence for AI (Comment 2)
+    if swipe_data.action.value in ["like", "superlike"]:
+        from backend.core.redis import redis_manager
+        history_key = f"interactions:{current_user_id}:liked"
+        await redis_manager.client.lpush(history_key, str(swipe_data.to_user_id))
+        await redis_manager.client.ltrim(history_key, 0, 99)  # Keep last 100
+
     return SwipeResponse(success=True, is_match=is_match)
 
 

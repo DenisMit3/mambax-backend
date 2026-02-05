@@ -115,6 +115,35 @@ class SafeRedisClient:
             logger.warning(f"Redis smembers error: {e}")
             return set()
 
+    async def lpush(self, key: str, *values):
+        r = await self._get()
+        if not r:
+            return 0
+        try:
+            return await r.lpush(key, *values)
+        except Exception as e:
+            logger.warning(f"Redis lpush error: {e}")
+            return 0
+
+    async def ltrim(self, key: str, start: int, stop: int):
+        r = await self._get()
+        if not r:
+            return
+        try:
+            await r.ltrim(key, start, stop)
+        except Exception as e:
+            logger.warning(f"Redis ltrim error: {e}")
+
+    async def lrange(self, key: str, start: int, stop: int) -> list:
+        r = await self._get()
+        if not r:
+            return []
+        try:
+            return await r.lrange(key, start, stop)
+        except Exception as e:
+            logger.warning(f"Redis lrange error: {e}")
+            return []
+
     async def scan(self, cursor: int = 0, match: str = None):
         r = await self._get()
         if not r:

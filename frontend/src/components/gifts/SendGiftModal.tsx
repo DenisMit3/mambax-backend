@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import { authService } from "@/services/api";
 import { wsService } from "@/services/websocket";
 import { Gift, Star, X, Send, MessageSquare, EyeOff, Loader2, Check, Sparkles } from "lucide-react";
+import { useHaptic } from "@/hooks/useHaptic";
+import { ToggleSwitch } from "../ui/ToggleSwitch";
 import dynamic from 'next/dynamic';
 
 const GiftCatalog = dynamic(() => import("./GiftCatalog").then(mod => mod.GiftCatalog), {
@@ -41,6 +43,7 @@ export function SendGiftModal({
     receiverPhoto,
     onGiftSent
 }: SendGiftModalProps) {
+    const haptic = useHaptic();
     const [step, setStep] = useState<ModalStep>("catalog");
     const [selectedGift, setSelectedGift] = useState<VirtualGift | null>(null);
     const [message, setMessage] = useState("");
@@ -62,6 +65,7 @@ export function SendGiftModal({
             if (data.type === "gift_sent_success") {
                 // Heuristic match
                 if (selectedGift && data.gift_id === selectedGift.id) {
+                    haptic.success();
                     setStep("success");
                     if (onGiftSent) onGiftSent(data);
                 }
@@ -89,6 +93,7 @@ export function SendGiftModal({
                     isAnonymous
                 );
 
+                haptic.success();
                 setStep("success");
 
                 if (onGiftSent) {
@@ -108,6 +113,7 @@ export function SendGiftModal({
                 }
             }
         } catch (err) {
+            haptic.error();
             setError((err as Error).message || "Failed to send gift");
         } finally {
             setSending(false);
@@ -138,8 +144,8 @@ export function SendGiftModal({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-5 z-[1000] animate-in fade-in duration-200" onClick={handleClose}>
-            <div className="w-full max-w-[480px] max-h-[90vh] bg-background rounded-[24px] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-5 duration-300" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-5 z-[1000]" onClick={handleClose}>
+            <div className="w-full max-w-[480px] max-h-[90vh] bg-background rounded-[24px] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-gradient-to-br from-primary/10 to-accent/5">
                     <div className="flex items-center gap-2.5">
@@ -251,19 +257,14 @@ export function SendGiftModal({
                             </div>
 
                             {/* Anonymous Toggle */}
-                            <label className="flex items-center gap-3 p-3 px-4 rounded-xl bg-surface cursor-pointer transition-all hover:bg-border">
-                                <input
-                                    type="checkbox"
+                            <div className="bg-surface rounded-xl px-2">
+                                <ToggleSwitch
+                                    label="Send anonymously"
                                     checked={isAnonymous}
-                                    onChange={(e) => setIsAnonymous(e.target.checked)}
-                                    className="hidden"
+                                    onChange={setIsAnonymous}
+                                    description="Receiver won't see who sent the gift"
                                 />
-                                <div className={`w-11 h-6 rounded-full relative transition-all ${isAnonymous ? "bg-primary" : "bg-border"}`}>
-                                    <div className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all shadow-md ${isAnonymous ? "left-[22px]" : "left-0.5"}`}></div>
-                                </div>
-                                <EyeOff size={16} className="text-muted-foreground" />
-                                <span className="text-sm text-foreground">Send anonymously</span>
-                            </label>
+                            </div>
 
                             {error && (
                                 <div className="p-3 px-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-[13px]">

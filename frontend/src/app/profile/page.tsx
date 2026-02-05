@@ -170,6 +170,19 @@ export default function ProfilePage() {
                         <ChevronRight size={18} className="text-slate-600" />
                     </button>
                     <button
+                        onClick={async () => {
+                            await authService.resetOnboarding();
+                            window.location.href = '/discover';
+                        }}
+                        className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition"
+                    >
+                        <div>
+                            <p className="text-white font-medium">Повторить обучение</p>
+                            <p className="text-gray-400 text-sm">Пройти интерактивный гайд заново</p>
+                        </div>
+                        <ChevronRight size={18} className="text-slate-600" />
+                    </button>
+                    <button
                         onClick={() => {
                             httpClient.logout();
                             window.location.reload(); // Force reload to clear state/redirect

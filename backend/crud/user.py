@@ -298,6 +298,20 @@ async def update_profile(db: AsyncSession, user_id: str, update_data: UserCreate
     if not user.is_complete and user.name and user.age and user.gender:
         user.is_complete = True
 
+    # Update UX Preferences
+    if hasattr(update_data, 'ux_preferences') and update_data.ux_preferences is not None:
+        # Convert Pydantic model to dict
+        new_prefs = update_data.ux_preferences.model_dump()
+        # Merge with existing
+        current_prefs = user.ux_preferences or {}
+        # Ensure we don't overwrite with None, though model_dump handles this usually. 
+        # But we want partial updates if the input schema supports it, 
+        # however UXPreferences in schema has default values so it might be full replace.
+        # UserUpdate schema has ux_preferences: Optional[UXPreferences], and UXPreferences has defaults.
+        # If the user sends a partial object, Pydantic fills defaults. 
+        # So we probably just replace the dict. 
+        user.ux_preferences = new_prefs
+
     await db.commit()
     await db.refresh(user)
     return user

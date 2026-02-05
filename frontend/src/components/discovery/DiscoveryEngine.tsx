@@ -9,9 +9,13 @@ import { SwipeCard } from './SwipeCard';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { usePrefetchProfiles, useUndoSwipe, useSwipeStatus } from '@/hooks/useDiscovery';
+import { useHaptic } from '@/hooks/useHaptic';
+import { useSoundService } from '@/hooks/useSoundService';
 import { SwipeLimitModal } from './SwipeLimitModal';
 import { ProfileSkeleton } from './ProfileSkeleton';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TooltipGuide } from '@/components/onboarding/TooltipGuide';
+import { ContextualTooltip } from '@/components/onboarding/ContextualTooltip';
 
 interface Profile {
     id: string;
@@ -53,7 +57,10 @@ export const DiscoveryEngine = ({
     userLocation,
     isPremium
 }: DiscoveryEngineProps) => {
-    const { hapticFeedback } = useTelegram();
+    // const { hapticFeedback } = useTelegram(); // Replaced by useHaptic
+    const haptic = useHaptic();
+    const soundService = useSoundService();
+
     const [currentIndex, setCurrentIndex] = useState(0);
     const [showFilters, setShowFilters] = useState(false);
     const [filters, setFilters] = useState<DiscoveryFilters>({
@@ -100,15 +107,7 @@ export const DiscoveryEngine = ({
         }
     }, [currentIndex, prefetchProfiles, profileQueue.length]);
 
-    const playMatchSound = () => {
-        if (typeof window !== 'undefined') {
-            const audio = new Audio('/sounds/match.mp3');
-            audio.volume = 0.5;
-            audio.play().catch(() => {
-                // Ignore autoplay errors
-            });
-        }
-    };
+
 
     const handleSwipe = useCallback(async (direction: 'left' | 'right' | 'up', profileId: string) => {
         // Проверить лимит перед свайпом
@@ -117,7 +116,7 @@ export const DiscoveryEngine = ({
             return;
         }
 
-        hapticFeedback.medium();
+        haptic.medium();
 
         // Сохранить в историю для Undo
         const swipedProfile = profileQueue[currentIndex];
@@ -131,23 +130,25 @@ export const DiscoveryEngine = ({
         setCurrentIndex(prev => prev + 1);
 
         if (direction === 'right' || direction === 'up') {
-            playMatchSound();
+            soundService.playMatch();
+        } else {
+            soundService.playWhoosh();
         }
 
         // Обновить статус свайпов
         await refetchStatus();
-    }, [onSwipe, hapticFeedback, superLikesLeft, swipeStatus, currentIndex, profileQueue, refetchStatus]);
+    }, [onSwipe, haptic, soundService, superLikesLeft, swipeStatus, currentIndex, profileQueue, refetchStatus]);
 
     const handleUndo = async () => {
         try {
-            hapticFeedback.heavy();
+            haptic.heavy();
             const result = await undoMutation.mutateAsync();
 
             // Вернуть карточку в стек
             setCurrentIndex(prev => Math.max(0, prev - 1));
             setUndoHistory(prev => prev.slice(1));
 
-            hapticFeedback.success();
+            haptic.success();
         } catch (error: any) {
             // Показать ошибку (нужен VIP или лимит исчерпан)
             alert(error.message);
@@ -161,19 +162,19 @@ export const DiscoveryEngine = ({
 
         switch (action) {
             case 'pass':
-                hapticFeedback.light();
+                haptic.light();
                 handleSwipe('left', currentProfile.id);
                 break;
             case 'like':
-                hapticFeedback.medium();
+                haptic.medium();
                 handleSwipe('right', currentProfile.id);
                 break;
             case 'superlike':
                 if (superLikesLeft > 0) {
-                    hapticFeedback.heavy();
+                    haptic.heavy();
                     handleSwipe('up', currentProfile.id);
                 } else {
-                    hapticFeedback.error();
+                    haptic.error();
                 }
                 break;
         }
@@ -183,7 +184,7 @@ export const DiscoveryEngine = ({
         if (!isPremium) return;
 
         setBoostActive(true);
-        hapticFeedback.success();
+        haptic.success();
 
         // Boost lasts 30 minutes
         setTimeout(() => {
@@ -247,6 +248,7 @@ export const DiscoveryEngine = ({
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowFilters(true)}
+                        data-onboarding="filters-button"
                     >
                         <Settings className="w-4 h-4" />
                     </AnimatedButton>
@@ -383,6 +385,7 @@ export const DiscoveryEngine = ({
 
                     {/* Super Like Button */}
                     <motion.button
+                        data-onboarding="superlike-button"
                         className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg ${superLikesLeft > 0
                             ? 'bg-gradient-to-r from-blue-500 to-purple-500'
                             : 'bg-gray-600 opacity-50'
@@ -397,6 +400,7 @@ export const DiscoveryEngine = ({
 
                     {/* Like Button */}
                     <motion.button
+                        data-onboarding="like-button"
                         className="w-14 h-14 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center shadow-lg"
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
@@ -449,6 +453,20 @@ export const DiscoveryEngine = ({
                 }}
                 resetTime={swipeStatus?.reset_at ? new Date(swipeStatus.reset_at).toLocaleTimeString() : '00:00'}
             />
+
+            {/* Onboarding Guides */}
+            <TooltipGuide currentPage="discover" />
+
+            {/* Contextual Tooltip при достижении лимита */}
+            {swipeStatus && !swipeStatus.is_vip && swipeStatus.remaining === 0 && (
+                <ContextualTooltip
+                    stepId="swipe_limit_reached"
+                    title="Хочешь больше?"
+                    message="Свайпы закончились на сегодня. Попробуй VIP для безлимитных свайпов!"
+                    trigger="auto"
+                    delay={1000}
+                />
+            )}
         </div>
     );
 };

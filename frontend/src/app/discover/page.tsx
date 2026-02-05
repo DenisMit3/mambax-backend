@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useProfiles, useSwipeStatus, useLikeMutation, Profile } from "@/hooks/useDiscovery";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
+import { DailyPicks } from "@/components/discovery/DailyPicks";
 
 export default function DiscoverPage() {
     const router = useRouter();
@@ -139,8 +140,12 @@ export default function DiscoverPage() {
                 )}
             </AnimatePresence>
 
+            <div className="mt-16">
+                <DailyPicks />
+            </div>
+
             {/* Main Swipe Area */}
-            <div className="flex-1 relative mt-16 mb-24 px-4 py-2">
+            <div className="flex-1 relative mb-24 px-4 py-2">
                 <div className="relative w-full h-full max-w-md mx-auto">
                     <SwipeCard
                         key={currentProfile.id}
@@ -154,6 +159,8 @@ export default function DiscoverPage() {
                             setShowGiftModal(true);
                         }}
                         onProfileClick={() => router.push(`/users/${currentProfile.id}`)}
+                        compatibilityScore={currentProfile.compatibility_score}
+                        commonInterests={currentProfile.common_interests}
                     />
                 </div>
             </div>

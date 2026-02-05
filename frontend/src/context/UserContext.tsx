@@ -7,6 +7,12 @@ import { wsService } from '@/services/websocket';
 
 // Define minimal user interface needed for context
 // Expand as needed based on UserResponse
+interface UXPreferences {
+    sounds_enabled: boolean;
+    haptic_enabled: boolean;
+    reduced_motion: boolean;
+}
+
 interface User {
     id: string;
     name: string;
@@ -16,13 +22,14 @@ interface User {
     photos?: string[];
     stars_balance: number;
     is_vip: boolean;
-    // Add other fields as necessary
+    ux_preferences?: UXPreferences;
 }
 
 interface UserContextType {
     user: User | null;
     refreshUser: () => Promise<void>;
     updateBalance: (newBalance: number) => void;
+    updateUXPreferences: (prefs: Partial<UXPreferences>) => Promise<void>;
     isLoading: boolean;
 }
 
@@ -30,6 +37,7 @@ const UserContext = createContext<UserContextType>({
     user: null,
     refreshUser: async () => { },
     updateBalance: () => { },
+    updateUXPreferences: async () => { },
     isLoading: true
 });
 
@@ -95,8 +103,35 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         await refetch();
     };
 
+    const updateUXPreferences = async (prefs: Partial<UXPreferences>) => {
+        if (!user) return;
+
+        const updatedPrefs = {
+            ...(user.ux_preferences || {
+                sounds_enabled: true,
+                haptic_enabled: true,
+                reduced_motion: false
+            }),
+            ...prefs
+        };
+
+        try {
+            // Optimistic update
+            queryClient.setQueryData(['user', 'me'], (old: User | null) => {
+                if (!old) return null;
+                return { ...old, ux_preferences: updatedPrefs };
+            });
+
+            await authService.updateProfile({ ux_preferences: updatedPrefs });
+        } catch (error) {
+            console.error("Failed to update UX preferences", error);
+            // Revert on error
+            await refetch();
+        }
+    };
+
     return (
-        <UserContext.Provider value={{ user, refreshUser, updateBalance, isLoading }}>
+        <UserContext.Provider value={{ user, refreshUser, updateBalance, updateUXPreferences, isLoading }}>
             {children}
         </UserContext.Provider>
     );

@@ -13,9 +13,21 @@ interface SwipeCardProps {
     onSwipe: (direction: "left" | "right") => void;
     onGiftClick?: () => void;
     onProfileClick?: () => void;
+    compatibilityScore?: number;
+    commonInterests?: string[];
 }
 
-export function SwipeCard({ name, age, bio, image, onSwipe, onGiftClick, onProfileClick }: SwipeCardProps) {
+export function SwipeCard({
+    name,
+    age,
+    bio,
+    image,
+    onSwipe,
+    onGiftClick,
+    onProfileClick,
+    compatibilityScore,
+    commonInterests
+}: SwipeCardProps) {
     const x = useMotionValue(0);
     const controls = useAnimation();
 
@@ -110,6 +122,29 @@ export function SwipeCard({ name, age, bio, image, onSwipe, onGiftClick, onProfi
                             <Check size={12} className="text-white font-bold" strokeWidth={4} />
                         </div>
                     </div>
+
+                    {compatibilityScore && (
+                        <div className="flex items-center gap-2 mt-2">
+                            <div className="bg-green-500/20 px-3 py-1 rounded-full">
+                                <span className="text-green-400 text-xs font-black">
+                                    {Math.round(compatibilityScore)}% совместимость
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {commonInterests && commonInterests.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-3">
+                            {commonInterests.map((interest) => (
+                                <span
+                                    key={interest}
+                                    className="bg-pink-500/20 text-pink-300 px-3 py-1 rounded-full text-[10px] font-bold"
+                                >
+                                    ✨ {interest}
+                                </span>
+                            ))}
+                        </div>
+                    )}
 
                     <p className="text-slate-300 text-sm line-clamp-2 drop-shadow-sm font-medium">
                         {bio}

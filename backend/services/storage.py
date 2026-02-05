@@ -118,4 +118,50 @@ class StorageService:
         # In prod this should be a private bucket
         return await self._save_file(file, "verifications")
 
+    async def save_voice_message(self, file: UploadFile) -> tuple[str, float]:
+        import subprocess
+        import json
+        
+        if file.content_type not in ["audio/ogg", "audio/webm", "audio/mpeg", "audio/wav"]:
+            raise HTTPException(400, "Invalid audio format")
+            
+        # Temp file
+        temp_filename = f"{uuid.uuid4()}.tmp"
+        temp_path = self.base_dir / "voice" / temp_filename
+        (self.base_dir / "voice").mkdir(exist_ok=True, parents=True)
+        
+        with open(temp_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+            
+        output_filename = f"{uuid.uuid4()}.ogg"
+        output_path = self.base_dir / "voice" / output_filename
+        
+        try:
+            # Convert
+            subprocess.run([
+                'ffmpeg', '-i', str(temp_path), 
+                '-c:a', 'libopus', '-b:a', '32k', '-vn', 
+                str(output_path)
+            ], check=True, capture_output=True)
+            
+            # Get duration
+            probe = subprocess.run([
+                'ffprobe', '-v', 'error', 
+                '-show_entries', 'format=duration', 
+                '-of', 'default=noprint_wrappers=1:nokey=1', 
+                str(output_path)
+            ], check=True, capture_output=True, text=True)
+            
+            duration = float(probe.stdout.strip())
+            
+            os.remove(temp_path)
+            return f"/static/voice/{output_filename}", duration
+            
+        except Exception as e:
+            if temp_path.exists(): os.remove(temp_path)
+            if output_path.exists(): os.remove(output_path)
+            print(f"FFmpeg error: {e}")
+            raise HTTPException(500, "Voice processing failed")
+
 storage_service = StorageService()

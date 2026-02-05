@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { X, Sparkles, Heart } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface GiftRevealAnimationProps {
     isOpen: boolean;
@@ -25,9 +26,11 @@ export function GiftRevealAnimation({
 }: GiftRevealAnimationProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const prefersReducedMotion = useReducedMotion();
 
     useEffect(() => {
         if (!isOpen) return;
+        if (prefersReducedMotion) return; // Disable confetti for reduced motion
 
         // Confetti animation
         const canvas = canvasRef.current;

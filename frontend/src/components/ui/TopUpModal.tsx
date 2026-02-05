@@ -3,9 +3,11 @@
 
 import { useState } from "react";
 import { X, Star, Loader2 } from "lucide-react";
-import { useTelegram } from "@/lib/telegram";
+import { useHaptic } from "@/hooks/useHaptic";
+import { useSoundService } from "@/hooks/useSoundService";
 import { authService } from "@/services/api";
 import { motion, AnimatePresence } from "framer-motion";
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 const PACKAGES = [
     { id: 'starter', stars: 100, price: 100, label: 'Starter', popular: false },
@@ -21,11 +23,13 @@ interface TopUpModalProps {
 }
 
 export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUpModalProps) {
-    const { webApp, hapticFeedback } = useTelegram();
+    const haptic = useHaptic();
+    const soundService = useSoundService();
     const [loadingPkg, setLoadingPkg] = useState<string | null>(null);
+    const prefersReducedMotion = useReducedMotion();
 
     const handlePurchase = async (pkg: typeof PACKAGES[0]) => {
-        hapticFeedback.impactOccurred('heavy');
+        haptic.heavy();
         setLoadingPkg(pkg.id);
 
         try {
@@ -40,13 +44,14 @@ export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUp
             if (supportsInvoice) {
                 webApp.openInvoice(invoice.invoice_link, (status: string) => {
                     if (status === 'paid') {
-                        hapticFeedback.notificationOccurred('success');
+                        haptic.success();
+                        soundService.playSuccess();
                         if (onSuccess) onSuccess();
                         onClose();
                         // Ideally we should listen to WS for balance update, but reload works for now
                         setTimeout(() => window.location.reload(), 1000);
                     } else if (status === 'cancelled' || status === 'failed') {
-                        hapticFeedback.notificationOccurred('error');
+                        haptic.error();
                     }
                 });
             } else {
@@ -71,19 +76,21 @@ export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUp
                 <>
                     {/* Backdrop */}
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
+                        initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                        animate={{ opacity: 1, backdropFilter: 'blur(12px)' }}
+                        exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                        transition={{ duration: 0.3 }}
                         onClick={onClose}
-                        className="absolute inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+                        className="absolute inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"
                     >
                         {/* Modal Container */}
                         <motion.div
-                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 25 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full max-w-md bg-[#0f1115] border border-white/10 p-6 rounded-3xl relative overflow-hidden shadow-2xl"
+                            className="w-full max-w-md bg-[#0f1115]/90 border border-white/10 p-6 rounded-3xl relative overflow-hidden shadow-2xl backdrop-blur-xl"
                         >
                             {/* Decor */}
                             <div className="absolute -top-20 -right-20 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />

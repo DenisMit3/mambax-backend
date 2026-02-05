@@ -2,20 +2,30 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
-import { Send, Heart, Gift, Image, Smile, MoreVertical, Phone, Video } from 'lucide-react';
+import { Send, Heart, Gift, Image, Smile, MoreVertical, Phone, Video, Play, Pause, Check, CheckCheck } from 'lucide-react';
 import { useTelegram } from '@/lib/telegram';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { VoiceRecorder } from './VoiceRecorder';
+import { useHaptic } from '@/hooks/useHaptic';
+import { useSoundService } from '@/hooks/useSoundService';
+import { wsService } from '@/services/websocket';
+import { ContextualTooltip } from '@/components/onboarding/ContextualTooltip';
+// import { getToken } from '@/services/auth'; // Assuming this exists, or use localStorage
+const getToken = () => localStorage.getItem('token');
 
 interface Message {
     id: string;
     text: string;
     senderId: string;
     timestamp: Date;
-    type: 'text' | 'image' | 'gift' | 'reaction';
+    type: 'text' | 'image' | 'gift' | 'reaction' | 'voice';
     isRead: boolean;
+    isPending?: boolean;
     replyTo?: string;
     reactions?: { emoji: string; userId: string }[];
+    audioUrl?: string;
+    duration?: number;
 }
 
 interface Chat {
@@ -52,14 +62,35 @@ export const ChatInterface = ({
     onCall,
     isPremium
 }: ChatInterfaceProps) => {
-    const { hapticFeedback } = useTelegram();
+    const haptic = useHaptic();
+    const soundService = useSoundService();
     const [message, setMessage] = useState('');
     const [showReactions, setShowReactions] = useState<string | null>(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+    // Voice & Audio
+    const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // Optimistic UI
+    const [localMessages, setLocalMessages] = useState<Message[]>(chat.messages);
+    const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
+
+    useEffect(() => {
+        setLocalMessages(chat.messages);
+    }, [chat.messages]);
+
+    const allMessages = [...localMessages, ...optimisticMessages];
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
+    const [typingDebounce, setTypingDebounce] = useState<NodeJS.Timeout | null>(null);
+
     const otherParticipant = chat.participants.find(p => p.id !== currentUserId);
+
+    // Removed manual whoosh sound initialization
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -67,28 +98,142 @@ export const ChatInterface = ({
 
     useEffect(() => {
         scrollToBottom();
-    }, [chat.messages]);
+    }, [allMessages]);
+
+    // WebSocket Handlers
+    useEffect(() => {
+        const handleReadReceipt = (data: any) => {
+            if (data.type === 'read' && data.message_ids) {
+                const updateRead = (msgs: Message[]) => msgs.map(m =>
+                    data.message_ids.includes(m.id) ? { ...m, isRead: true } : m
+                );
+                setLocalMessages(prev => updateRead(prev));
+                setOptimisticMessages(prev => updateRead(prev));
+                haptic.light();
+            }
+        };
+
+        const handleMessageConfirmed = (data: any) => {
+            // If we get an echo or confirmation of our message
+            if (data.sender_id === currentUserId) {
+                setOptimisticMessages(prev =>
+                    prev.filter(m => m.text !== data.content) // Simplified matching
+                );
+            }
+        };
+
+        const handleTyping = (data: any) => {
+            // Typing handled by parent 'chat' prop?
+            // "if (data.type === 'typing' ... setChatTyping(true)"
+            // Logic seems to be needed here if 'chat.isTyping' is not auto-updated
+        };
+
+        wsService.on('read', handleReadReceipt);
+        wsService.on('message', handleMessageConfirmed);
+
+        return () => {
+            wsService.off('read', handleReadReceipt);
+            wsService.off('message', handleMessageConfirmed);
+        };
+    }, []);
+
+    // Auto-read effect
+    useEffect(() => {
+        const unreadMessages = chat.messages.filter(
+            m => m.senderId !== currentUserId && !m.isRead
+        );
+
+        if (unreadMessages.length > 0) {
+            const messageIds = unreadMessages.map(m => m.id);
+            wsService.send({
+                type: 'read',
+                match_id: chat.matchId,
+                message_ids: messageIds
+            });
+        }
+    }, [chat.messages, chat.matchId]);
 
     const handleSendMessage = () => {
         if (!message.trim()) return;
 
+        const tempId = `temp-${Date.now()}`;
+        const optimisticMsg: Message = {
+            id: tempId,
+            text: message.trim(),
+            senderId: currentUserId,
+            timestamp: new Date(),
+            type: 'text',
+            isRead: false,
+            isPending: true
+        };
+
+        setOptimisticMessages(prev => [...prev, optimisticMsg]);
         onSendMessage(message.trim());
+
         setMessage('');
-        hapticFeedback.light();
+        soundService.playSent();
+        haptic.success();
         inputRef.current?.focus();
+    };
+
+    const handleVoiceSend = async (audioBlob: Blob, duration: number) => {
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'voice.webm');
+
+        const token = localStorage.getItem('token'); // Simplification
+
+        try {
+            // Upload
+            const response = await fetch('/api/chat/voice', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+
+            if (!response.ok) throw new Error('Upload failed');
+
+            const { url, duration: serverDuration } = await response.json();
+
+            // Send WS
+            wsService.send({
+                type: 'voice',
+                match_id: chat.matchId,
+                media_url: url,
+                duration: serverDuration
+            });
+
+            haptic.success();
+            soundService.playSent();
+        } catch (e) {
+            console.error(e);
+            haptic.error();
+        }
+    };
+
+    const toggleAudio = (url: string) => {
+        if (playingAudio === url) {
+            audioRef.current?.pause();
+            setPlayingAudio(null);
+        } else {
+            if (audioRef.current) audioRef.current.pause();
+            audioRef.current = new Audio(url);
+            audioRef.current.onended = () => setPlayingAudio(null);
+            audioRef.current.play();
+            setPlayingAudio(url);
+        }
     };
 
     const handleReaction = (messageId: string, emoji: string) => {
         onReaction(messageId, emoji);
         setShowReactions(null);
-        hapticFeedback.medium();
+        haptic.medium();
     };
 
     const formatTime = (date: Date) => {
         return new Intl.DateTimeFormat('ru', {
             hour: '2-digit',
             minute: '2-digit'
-        }).format(date);
+        }).format(new Date(date));
     };
 
     return (
@@ -153,11 +298,11 @@ export const ChatInterface = ({
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 <AnimatePresence>
-                    {chat.messages.map((msg, index) => {
+                    {allMessages.map((msg, index) => {
                         const isOwn = msg.senderId === currentUserId;
+                        const previousMessage = index > 0 ? allMessages[index - 1] : null;
                         const showAvatar = !isOwn && (
-                            index === 0 ||
-                            chat.messages[index - 1].senderId !== msg.senderId
+                            !previousMessage || previousMessage.senderId !== msg.senderId
                         );
 
                         return (
@@ -213,6 +358,41 @@ export const ChatInterface = ({
                                             </div>
                                         )}
 
+                                        {msg.type === 'voice' && (
+                                            <div className="flex items-center space-x-2 min-w-[150px]">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); toggleAudio(msg.audioUrl || ''); }}
+                                                    className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0"
+                                                >
+                                                    {playingAudio === msg.audioUrl ?
+                                                        <Pause className="w-4 h-4 text-white" /> :
+                                                        <Play className="w-4 h-4 text-white fill-current" />
+                                                    }
+                                                </button>
+                                                <div className="flex flex-col flex-1">
+                                                    <div className="flex items-center space-x-0.5 h-4">
+                                                        {[...Array(12)].map((_, i) => (
+                                                            <motion.div
+                                                                key={i}
+                                                                className="w-1 bg-white/40 rounded-full"
+                                                                animate={playingAudio === msg.audioUrl ? {
+                                                                    height: [4, 12, 6, 14, 4],
+                                                                } : { height: 4 }}
+                                                                transition={{
+                                                                    duration: 1,
+                                                                    repeat: Infinity,
+                                                                    delay: i * 0.1,
+                                                                }}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    <span className="text-xs text-white/50 mt-1">
+                                                        {msg.duration ? `${msg.duration.toFixed(0)}s` : 'Voice'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Reactions */}
                                         {msg.reactions && msg.reactions.length > 0 && (
                                             <div className="flex flex-wrap gap-1 mt-2">
@@ -238,8 +418,46 @@ export const ChatInterface = ({
                                             {formatTime(msg.timestamp)}
                                         </span>
                                         {isOwn && (
-                                            <div className={`w-2 h-2 rounded-full ${msg.isRead ? 'bg-blue-500' : 'bg-gray-500'
-                                                }`} />
+                                            <div className="flex items-center">
+                                                {msg.isPending ? (
+                                                    <div className="w-3 h-3 rounded-full border-2 border-gray-500 border-t-transparent animate-spin" />
+                                                ) : (
+                                                    <motion.div
+                                                        className="flex items-center"
+                                                        initial={false}
+                                                        animate={msg.isRead ? "read" : "unread"}
+                                                    >
+                                                        <AnimatePresence mode="wait">
+                                                            {msg.isRead ? (
+                                                                <motion.div
+                                                                    key="avatar"
+                                                                    initial={{ scale: 0, opacity: 0 }}
+                                                                    animate={{ scale: 1, opacity: 1 }}
+                                                                    exit={{ scale: 0, opacity: 0 }}
+                                                                    className="w-4 h-4 rounded-full border border-white/20 overflow-hidden shadow-sm"
+                                                                >
+                                                                    <img
+                                                                        src={otherParticipant?.photo || '/placeholder.jpg'}
+                                                                        alt=""
+                                                                        className="w-full h-full object-cover"
+                                                                    />
+                                                                </motion.div>
+                                                            ) : (
+                                                                <motion.div
+                                                                    key="checks"
+                                                                    initial={{ opacity: 0 }}
+                                                                    animate={{ opacity: 1 }}
+                                                                    exit={{ opacity: 0 }}
+                                                                    className="flex -space-x-1"
+                                                                >
+                                                                    <Check className="w-3 h-3 text-gray-500" />
+                                                                    <Check className="w-3 h-3 text-gray-500" />
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
+                                                    </motion.div>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
 
@@ -350,7 +568,44 @@ export const ChatInterface = ({
                             ref={inputRef}
                             type="text"
                             value={message}
-                            onChange={(e) => setMessage(e.target.value)}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setMessage(val);
+
+                                // Typing Logic
+                                if (val.length > 0 && !typingDebounce) {
+                                    wsService.send({
+                                        type: 'typing',
+                                        match_id: chat.matchId,
+                                        is_typing: true,
+                                        recipient_id: otherParticipant?.id
+                                    });
+                                }
+
+                                if (typingDebounce) clearTimeout(typingDebounce);
+                                const newDebounce = setTimeout(() => {
+                                    wsService.send({
+                                        type: 'typing',
+                                        match_id: chat.matchId,
+                                        is_typing: false,
+                                        recipient_id: otherParticipant?.id
+                                    });
+                                    setTypingDebounce(null);
+                                }, 300);
+                                setTypingDebounce(newDebounce);
+
+                                if (typingTimeout) clearTimeout(typingTimeout);
+                                const newTimeout = setTimeout(() => {
+                                    wsService.send({
+                                        type: 'typing',
+                                        match_id: chat.matchId,
+                                        is_typing: false,
+                                        recipient_id: otherParticipant?.id
+                                    });
+                                    setTypingTimeout(null);
+                                }, 10000);
+                                setTypingTimeout(newTimeout);
+                            }}
                             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                             placeholder="Напишите сообщение..."
                             className="w-full bg-gray-800 text-white rounded-full px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -363,14 +618,17 @@ export const ChatInterface = ({
                         </button>
                     </div>
 
-                    {/* Send Button */}
-                    <AnimatedButton
-                        onClick={handleSendMessage}
-                        disabled={!message.trim()}
-                        className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 disabled:opacity-50"
-                    >
-                        <Send className="w-4 h-4" />
-                    </AnimatedButton>
+                    {/* Send Button or Voice */}
+                    {message.trim() ? (
+                        <AnimatedButton
+                            onClick={handleSendMessage}
+                            className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
+                        >
+                            <Send className="w-4 h-4" />
+                        </AnimatedButton>
+                    ) : (
+                        <VoiceRecorder onSend={handleVoiceSend} />
+                    )}
                 </div>
 
                 {/* Emoji Picker */}
@@ -400,6 +658,15 @@ export const ChatInterface = ({
                     )}
                 </AnimatePresence>
             </motion.div>
+
+            {/* Contextual Tooltips */}
+            <ContextualTooltip
+                stepId="first_chat_opened"
+                title="Совет: используй голосовые сообщения"
+                message="Голосовые сообщения создают более личную связь. Попробуй!"
+                trigger="auto"
+                delay={5000}
+            />
         </div>
     );
 };

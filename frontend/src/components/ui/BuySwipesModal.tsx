@@ -4,6 +4,8 @@ import { useState } from "react";
 import { X, Zap, Star, Sparkles, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useHaptic } from "@/hooks/useHaptic";
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface BuySwipesModalProps {
     isOpen: boolean;
@@ -26,6 +28,8 @@ export function BuySwipesModal({
     onSuccess,
     mode = 'swipes'
 }: BuySwipesModalProps) {
+    const haptic = useHaptic();
+    const prefersReducedMotion = useReducedMotion();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -34,6 +38,7 @@ export function BuySwipesModal({
     const canAfford = currentBalance >= item.price;
 
     const handlePurchase = async () => {
+        haptic.medium();
         setLoading(true);
         setError(null);
 
@@ -57,17 +62,20 @@ export function BuySwipesModal({
             const data = await response.json();
 
             if (data.success) {
+                haptic.success();
                 setSuccess(true);
                 setTimeout(() => {
                     onSuccess?.();
                     onClose();
                 }, 1500);
             } else {
+                haptic.error();
                 setError(data.error === 'insufficient_balance'
                     ? `Not enough Stars. Need ${data.required}, have ${data.available}`
                     : data.error || 'Purchase failed');
             }
         } catch (err: any) {
+            haptic.error();
             setError(err.message || "An error occurred");
         } finally {
             setLoading(false);
@@ -79,17 +87,19 @@ export function BuySwipesModal({
             {isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
+                        initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                        animate={{ opacity: 1, backdropFilter: 'blur(12px)' }}
+                        exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                        transition={{ duration: 0.3 }}
                         onClick={onClose}
-                        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+                        className="absolute inset-0 bg-slate-950/80"
                     />
 
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 25 }}
                         className="relative w-full max-w-[340px] rounded-3xl overflow-hidden bg-slate-900 border border-slate-700/50 shadow-2xl"
                     >
                         {/* Header */}

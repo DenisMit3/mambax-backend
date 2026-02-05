@@ -11,6 +11,9 @@ from backend.services.search_filters import SearchFilters, get_filtered_profiles
 from backend.services.pagination import get_matches_paginated, get_messages_paginated
 from backend.services.geo import geo_service
 from backend.services.storage import storage_service
+from backend.services.ai import ai_service
+from backend.core.redis import redis_manager
+from datetime import date
 import logging
 
 logger = logging.getLogger(__name__)
@@ -85,7 +88,8 @@ async def discover_profiles(
         with_photos_only=with_photos_only
     )
     
-    return await get_filtered_profiles(
+
+    res = await get_filtered_profiles(
         db=db,
         current_user_id=current_user,
         filters=filters,
@@ -93,6 +97,17 @@ async def discover_profiles(
         limit=limit,
         is_vip=is_vip
     )
+
+    # AI Personalization: Add compatibility score and common interests
+    user_profile = await crud.get_user_profile(db, current_user)
+    if user_profile:
+        current_interests = set(user_profile.interests)
+        for profile in res.get("profiles", []):
+            p_interests = set(profile.get("interests", []))
+            profile["common_interests"] = list(p_interests & current_interests)
+            profile["compatibility_score"] = ai_service.calculate_compatibility(user_profile, profile)
+            
+    return res
 
 
 @router.get("/discover/prefetch")
@@ -122,6 +137,86 @@ async def prefetch_profiles(
         }
         for p in profiles
     ]
+
+
+@router.get("/discover/daily-picks")
+async def get_daily_picks(
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db)
+):
+    """
+    🌟 AI Daily Picks - персональная подборка на сегодня
+    Кэшируется на 24 часа
+    """
+    cache_key = f"daily_picks:{current_user}:{date.today().isoformat()}"
+    
+    # Проверить кэш
+    cached = await redis_manager.get_json(cache_key)
+    if cached:
+        return {"picks": cached, "cached": True}
+    
+    # Генерация новой подборки
+    picks = await ai_service.generate_daily_picks(current_user, db, limit=5)
+    
+    # Кэшировать на 24 часа
+    await redis_manager.set_json(cache_key, picks, expire=86400)
+    
+    # Send Notification (Comment 3)
+    from backend.services.notification import send_daily_picks_notification
+    await send_daily_picks_notification(db, current_user)
+    
+    return {"picks": picks, "cached": False}
+
+
+@router.post("/discover/daily-picks/refresh")
+async def refresh_daily_picks(
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db)
+):
+    """
+    🔄 Обновить Daily Picks (доступно 1 раз в день для FREE, безлимит для VIP)
+    """
+    user = await crud.get_user_profile(db, current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Проверка лимита обновлений
+    refresh_key = f"daily_picks_refresh:{current_user}:{date.today().isoformat()}"
+    refresh_count = await redis_manager.get_value(refresh_key) or "0"
+    
+    if not user.is_vip and int(refresh_count) >= 1:
+        raise HTTPException(
+            status_code=429, 
+            detail="Daily picks refresh limit reached. Upgrade to VIP for unlimited refreshes."
+        )
+    
+    # Инвалидировать кэш и сгенерировать новую подборку
+    cache_key = f"daily_picks:{current_user}:{date.today().isoformat()}"
+    await redis_manager.delete(cache_key)
+    
+    picks = await ai_service.generate_daily_picks(current_user, db, limit=5)
+    await redis_manager.set_json(cache_key, picks, expire=86400)
+    
+    # Send Notification (Comment 3)
+    from backend.services.notification import send_daily_picks_notification
+    await send_daily_picks_notification(db, current_user)
+    
+    # Увеличить счетчик обновлений
+    await redis_manager.set_value(refresh_key, str(int(refresh_count) + 1), expire=86400)
+    
+    return {"picks": picks, "refreshed": True}
+
+
+@router.get("/discover/smart-filters")
+async def get_smart_filters(
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db)
+):
+    """
+    🧠 Smart Filters - автоматические предложения фильтров на основе предпочтений
+    """
+    filters = await ai_service.suggest_smart_filters(current_user, db)
+    return filters
 
 
 @router.get("/filters/options")

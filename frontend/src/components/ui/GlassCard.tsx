@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { forwardRef } from "react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 // Create a motion version of the Shadcn Card
 const MotionCard = motion(Card);
@@ -21,6 +22,8 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(({
     glow = false,
     ...props
 }, ref) => {
+    const prefersReducedMotion = useReducedMotion();
+
     return (
         <MotionCard
             ref={ref}
@@ -33,16 +36,17 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(({
                 glow && "shadow-[0_0_40px_rgba(255,45,85,0.3)] border-primary-red/50 ring-primary-red/30",
                 className
             )}
-            whileHover={hover ? {
+            whileHover={(!hover || prefersReducedMotion) ? undefined : {
                 scale: 1.02,
                 translateY: -4,
                 boxShadow: glow
                     ? '0 0 60px rgba(255, 149, 0, 0.4)'
                     : '0 20px 60px rgba(0, 0, 0, 0.4)',
-            } : undefined}
+            }}
+            whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
             transition={{
                 type: 'spring',
-                stiffness: 300,
+                stiffness: prefersReducedMotion ? 0 : 300,
                 damping: 20
             }}
             {...props}

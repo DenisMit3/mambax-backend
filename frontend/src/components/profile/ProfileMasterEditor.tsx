@@ -2,9 +2,10 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { Camera, Plus, Trash2, Shield, EyeOff, MapPinOff, Calendar, Sparkles, Wand2, Check } from 'lucide-react';
+import { Camera, Plus, Trash2, Shield, EyeOff, MapPinOff, Calendar, Sparkles, Wand2, Check, Volume2, Vibrate, MonitorOff } from 'lucide-react';
 
 import { useTelegram } from '@/lib/telegram';
+import { useUser } from '@/context/UserContext';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 
@@ -33,6 +34,26 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
     const [incognito, setIncognito] = useState(false);
     const [hideAge, setHideAge] = useState(false);
     const [hideDistance, setHideDistance] = useState(false);
+    const { user, updateUXPreferences } = useUser();
+    const [uxPrefs, setUxPrefs] = useState({
+        sounds_enabled: true,
+        haptic_enabled: true,
+        reduced_motion: false
+    });
+
+    useEffect(() => {
+        if (user?.ux_preferences) {
+            setUxPrefs(user.ux_preferences);
+        }
+    }, [user]);
+
+    const handleUXToggle = (key: keyof typeof uxPrefs) => {
+        const newVal = !uxPrefs[key];
+        setUxPrefs(prev => ({ ...prev, [key]: newVal }));
+        updateUXPreferences({ [key]: newVal });
+        hapticFeedback.selection();
+    };
+
     const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 
     useEffect(() => {
@@ -76,7 +97,7 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
     };
 
     return (
-        <div className="p-4 md:p-6 space-y-6 pb-32">
+        <div className="p-6 md:p-8 space-y-8 pb-32">
             {/* Header */}
             <motion.div
                 className="flex items-center justify-between"
@@ -198,7 +219,7 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
             </GlassCard>
 
             {/* VIP Settings */}
-            <div className="space-y-4">
+            <div className="space-y-6">
                 <h3 className="text-white text-sm font-black uppercase tracking-widest mb-4 flex items-center space-x-2">
                     <Shield className="w-5 h-5 text-primary-red opacity-80" />
                     <span>Приватность</span>
@@ -226,6 +247,38 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
                     desc="Не показывать дистанцию"
                     active={hideDistance}
                     onToggle={() => { setHideDistance(!hideDistance); hapticFeedback.selection(); }}
+                />
+            </div>
+
+            {/* UX Settings */}
+            <div className="space-y-6">
+                <h3 className="text-white text-sm font-black uppercase tracking-widest mb-4 flex items-center space-x-2">
+                    <Sparkles className="w-5 h-5 text-primary-red opacity-80" />
+                    <span>Интерфейс</span>
+                </h3>
+
+                <SettingsToggle
+                    icon={Volume2}
+                    title="Звуки"
+                    desc="Звуковые эффекты в приложении"
+                    active={uxPrefs.sounds_enabled}
+                    onToggle={() => handleUXToggle('sounds_enabled')}
+                />
+
+                <SettingsToggle
+                    icon={Vibrate}
+                    title="Вибрация"
+                    desc="Тактильный отклик при действиях"
+                    active={uxPrefs.haptic_enabled}
+                    onToggle={() => handleUXToggle('haptic_enabled')}
+                />
+
+                <SettingsToggle
+                    icon={MonitorOff} // Or a better icon for motion
+                    title="Меньше анимаций"
+                    desc="Отключить сложные переходы"
+                    active={uxPrefs.reduced_motion}
+                    onToggle={() => handleUXToggle('reduced_motion')}
                 />
             </div>
         </div>

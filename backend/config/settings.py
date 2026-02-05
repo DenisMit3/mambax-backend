@@ -7,6 +7,7 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
+    PROJECT_NAME: str = "MambaX"
     # Database & Cache
     DATABASE_URL: Optional[str] = None
     DOCKER_DATABASE_URL: Optional[str] = None

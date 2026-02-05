@@ -6,6 +6,7 @@ import { Lock, Heart, Zap, Loader2, X } from 'lucide-react';
 
 import { TopUpModal } from '@/components/ui/TopUpModal';
 import { authService } from '@/services/api';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface LikeUser {
     id: string;
@@ -22,6 +23,7 @@ export default function LikesPage() {
     const [loading, setLoading] = useState(true);
     const [currentBalance, setCurrentBalance] = useState(0);
     const [selectedUser, setSelectedUser] = useState<LikeUser | null>(null);
+    const prefersReducedMotion = useReducedMotion();
 
     useEffect(() => {
         const fetchData = async () => {
@@ -149,13 +151,25 @@ export default function LikesPage() {
                         <Loader2 className="w-8 h-8 text-white/50 animate-spin" />
                     </div>
                 ) : (
-                    <div className="p-4 grid grid-cols-2 gap-3">
+                    <motion.div
+                        className="p-4 grid grid-cols-2 gap-3"
+                        initial="hidden"
+                        animate="visible"
+                        variants={{
+                            hidden: { opacity: 0 },
+                            visible: {
+                                opacity: 1,
+                                transition: { staggerChildren: prefersReducedMotion ? 0 : 0.1 }
+                            }
+                        }}
+                    >
                         {likes.map((user, idx) => (
                             <motion.div
                                 key={user.id}
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: idx * 0.1 }}
+                                variants={{
+                                    hidden: { opacity: 0, scale: 0.9 },
+                                    visible: { opacity: 1, scale: 1 }
+                                }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => setSelectedUser(user)}
                                 className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-slate-900 border border-white/5 group cursor-pointer"
@@ -198,7 +212,7 @@ export default function LikesPage() {
                                 </div>
                             </motion.div>
                         ))}
-                    </div>
+                    </motion.div>
                 )}
 
                 {/* Empty State */}

@@ -133,3 +133,21 @@ async def subscribe_user(
     await db.commit()
     await db.refresh(new_sub)
     return new_sub
+async def send_daily_picks_notification(db: AsyncSession, user_id: str):
+    """
+    Отправить уведомление о готовности новой подборки (запускается cron в 9:00 UTC)
+    """
+    from backend.services.push_notifications import send_push_to_users
+    import uuid
+    
+    try:
+        u_id = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+        await send_push_to_users(
+            db=db,
+            user_ids=[u_id],
+            title="🌟 Новая подборка готова!",
+            body="Мы подобрали для вас 5 идеальных совпадений",
+            data={"route": "/discover"}
+        )
+    except Exception as e:
+        logger.error(f"Failed to send daily picks notification to {user_id}: {e}")

@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { httpClient } from "@/lib/http-client"; // Import httpClient
 import { useRouter } from 'next/navigation';
 import { useTelegram } from '@/lib/telegram';
+import { MatchModal } from '@/components/discovery/MatchModal';
 
 // FIX: Move API_BASE outside component to avoid recreation
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
@@ -33,6 +34,7 @@ export function HomeClient() {
     const queryClient = useQueryClient();
     const { user, hapticFeedback } = useTelegram(); // Assuming useTelegram provides user context or similar
     const [isAuth, setIsAuth] = useState(false);
+    const [matchData, setMatchData] = useState<{ isOpen: boolean; user?: any; partner?: any } | null>(null);
 
     // Check authentication on mount
     useEffect(() => {
@@ -209,6 +211,20 @@ export function HomeClient() {
             // For now, we trust the UI to remove the card.
             if (variables.direction !== 'pass') {
                 hapticFeedback.impactOccurred('medium');
+
+                // Show Match Modal if it's a match
+                const result = _ as any;
+                if (result.is_match) {
+                    // Find the user we just swiped
+                    const partner = profiles?.find(p => p.id === variables.userId);
+                    if (partner) {
+                        setMatchData({
+                            isOpen: true,
+                            user: me,
+                            partner: partner
+                        });
+                    }
+                }
             }
         },
         onError: (err) => {
@@ -301,25 +317,47 @@ export function HomeClient() {
     }
 
     return (
-        <SmartDiscoveryEngine
-            users={profiles}
-            filters={filters}
-            onSwipe={handleSwipe}
-            onFilterChange={setFilters}
-            onStartChat={async (userId: string) => {
-                try {
-                    const result = await authService.startChat(userId);
-                    router.push(`/chat/${result.match_id}`);
-                } catch (e) {
-                    console.error("Failed to start chat", e);
-                    alert("Не удалось начать чат");
-                }
-            }}
-            isPremium={false} // Get from real user state, hardcoded false for now is safer than true
-            superLikesLeft={5} // Get from BE
-            boostActive={false} // Get from BE
-            onUpgradeToPremium={() => router.push('/premium')}
-            onUseBoost={() => { }}
-        />
+        <>
+            <SmartDiscoveryEngine
+                users={profiles}
+                filters={filters}
+                onSwipe={handleSwipe}
+                onFilterChange={setFilters}
+                onStartChat={async (userId: string) => {
+                    try {
+                        const result = await authService.startChat(userId);
+                        router.push(`/chat/${result.match_id}`);
+                    } catch (e) {
+                        console.error("Failed to start chat", e);
+                        alert("Не удалось начать чат");
+                    }
+                }}
+                isPremium={false} // Get from real user state, hardcoded false for now is safer than true
+                superLikesLeft={5} // Get from BE
+                boostActive={false} // Get from BE
+                onUpgradeToPremium={() => router.push('/premium')}
+                onUseBoost={() => { }}
+            />
+
+            {matchData && (
+                <MatchModal
+                    isOpen={matchData.isOpen}
+                    onClose={() => setMatchData(null)}
+                    onStartChat={async () => {
+                        if (matchData.partner) {
+                            try {
+                                const result = await authService.startChat(matchData.partner.id);
+                                router.push(`/chat/${result.match_id}`);
+                            } catch (e) {
+                                console.error("Failed to start chat from match modal", e);
+                            }
+                        }
+                    }}
+                    userAvatar={matchData.user?.photos?.[0]}
+                    matchAvatar={matchData.partner?.photos?.[0]}
+                    matchName={matchData.partner?.name || 'Partner'}
+                />
+            )}
+        </>
     );
 }

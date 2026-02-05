@@ -8,7 +8,7 @@ All endpoints use AsyncSession for database operations and require admin privile
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, desc, and_, or_, select, delete
+from sqlalchemy import func, desc, and_, or_, select, delete, cast, Date
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -253,7 +253,7 @@ async def get_dashboard_metrics(
     pending_moderation = result.scalar() or 0
     
     result = await db.execute(
-        select(func.count(Report.id)).where(func.date(Report.created_at) == today)
+        select(func.count(Report.id)).where(cast(Report.created_at, Date) == today)
     )
     reports_today = result.scalar() or 0
     
@@ -262,7 +262,7 @@ async def get_dashboard_metrics(
         select(func.sum(RevenueTransaction.amount)).where(
             and_(
                 RevenueTransaction.status == 'completed',
-                func.date(RevenueTransaction.created_at) == today
+                cast(RevenueTransaction.created_at, Date) == today
             )
         )
     )
@@ -270,13 +270,13 @@ async def get_dashboard_metrics(
     
     # Matches Today
     result = await db.execute(
-        select(func.count(Match.id)).where(func.date(Match.created_at) == today)
+        select(func.count(Match.id)).where(cast(Match.created_at, Date) == today)
     )
     new_matches = result.scalar() or 0
     
     # Messages sent today
     result = await db.execute(
-        select(func.count(Message.id)).where(func.date(Message.created_at) == today)
+        select(func.count(Message.id)).where(cast(Message.created_at, Date) == today)
     )
     messages_sent = result.scalar() or 0
 
@@ -1162,7 +1162,7 @@ async def get_moderation_stats(
         select(func.count(ModerationQueueItemModel.id)).where(
             and_(
                 ModerationQueueItemModel.status != "pending",
-                func.date(ModerationQueueItemModel.created_at) == today
+                cast(ModerationQueueItemModel.created_at, Date) == today
             )
         )
     )
@@ -1225,7 +1225,7 @@ async def get_analytics_overview(
         
         # New Users
         result = await db.execute(
-            select(func.count(User.id)).where(func.date(User.created_at) == c_date)
+            select(func.count(User.id)).where(cast(User.created_at, Date) == c_date)
         )
         new_users = result.scalar() or 0
         
@@ -1234,7 +1234,7 @@ async def get_analytics_overview(
             select(func.sum(RevenueTransaction.amount)).where(
                 and_(
                     RevenueTransaction.status == 'completed',
-                    func.date(RevenueTransaction.created_at) == c_date
+                    cast(RevenueTransaction.created_at, Date) == c_date
                 )
             )
         )
@@ -1242,13 +1242,13 @@ async def get_analytics_overview(
         
         # Matches
         result = await db.execute(
-            select(func.count(Match.id)).where(func.date(Match.created_at) == c_date)
+            select(func.count(Match.id)).where(cast(Match.created_at, Date) == c_date)
         )
         matches_count = result.scalar() or 0
         
         # DAU (approx via updated_at)
         result = await db.execute(
-            select(func.count(User.id)).where(func.date(User.updated_at) == c_date)
+            select(func.count(User.id)).where(cast(User.updated_at, Date) == c_date)
         )
         dau = result.scalar() or 0
         
@@ -1321,7 +1321,7 @@ async def export_analytics_data(
         c_date = current.date()
         
         result = await db.execute(
-            select(func.count(User.id)).where(func.date(User.created_at) == c_date)
+            select(func.count(User.id)).where(cast(User.created_at, Date) == c_date)
         )
         new_users = result.scalar() or 0
         
@@ -1329,19 +1329,19 @@ async def export_analytics_data(
             select(func.sum(RevenueTransaction.amount)).where(
                 and_(
                     RevenueTransaction.status == 'completed',
-                    func.date(RevenueTransaction.created_at) == c_date
+                    cast(RevenueTransaction.created_at, Date) == c_date
                 )
             )
         )
         revenue = result.scalar() or 0.0
         
         result = await db.execute(
-            select(func.count(Match.id)).where(func.date(Match.created_at) == c_date)
+            select(func.count(Match.id)).where(cast(Match.created_at, Date) == c_date)
         )
         matches_count = result.scalar() or 0
         
         result = await db.execute(
-            select(func.count(User.id)).where(func.date(User.updated_at) == c_date)
+            select(func.count(User.id)).where(cast(User.updated_at, Date) == c_date)
         )
         dau = result.scalar() or 0
         
@@ -1764,7 +1764,7 @@ async def get_revenue_metrics(
         select(func.sum(RevenueTransaction.amount)).where(
             and_(
                 RevenueTransaction.status == 'completed',
-                func.date(RevenueTransaction.created_at) == today
+                cast(RevenueTransaction.created_at, Date) == today
             )
         )
     )
@@ -2381,11 +2381,11 @@ async def send_admin_update(websocket: WebSocket, db: AsyncSession, user_id: uui
     # Parallelize independent count/sum queries
     queries = [
         db.execute(select(func.count(User.id))), # q0: total_users
-        db.execute(select(func.count(User.id)).where(func.date(User.updated_at) == today)), # q1: active_today
+        db.execute(select(func.count(User.id)).where(cast(User.updated_at, Date) == today)), # q1: active_today
         db.execute(select(func.sum(RevenueTransaction.amount)).where(
             and_(
                 RevenueTransaction.status == 'completed',
-                func.date(RevenueTransaction.created_at) == today
+                cast(RevenueTransaction.created_at, Date) == today
             )
         )), # q2: revenue_today
         db.execute(select(User).order_by(desc(User.created_at)).limit(5)), # q3: recent_users

@@ -3,7 +3,8 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Zap, Star } from 'lucide-react';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
-import { useTelegram } from '@/lib/telegram';
+import { useHaptic } from '@/hooks/useHaptic';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface SwipeLimitModalProps {
     isOpen: boolean;
@@ -20,24 +21,26 @@ export const SwipeLimitModal = ({
     onBuySwipes,
     resetTime
 }: SwipeLimitModalProps) => {
-    const { hapticFeedback } = useTelegram();
+    const haptic = useHaptic();
+    const prefersReducedMotion = useReducedMotion();
 
     return (
         <AnimatePresence>
             {isOpen && (
                 <motion.div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md"
+                    initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                    animate={{ opacity: 1, backdropFilter: 'blur(12px)' }}
+                    exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                    transition={{ duration: 0.3 }}
                     onClick={onClose}
                 >
                     <motion.div
-                        className="w-full max-w-sm bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 mx-4 border border-white/10"
-                        initial={{ scale: 0.9, y: 20 }}
-                        animate={{ scale: 1, y: 0 }}
-                        exit={{ scale: 0.9, y: 20 }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className="w-full max-w-sm bg-gradient-to-br from-gray-900/90 to-gray-800/90 rounded-3xl p-6 mx-4 border border-white/10 shadow-2xl relative"
+                        initial={{ scale: 0.9, y: 20, opacity: 0 }}
+                        animate={{ scale: 1, y: 0, opacity: 1 }}
+                        exit={{ scale: 0.9, y: 20, opacity: 0 }}
+                        transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 25 }}
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Close Button */}
@@ -73,7 +76,7 @@ export const SwipeLimitModal = ({
                                 variant="primary"
                                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600"
                                 onClick={() => {
-                                    hapticFeedback.success();
+                                    haptic.success();
                                     onUpgradeToVIP();
                                 }}
                             >
@@ -86,7 +89,7 @@ export const SwipeLimitModal = ({
                                 variant="secondary"
                                 className="w-full"
                                 onClick={() => {
-                                    hapticFeedback.light();
+                                    haptic.light();
                                     onBuySwipes();
                                 }}
                             >

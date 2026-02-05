@@ -116,17 +116,14 @@ const nextConfig: NextConfig = {
   },
 };
 
-// Uncomment when Sentry is configured
-// import { withSentryConfig } from "@sentry/nextjs";
-// export default withSentryConfig(nextConfig, {
-//    org: process.env.SENTRY_ORG,
-//    project: process.env.SENTRY_PROJECT,
-//    silent: !process.env.CI,
-//    widenClientFileUpload: true,
-//    reactComponentAnnotation: { enabled: true },
-//    tunnelRoute: "/monitoring",
-//    hideSourceMaps: true,
-//    disableLogger: true,
-// });
+import { withSentryConfig } from "@sentry/nextjs";
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: "mambax",
+  project: "frontend",
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  reactComponentAnnotation: { enabled: true },
+  tunnelRoute: "/monitoring",
+  disableLogger: true,
+});

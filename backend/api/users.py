@@ -229,6 +229,7 @@ async def update_user_me(
         role=updated_user.role,
         is_complete=updated_user.is_complete,
         verification_selfie=updated_user.verification_selfie,
+        ux_preferences=updated_user.ux_preferences,
     )
 
 
@@ -262,6 +263,7 @@ async def read_users_me(current_user = Depends(get_current_user)):
         role=current_user.role,
         is_complete=current_user.is_complete,
         verification_selfie=current_user.verification_selfie,
+        ux_preferences=current_user.ux_preferences,
     )
 
 
@@ -408,6 +410,81 @@ async def export_my_data(
         },
         "privacy_note": "This export contains your personal profile data stored on MambaX."
     }
+
+
+class OnboardingStepRequest(BaseModel):
+    step_name: str
+    completed: bool = True
+
+@router.post("/me/onboarding/complete-step")
+async def complete_onboarding_step(
+    data: OnboardingStepRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Отметить шаг онбординга как пройденный.
+    Используется для прогрессивного раскрытия функций.
+    """
+    if not current_user.onboarding_completed_steps:
+        current_user.onboarding_completed_steps = {}
+    
+    current_user.onboarding_completed_steps[data.step_name] = data.completed
+    
+    # Mark as modified for SQLAlchemy to detect JSON change
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(current_user, "onboarding_completed_steps")
+    
+    await db.commit()
+    await db.refresh(current_user)
+    
+    return {
+        "status": "ok",
+        "step": data.step_name,
+        "completed": data.completed,
+        "all_steps": current_user.onboarding_completed_steps
+    }
+
+@router.get("/me/onboarding/status")
+async def get_onboarding_status(
+    current_user = Depends(get_current_user)
+):
+    """
+    Получить статус прохождения онбординга.
+    """
+    return {
+        "completed_steps": current_user.onboarding_completed_steps or {},
+        "is_onboarding_complete": all(
+            (current_user.onboarding_completed_steps or {}).values()
+        )
+    }
+
+@router.post("/me/onboarding/reset")
+async def reset_onboarding(
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Сбросить прогресс онбординга (для повторного прохождения).
+    Доступно из настроек профиля.
+    """
+    current_user.onboarding_completed_steps = {
+        "interactive_tour_completed": False,
+        "first_swipe_done": False,
+        "first_filter_opened": False,
+        "first_superlike_used": False,
+        "first_chat_opened": False,
+        "first_voice_message_sent": False,
+        "first_match_achieved": False,
+        "profile_completion_prompted": False
+    }
+    
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(current_user, "onboarding_completed_steps")
+    
+    await db.commit()
+    
+    return {"status": "ok", "message": "Onboarding reset successfully"}
 
 
 @router.get("/{user_id}", response_model=UserResponse)

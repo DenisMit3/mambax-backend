@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { authService } from "@/services/api";
 import { X, Camera } from "lucide-react";
 import Link from "next/link";
+import { useUser } from "@/context/UserContext";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 
 export default function EditProfilePage() {
     const router = useRouter();
@@ -18,6 +20,25 @@ export default function EditProfilePage() {
     const [gender, setGender] = useState("male");
     const [interests, setInterests] = useState<string[]>([]);
     const [photos, setPhotos] = useState<string[]>([]);
+
+    const { user, updateUXPreferences } = useUser();
+    const [uxPreferences, setUxPreferences] = useState({
+        sounds_enabled: true,
+        haptic_enabled: true,
+        reduced_motion: false
+    });
+
+    useEffect(() => {
+        if (user?.ux_preferences) {
+            setUxPreferences(user.ux_preferences);
+        }
+    }, [user]);
+
+    const updateUXPref = async (key: string, value: boolean) => {
+        const newPrefs = { ...uxPreferences, [key]: value };
+        setUxPreferences(newPrefs);
+        await updateUXPreferences(newPrefs);
+    };
 
     // UI State
     const [newInterest, setNewInterest] = useState("");
@@ -296,6 +317,29 @@ export default function EditProfilePage() {
                                 </button>
                             )}
                         </div>
+                    </div>
+
+                    <h3 style={{ textTransform: 'uppercase', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', marginTop: '24px', paddingLeft: '4px' }}>
+                        Interface Settings
+                    </h3>
+                    <div style={{ background: 'var(--surface)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)', padding: '0 16px' }}>
+                        <ToggleSwitch
+                            label="Sound Effects"
+                            checked={uxPreferences.sounds_enabled}
+                            onChange={(val) => updateUXPref('sounds_enabled', val)}
+                        />
+                        <div style={{ height: '1px', background: 'var(--border)' }} />
+                        <ToggleSwitch
+                            label="Haptic Feedback"
+                            checked={uxPreferences.haptic_enabled}
+                            onChange={(val) => updateUXPref('haptic_enabled', val)}
+                        />
+                        <div style={{ height: '1px', background: 'var(--border)' }} />
+                        <ToggleSwitch
+                            label="Reduced Motion"
+                            checked={uxPreferences.reduced_motion}
+                            onChange={(val) => updateUXPref('reduced_motion', val)}
+                        />
                     </div>
 
                 </div>

@@ -30,3 +30,20 @@ async def get_messages(db: AsyncSession, match_id: UUID) -> list[Message]:
     stmt = select(Message).where(Message.match_id == match_id).order_by(Message.created_at)
     result = await db.execute(stmt)
     return result.scalars().all()
+
+async def mark_messages_as_read(
+    db: AsyncSession,
+    message_ids: list[UUID],
+    reader_id: UUID
+) -> int:
+    from sqlalchemy import update
+    stmt = (
+        update(Message)
+        .where(Message.id.in_(message_ids))
+        .where(Message.receiver_id == reader_id)
+        .where(Message.is_read == False)
+        .values(is_read=True)
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.rowcount

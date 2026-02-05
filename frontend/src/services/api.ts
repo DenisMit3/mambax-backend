@@ -87,6 +87,16 @@ export interface UserProfile {
     work?: string;
     education?: string;
     gifts_received?: number;
+
+    // UX Preferences
+    ux_preferences?: {
+        sounds_enabled: boolean;
+        haptic_enabled: boolean;
+        reduced_motion: boolean;
+    };
+
+    // Onboarding tracking
+    onboarding_completed_steps?: Record<string, boolean>;
 }
 
 export interface GiftCategory {
@@ -181,7 +191,19 @@ export const authService = {
         return httpClient.put("/users/me", data);
     },
 
-    async updateProfile(data: { name?: string; age?: number; bio?: string; gender?: string; interests?: string[]; photos?: string[] }) {
+    async updateProfile(data: {
+        name?: string;
+        age?: number;
+        bio?: string;
+        gender?: string;
+        interests?: string[];
+        photos?: string[];
+        ux_preferences?: {
+            sounds_enabled: boolean;
+            haptic_enabled: boolean;
+            reduced_motion: boolean;
+        }
+    }) {
         return httpClient.put("/users/me", data);
     },
 
@@ -380,5 +402,23 @@ export const authService = {
 
     async buySubscription(tier: string) {
         return httpClient.post("/payments/subscription", { tier });
+    },
+
+    async completeOnboardingStep(stepName: string, completed: boolean = true) {
+        return httpClient.post("/users/me/onboarding/complete-step", {
+            step_name: stepName,
+            completed
+        });
+    },
+
+    async getOnboardingStatus() {
+        return httpClient.get<{
+            completed_steps: Record<string, boolean>;
+            is_onboarding_complete: boolean;
+        }>("/users/me/onboarding/status");
+    },
+
+    async resetOnboarding() {
+        return httpClient.post("/users/me/onboarding/reset");
     }
 };

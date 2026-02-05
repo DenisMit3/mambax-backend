@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authService, CatalogResponse, GiftCategory, VirtualGift } from "@/services/api";
 import { Sparkles, Star, Heart, Search, Loader2, Gift as GiftIcon } from "lucide-react";
+import { useHaptic } from "@/hooks/useHaptic";
 
 // Remove local interfaces that are now imported
 // interface GiftCategory { ... }
@@ -31,6 +32,7 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedGift, setSelectedGift] = useState<VirtualGift | null>(null);
+    const haptic = useHaptic();
 
     // FIX (CACHE): Use React Query with aggressive caching
     // Gift catalog rarely changes - cache for 1 hour
@@ -56,6 +58,7 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
     });
 
     const handleGiftClick = (gift: VirtualGift) => {
+        haptic.medium();
         setSelectedGift(gift);
         if (onGiftSelect) {
             onGiftSelect(gift);

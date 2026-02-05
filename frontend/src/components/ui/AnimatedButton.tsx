@@ -3,7 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { useTelegram } from "@/lib/telegram";
+import { useHaptic } from "@/hooks/useHaptic";
+import { useSoundService } from "@/hooks/useSoundService";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { forwardRef } from "react";
 
 // Extend Shadcn Button props, adding back custom props for compatibility if needed.
@@ -17,6 +19,8 @@ interface AnimatedButtonProps extends Omit<React.ComponentProps<typeof Button>, 
     size?: 'default' | 'sm' | 'lg' | 'icon' | 'md';
     isLoading?: boolean;
     icon?: React.ReactNode;
+    soundOnClick?: 'whoosh' | 'success' | 'tap' | null;
+    hapticType?: 'light' | 'medium' | 'heavy' | 'success';
 }
 
 const MotionButton = motion(Button);
@@ -30,9 +34,13 @@ export const AnimatedButton = forwardRef<HTMLButtonElement, AnimatedButtonProps>
     className,
     isLoading,
     icon,
+    soundOnClick,
+    hapticType = 'light',
     ...props
 }, ref) => {
-    const { hapticFeedback } = useTelegram();
+    const haptic = useHaptic();
+    const soundService = useSoundService();
+    const prefersReducedMotion = useReducedMotion();
 
     // Map legacy 'primary' to 'default' for base Shadcn styles, 
     // but we will override with custom classes below.
@@ -41,9 +49,10 @@ export const AnimatedButton = forwardRef<HTMLButtonElement, AnimatedButtonProps>
     const shadcnSize = size === 'md' ? 'default' : size;
 
     const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-        if (!disabled && !isLoading && onClick) {
-            hapticFeedback.light();
-            onClick(e);
+        if (!disabled && !isLoading) {
+            haptic[hapticType]();
+            if (soundOnClick) soundService.play(soundOnClick);
+            onClick?.(e);
         }
     };
 
@@ -73,9 +82,9 @@ export const AnimatedButton = forwardRef<HTMLButtonElement, AnimatedButtonProps>
                 tap: { scale: 0.98 }
             }}
             initial="initial"
-            whileHover={!disabled && !isLoading ? "hover" : undefined}
-            whileTap={!disabled && !isLoading ? "tap" : undefined}
-            transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+            whileHover={(!disabled && !isLoading && !prefersReducedMotion) ? "hover" : undefined}
+            whileTap={(!disabled && !isLoading && !prefersReducedMotion) ? "tap" : "initial"}
+            transition={{ type: 'spring', stiffness: prefersReducedMotion ? 0 : 400, damping: 17 }}
             {...props}
         >
             <motion.div

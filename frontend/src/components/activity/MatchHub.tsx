@@ -8,6 +8,7 @@ import Image from 'next/image';
 import { useTelegram } from '@/lib/telegram';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface Match {
     id: string;
@@ -69,6 +70,7 @@ export const MatchHub = ({
     onUpgradeToPremium
 }: MatchHubProps) => {
     const { hapticFeedback } = useTelegram();
+    const prefersReducedMotion = useReducedMotion();
     const [activeTab, setActiveTab] = useState<'matches' | 'likes'>('matches');
 
     const handleTabChange = (tab: 'matches' | 'likes') => {
@@ -205,7 +207,7 @@ export const MatchHub = ({
                                                 initial={{ opacity: 0, scale: 0.8, y: 20 }}
                                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                                 transition={{
-                                                    delay: index * 0.1,
+                                                    delay: prefersReducedMotion ? 0 : index * 0.1,
                                                     type: 'spring',
                                                     stiffness: 300,
                                                     damping: 20
@@ -278,7 +280,7 @@ export const MatchHub = ({
                                         show: {
                                             opacity: 1,
                                             transition: {
-                                                staggerChildren: 0.05
+                                                staggerChildren: prefersReducedMotion ? 0 : 0.05
                                             }
                                         }
                                     }}
@@ -423,7 +425,7 @@ export const MatchHub = ({
                                     show: {
                                         opacity: 1,
                                         transition: {
-                                            staggerChildren: 0.1
+                                            staggerChildren: prefersReducedMotion ? 0 : 0.1
                                         }
                                     }
                                 }}

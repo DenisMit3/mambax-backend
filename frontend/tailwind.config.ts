@@ -92,10 +92,15 @@ const config: Config = {
                 'neon-pulse': {
                     '0%, 100%': { boxShadow: '0 0 5px rgba(255, 59, 48, 0.2)' },
                     '50%': { boxShadow: '0 0 20px rgba(255, 59, 48, 0.5)' },
+                },
+                shimmer: {
+                    '0%': { transform: 'translateX(-100%)' },
+                    '100%': { transform: 'translateX(100%)' }
                 }
             },
             animation: {
                 'neon-pulse': 'neon-pulse 2s infinite ease-in-out',
+                shimmer: 'shimmer 2s infinite'
             },
             backdropBlur: {
                 'xs': '2px',

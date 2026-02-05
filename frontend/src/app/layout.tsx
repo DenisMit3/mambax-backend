@@ -1,8 +1,15 @@
 import type { Metadata, Viewport } from 'next';
 import React from 'react';
+import { Manrope } from 'next/font/google';
 import './globals.css';
 import Script from 'next/script';
 import ClientLayout from '@/components/layout/ClientLayout';
+
+const manrope = Manrope({
+    subsets: ['latin', 'cyrillic'],
+    variable: '--font-manrope',
+    display: 'swap',
+});
 
 export const metadata: Metadata = {
     title: 'MambaX | Premium Dating',
@@ -78,7 +85,7 @@ export default function RootLayout({
                     strategy="beforeInteractive"
                 />
             </head>
-            <body className="antialiased font-sans text-slate-900 bg-gray-50 overflow-hidden">
+            <body className={`${manrope.variable} font-sans antialiased text-slate-900 bg-gray-50 overflow-hidden`}>
                 <ClientLayout>{children}</ClientLayout>
                 {/* HONEYPOT TRAP: Bots following this invisible link get banned */}
                 <a href="/api_proxy/trap" style={{ display: 'none', visibility: 'hidden' }} aria-hidden="true" rel="nofollow">System Node Status</a>

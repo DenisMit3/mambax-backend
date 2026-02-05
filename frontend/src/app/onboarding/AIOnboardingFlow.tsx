@@ -13,6 +13,7 @@ interface Message {
     options?: string[];
     content?: string;
     multiSelect?: boolean;
+    layoutType?: 'chip' | 'card'; // New property for visual refresh
 }
 
 interface PhotoData {
@@ -33,10 +34,10 @@ interface UserData {
 // --- FLOW STEPS ---
 const FLOW_STEPS = [
     { id: 'name', label: "Имя", q: "Привет! 👋 Я YouMe AI. Как тебя зовут?", type: 'text' },
-    { id: 'gender', label: "Пол", q: "Приятно! Кто ты?", type: 'options', options: ["Мужчина", "Женщина"], multiSelect: false },
+    { id: 'gender', label: "Пол", q: "Приятно! Кто ты?", type: 'options', options: ["Мужчина", "Женщина"], multiSelect: false, layoutType: 'card' },
     { id: 'age', label: "Возраст", q: "Сколько тебе лет? (Это останется между нами... и мэтчами 😉)", type: 'number' },
     { id: 'city', label: "Город", q: "В каком ты городе сейчас?", type: 'text' },
-    { id: 'intent', label: "Цель", q: "Что ищем? (Можно выбрать несколько) ❤️‍🔥", type: 'options', options: ["Отношения", "Свидания", "Флирт", "Дружба", "Пока смотрю"], multiSelect: true },
+    { id: 'intent', label: "Цель", q: "Что ищем? (Можно выбрать несколько) ❤️‍🔥", type: 'options', options: ["Отношения", "Свидания", "Флирт", "Дружба", "Пока смотрю"], multiSelect: true, layoutType: 'card' },
     { id: 'education', label: "Образование", q: "Образование? 🎓", type: 'options', options: ["Высшее", "Студент", "Среднее", "PhD"], multiSelect: false },
     { id: 'job', label: "Работа", q: "Кем работаешь? 💼", type: 'text' },
     { id: 'height', label: "Рост", q: "Рост? (в см. Только цифры)", type: 'number' },
@@ -81,7 +82,8 @@ export default function AIOnboardingFlow() {
 
         if (!initialMessageSent.current) {
             initialMessageSent.current = true;
-            addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect);
+            initialMessageSent.current = true;
+            addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
         }
     }, []);
 
@@ -98,12 +100,12 @@ export default function AIOnboardingFlow() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isTyping, userData.photos, tempSelectedOptions]);
 
-    const addAIMessage = (text: string, type: 'text' | 'number' | 'options' | 'photo_upload' = 'text', options?: string[], multiSelect?: boolean) => {
+    const addAIMessage = (text: string, type: 'text' | 'number' | 'options' | 'photo_upload' = 'text', options?: string[], multiSelect?: boolean, layoutType?: 'chip' | 'card') => {
         setIsTyping(true);
         setTimeout(() => {
             setMessages(prev => [
                 ...prev,
-                { id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, text, isAI: true, type, options, multiSelect }
+                { id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, text, isAI: true, type, options, multiSelect, layoutType }
             ]);
             setTempSelectedOptions([]);
             setIsTyping(false);
@@ -183,8 +185,20 @@ export default function AIOnboardingFlow() {
         if (stepIndex < FLOW_STEPS.length - 1) {
             const nextStep = FLOW_STEPS[stepIndex + 1];
             setStepIndex(prev => prev + 1);
-            addAIMessage(nextStep.q, nextStep.type as any, nextStep.options, (nextStep as any).multiSelect);
+            setStepIndex(prev => prev + 1);
+            addAIMessage(nextStep.q, nextStep.type as any, nextStep.options, (nextStep as any).multiSelect, (nextStep as any).layoutType);
         }
+    };
+
+    const getEmojiForOption = (option: string) => {
+        if (option.includes('Мужчина')) return '👨';
+        if (option.includes('Женщина')) return '👩';
+        if (option.includes('Отношения')) return '💍';
+        if (option.includes('Свидания')) return '🍷';
+        if (option.includes('Флирт')) return '🔥';
+        if (option.includes('Дружба')) return '🤝';
+        if (option.includes('Пока смотрю')) return '👀';
+        return '✨';
     };
 
     const processStepData = (stepId: string, value: string, content?: string) => {
@@ -470,10 +484,27 @@ export default function AIOnboardingFlow() {
                                             </div>
                                         )}
                                         {msg.isAI && msg.options && (
-                                            <div className="mt-3 flex flex-col items-start gap-3">
-                                                <div className="flex flex-wrap gap-2">
+                                            <div className="mt-3 flex flex-col items-start gap-3 w-full">
+                                                <div className={`flex flex-wrap gap-2 w-full ${msg.layoutType === 'card' ? 'grid grid-cols-2 gap-3' : ''}`}>
                                                     {msg.options.map(opt => (
-                                                        <button key={opt} onClick={() => handleOptionClick(opt, msg.multiSelect)} className={`px-4 py-2.5 rounded-xl text-xs font-medium transition-all ${tempSelectedOptions.includes(opt) ? 'bg-white text-black scale-105 shadow-lg' : 'bg-white/5 border border-white/10 text-gray-200 hover:bg-white/10'}`}>
+                                                        <button
+                                                            key={opt}
+                                                            onClick={() => handleOptionClick(opt, msg.multiSelect)}
+                                                            className={`
+                                                                transition-all active:scale-95
+                                                                ${msg.layoutType === 'card'
+                                                                    ? `h-24 rounded-2xl flex flex-col items-center justify-center p-2 font-bold text-sm shadow-md border 
+                                                                        ${tempSelectedOptions.includes(opt)
+                                                                        ? 'bg-gradient-to-br from-[#ff4b91] to-[#ff9e4a] text-white border-transparent'
+                                                                        : 'bg-[#1c1c1e] text-gray-300 border-white/10 hover:bg-white/5'}`
+                                                                    : `px-4 py-2.5 rounded-xl text-xs font-medium 
+                                                                        ${tempSelectedOptions.includes(opt)
+                                                                        ? 'bg-white text-black scale-105 shadow-lg'
+                                                                        : 'bg-white/5 border border-white/10 text-gray-200 hover:bg-white/10'}`
+                                                                }
+                                                            `}
+                                                        >
+                                                            {msg.layoutType === 'card' && <span className="text-2xl mb-1">{getEmojiForOption(opt)}</span>}
                                                             {opt}
                                                         </button>
                                                     ))}

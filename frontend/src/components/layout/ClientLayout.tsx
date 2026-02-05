@@ -1,13 +1,16 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { BottomNav } from '@/components/layout/BottomNav';
 import QueryProvider from '@/providers/QueryProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { useTelegram } from '@/lib/telegram';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const router = useRouter();
+    const { webApp } = useTelegram();
     const isAdmin = pathname?.startsWith('/admin');
     const isVerification = pathname?.startsWith('/verification');
     const isOnboarding = pathname?.startsWith('/onboarding');
@@ -36,6 +39,30 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 });
         }
     }, []);
+
+    // Telegram Back Button Management
+    useEffect(() => {
+        if (!webApp) return;
+
+        // Pages that are "top-level" and shouldn't show a back button
+        const topLevelPaths = ['/', '/discover', '/likes', '/chat', '/profile'];
+        const isTopLevel = topLevelPaths.includes(pathname || '');
+
+        if (isTopLevel) {
+            webApp.BackButton.hide();
+        } else {
+            webApp.BackButton.show();
+        }
+
+        const handleBack = () => {
+            router.back();
+        };
+
+        webApp.BackButton.onClick(handleBack);
+        return () => {
+            webApp.BackButton.offClick(handleBack);
+        };
+    }, [pathname, webApp, router]);
 
     if (isAdmin) {
         // Full screen layout for admin

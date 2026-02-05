@@ -327,6 +327,26 @@ async def scheduled_backup_cleanup_job():
         logger.error(f"Backup cleanup failed: {e}")
 
 
+async def scheduled_daily_picks_notification():
+    """Job function to notify users about new daily picks"""
+    logger.info("Running scheduled daily picks notification...")
+    
+    from backend.database import async_session
+    from backend.models.user import User
+    from backend.services.notification import send_daily_picks_notification
+    
+    async with async_session() as db:
+        # Get all active users
+        result = await db.execute(select(User.id).where(User.is_active == True))
+        user_ids = [str(r[0]) for r in result.all()]
+        
+        for user_id in user_ids:
+            try:
+                await send_daily_picks_notification(db, user_id)
+            except Exception as e:
+                logger.error(f"Failed to send daily picks notification to {user_id}: {e}")
+
+
 def setup_scheduled_jobs():
     """
     Configure all scheduled jobs.
@@ -364,6 +384,15 @@ def setup_scheduled_jobs():
             CronTrigger(day_of_week='sun', hour=5, minute=0),
             id='backup_cleanup',
             name='Weekly Backup Cleanup',
+            replace_existing=True
+        )
+        
+        # Daily Picks Notification: Daily at 9:00 AM UTC
+        scheduler.add_job(
+            scheduled_daily_picks_notification,
+            CronTrigger(hour=9, minute=0),
+            id='daily_picks_notification',
+            name='Daily Picks Notification',
             replace_existing=True
         )
         

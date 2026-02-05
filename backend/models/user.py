@@ -271,6 +271,35 @@ class User(Base):
         comment="When the user was last online"
     )
 
+    # UX Preferences (JSON field)
+    ux_preferences: Mapped[Optional[dict]] = mapped_column(
+        JSON,
+        nullable=True,
+        default=lambda: {
+            "sounds_enabled": True,
+            "haptic_enabled": True,
+            "reduced_motion": False
+        },
+        comment="User UX preferences for sounds, haptics, animations"
+    )
+
+    # Onboarding Progress Tracking
+    onboarding_completed_steps: Mapped[Optional[dict]] = mapped_column(
+        JSON,
+        nullable=True,
+        default=lambda: {
+            "interactive_tour_completed": False,
+            "first_swipe_done": False,
+            "first_filter_opened": False,
+            "first_superlike_used": False,
+            "first_chat_opened": False,
+            "first_voice_message_sent": False,
+            "first_match_achieved": False,
+            "profile_completion_prompted": False
+        },
+        comment="Tracks which onboarding steps user has completed"
+    )
+
     @property
     def user_id(self):
         return self.id
