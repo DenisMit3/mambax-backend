@@ -63,17 +63,73 @@ export const TooltipGuide = ({ currentPage }: TooltipGuideProps) => {
         });
     }, []);
 
-    // Обновить позицию подсветки при изменении шага
+    // Обновить позицию подсветки при изменении шага; повторять поиск, пока элемент не появится, или перейти/пропустить по таймауту
+    const TARGET_WAIT_MS = 3000;
+    const POLL_INTERVAL_MS = 100;
+
     useEffect(() => {
         if (!isVisible) return;
 
         const currentStep = ONBOARDING_STEPS[currentStepIndex];
-        const targetElement = document.querySelector(currentStep.targetSelector);
-        
-        if (targetElement) {
-            const rect = targetElement.getBoundingClientRect();
-            setTargetRect(rect);
-        }
+        const selector = currentStep.targetSelector;
+        let cancelled = false;
+        let pollId: ReturnType<typeof setInterval> | null = null;
+        let skipId: ReturnType<typeof setTimeout> | null = null;
+        let observer: MutationObserver | null = null;
+
+        const trySetRect = (): boolean => {
+            if (cancelled) return false;
+            const el = document.querySelector(selector);
+            if (el) {
+                setTargetRect(el.getBoundingClientRect());
+                return true;
+            }
+            setTargetRect(null);
+            return false;
+        };
+
+        if (trySetRect()) return;
+
+        const advanceOrSkip = () => {
+            if (cancelled) return;
+            if (currentStepIndex < ONBOARDING_STEPS.length - 1) {
+                setCurrentStepIndex((prev) => prev + 1);
+            } else {
+                authService.completeOnboardingStep('interactive_tour_completed');
+                setIsVisible(false);
+            }
+        };
+
+        skipId = setTimeout(advanceOrSkip, TARGET_WAIT_MS);
+        pollId = setInterval(() => {
+            if (trySetRect()) {
+                if (skipId) clearTimeout(skipId);
+                if (pollId) clearInterval(pollId);
+                observer?.disconnect();
+            }
+        }, POLL_INTERVAL_MS);
+
+        observer = new MutationObserver(() => {
+            if (trySetRect()) {
+                if (skipId) {
+                    clearTimeout(skipId);
+                    skipId = null;
+                }
+                if (pollId) {
+                    clearInterval(pollId);
+                    pollId = null;
+                }
+                observer?.disconnect();
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        return () => {
+            cancelled = true;
+            if (skipId) clearTimeout(skipId);
+            if (pollId) clearInterval(pollId);
+            observer?.disconnect();
+        };
     }, [currentStepIndex, isVisible]);
 
     const handleNext = async () => {

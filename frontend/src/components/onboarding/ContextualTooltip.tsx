@@ -26,16 +26,26 @@ export const ContextualTooltip = ({
     const [isDismissed, setIsDismissed] = useState(false);
 
     useEffect(() => {
-        // Проверить, показывали ли уже эту подсказку
+        let isMounted = true;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
         authService.getOnboardingStatus().then(({ completed_steps }) => {
+            if (!isMounted) return;
             if (!completed_steps[stepId] && !isDismissed) {
                 if (trigger === 'auto') {
-                    setTimeout(() => setIsVisible(true), delay);
+                    timeoutId = setTimeout(() => {
+                        if (isMounted) setIsVisible(true);
+                    }, delay);
                 } else {
                     setIsVisible(true);
                 }
             }
         });
+
+        return () => {
+            isMounted = false;
+            if (timeoutId !== null) clearTimeout(timeoutId);
+        };
     }, [stepId, trigger, delay, isDismissed]);
 
     const handleDismiss = async () => {

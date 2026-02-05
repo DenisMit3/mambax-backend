@@ -445,6 +445,19 @@ async def complete_onboarding_step(
         "all_steps": current_user.onboarding_completed_steps
     }
 
+# Ключи шагов онбординга; все должны быть True для завершения
+ONBOARDING_REQUIRED_STEP_KEYS = [
+    "interactive_tour_completed",
+    "first_swipe_done",
+    "first_filter_opened",
+    "first_superlike_used",
+    "first_chat_opened",
+    "first_voice_message_sent",
+    "first_match_achieved",
+    "profile_completion_prompted",
+]
+
+
 @router.get("/me/onboarding/status")
 async def get_onboarding_status(
     current_user = Depends(get_current_user)
@@ -452,11 +465,13 @@ async def get_onboarding_status(
     """
     Получить статус прохождения онбординга.
     """
+    steps = current_user.onboarding_completed_steps or {}
+    is_complete = bool(steps) and all(
+        steps.get(key) for key in ONBOARDING_REQUIRED_STEP_KEYS
+    )
     return {
-        "completed_steps": current_user.onboarding_completed_steps or {},
-        "is_onboarding_complete": all(
-            (current_user.onboarding_completed_steps or {}).values()
-        )
+        "completed_steps": steps,
+        "is_onboarding_complete": is_complete,
     }
 
 @router.post("/me/onboarding/reset")
