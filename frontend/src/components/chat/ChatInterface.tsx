@@ -1,8 +1,8 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useRef } from 'react';
-import { Send, Heart, Gift, Image, Smile, MoreVertical, Phone, Video, Play, Pause, Check, CheckCheck } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { Send, Heart, Gift, Image, Smile, MoreVertical, Phone, Video, Play, Pause, Check, CheckCheck, Lightbulb } from 'lucide-react';
 import { useTelegram } from '@/lib/telegram';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -11,6 +11,7 @@ import { useHaptic } from '@/hooks/useHaptic';
 import { useSoundService } from '@/hooks/useSoundService';
 import { wsService } from '@/services/websocket';
 import { ContextualTooltip } from '@/components/onboarding/ContextualTooltip';
+import { IcebreakersModal } from './IcebreakersModal';
 // import { getToken } from '@/services/auth'; // Assuming this exists, or use localStorage
 const getToken = () => localStorage.getItem('token');
 
@@ -67,6 +68,7 @@ export const ChatInterface = ({
     const [message, setMessage] = useState('');
     const [showReactions, setShowReactions] = useState<string | null>(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [showIcebreakers, setShowIcebreakers] = useState(false);
 
     // Voice & Audio
     const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -79,6 +81,14 @@ export const ChatInterface = ({
     useEffect(() => {
         setLocalMessages(chat.messages);
     }, [chat.messages]);
+
+    // Auto-show icebreakers for new match (no messages yet)
+    useEffect(() => {
+        if (chat.matchId && chat.messages.length === 0) {
+            const t = setTimeout(() => setShowIcebreakers(true), 500);
+            return () => clearTimeout(t);
+        }
+    }, [chat.matchId, chat.messages.length]);
 
     const allMessages = [...localMessages, ...optimisticMessages];
 
@@ -153,7 +163,8 @@ export const ChatInterface = ({
         }
     }, [chat.messages, chat.matchId]);
 
-    const handleSendMessage = () => {
+    // FIX (PERF-001): Memoize handlers to prevent unnecessary re-renders
+    const handleSendMessage = useCallback(() => {
         if (!message.trim()) return;
 
         const tempId = `temp-${Date.now()}`;
@@ -174,9 +185,9 @@ export const ChatInterface = ({
         soundService.playSent();
         haptic.success();
         inputRef.current?.focus();
-    };
+    }, [message, currentUserId, onSendMessage, soundService, haptic]);
 
-    const handleVoiceSend = async (audioBlob: Blob, duration: number) => {
+    const handleVoiceSend = useCallback(async (audioBlob: Blob, duration: number) => {
         const formData = new FormData();
         formData.append('file', audioBlob, 'voice.webm');
 
@@ -208,9 +219,9 @@ export const ChatInterface = ({
             console.error(e);
             haptic.error();
         }
-    };
+    }, [chat.matchId, haptic, soundService]);
 
-    const toggleAudio = (url: string) => {
+    const toggleAudio = useCallback((url: string) => {
         if (playingAudio === url) {
             audioRef.current?.pause();
             setPlayingAudio(null);
@@ -271,6 +282,14 @@ export const ChatInterface = ({
                 </div>
 
                 <div className="flex items-center space-x-2">
+                    <AnimatedButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowIcebreakers(true)}
+                        title="Идеи для разговора"
+                    >
+                        <Lightbulb className="w-4 h-4 text-amber-400" />
+                    </AnimatedButton>
                     {isPremium && (
                         <>
                             <AnimatedButton
@@ -294,6 +313,17 @@ export const ChatInterface = ({
                     </AnimatedButton>
                 </div>
             </motion.div>
+
+            <IcebreakersModal
+                isOpen={showIcebreakers}
+                onClose={() => setShowIcebreakers(false)}
+                matchId={chat.matchId}
+                onSelectIcebreaker={(text) => {
+                    setMessage(text);
+                    setShowIcebreakers(false);
+                    inputRef.current?.focus();
+                }}
+            />
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -670,3 +700,6 @@ export const ChatInterface = ({
         </div>
     );
 };
+
+// FIX (PERF-001): Memoize component to prevent unnecessary re-renders
+export default memo(ChatInterface);

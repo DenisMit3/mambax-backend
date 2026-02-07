@@ -300,6 +300,14 @@ class User(Base):
         comment="Tracks which onboarding steps user has completed"
     )
 
+    # Gamification: badges earned
+    achievements: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False,
+        comment='[{"badge": "conversationalist", "earned_at": "2026-02-05T12:00:00Z", "level": 1}]'
+    )
+
     @property
     def user_id(self):
         return self.id

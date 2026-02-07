@@ -83,6 +83,9 @@ export interface UserProfile {
     distance_km?: number;
     compatibility_score?: number;
 
+    // Gamification
+    achievements?: { badge: string; earned_at: string; level: number }[];
+
     // Extended profile info
     work?: string;
     education?: string;
@@ -181,7 +184,11 @@ export const authService = {
     async telegramLogin(initData: string) {
         const data = await httpClient.post<AuthResponse>("/auth/telegram", { init_data: initData }, { skipAuth: true });
         if (typeof window !== 'undefined') {
+            console.log("[Auth] Setting token from telegramLogin, has_profile:", data.has_profile);
             httpClient.setToken(data.access_token);
+            // Verify token was saved
+            const savedToken = localStorage.getItem('accessToken');
+            console.log("[Auth] Token saved successfully:", !!savedToken);
         }
         return data;
     },
@@ -294,6 +301,28 @@ export const authService = {
 
     async getMessages(matchId: string) {
         return httpClient.get(`/matches/${matchId}/messages`);
+    },
+
+    async getIcebreakers(matchId: string, refresh = false) {
+        const params = new URLSearchParams({ match_id: matchId });
+        if (refresh) params.set("refresh", "true");
+        return httpClient.get<{ icebreakers: string[] }>(`/chat/icebreakers?${params}`);
+    },
+
+    async recordIcebreakerUsed(matchId: string) {
+        return httpClient.post(`/chat/icebreakers/used?match_id=${encodeURIComponent(matchId)}`);
+    },
+
+    async getConversationPrompts(matchId: string) {
+        return httpClient.get<{ prompts: string[]; stalled: boolean }>(`/chat/conversation-prompts?match_id=${encodeURIComponent(matchId)}`);
+    },
+
+    async getQuestionOfDay() {
+        return httpClient.get<{ question: string; date: string }>("/chat/question-of-day");
+    },
+
+    async postQuestionOfDayAnswer(matchId: string, answer: string) {
+        return httpClient.post<{ status: string; partner_answered: boolean }>("/chat/question-of-day/answer", { match_id: matchId, answer });
     },
 
     async sendMessage(matchId: string, text: string, type: string = "text", audio_url: string | null = null, duration: string | null = null) {

@@ -57,6 +57,13 @@ def validate_telegram_data(init_data: str) -> dict | None:
 
         received_hash = parsed_data.pop("hash")
         
+        # FIX: Check auth_date to prevent replay attacks (max 5 minutes old)
+        auth_date = int(parsed_data.get("auth_date", 0))
+        current_time = datetime.utcnow().timestamp()
+        if current_time - auth_date > 300:  # 5 minutes
+            logger.warning(f"Telegram auth_date too old: {current_time - auth_date}s")
+            return None
+        
         # Sort keys alphabetically
         data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
         
@@ -68,7 +75,9 @@ def validate_telegram_data(init_data: str) -> dict | None:
             user_data = json.loads(parsed_data["user"])
             return {
                 "id": str(user_data.get("id")),
-                "username": user_data.get("username")
+                "username": user_data.get("username"),
+                "first_name": user_data.get("first_name"),
+                "last_name": user_data.get("last_name"),
             }
         return None
     except Exception as e:
@@ -80,7 +89,8 @@ def validate_telegram_data(init_data: str) -> dict | None:
 _memory_otp = {}
 
 def generate_otp() -> str:
-    return "".join(random.choices(string.digits, k=4))
+    # FIX (SEC-002): 6 digits instead of 4 for better security
+    return "".join(random.choices(string.digits, k=6))
 
 async def save_otp(identifier: str, otp: str):
     # Try Redis if configured

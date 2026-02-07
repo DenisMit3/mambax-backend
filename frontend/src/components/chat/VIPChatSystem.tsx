@@ -61,6 +61,9 @@ interface VIPChatSystemProps {
   onSendSuperLike: () => void;
   onReaction?: (id: string, reaction: string) => void;
   onBack: () => void;
+  /** Optional: inject text into input (e.g. from icebreakers or prompts) */
+  injectInputText?: string;
+  onConsumedInject?: () => void;
 }
 
 const REACTION_OPTIONS = ['👍', '👎', '❤️', '🔥', '🎉', '💩'];
@@ -227,7 +230,9 @@ export const VIPChatSystem = ({
   onSendImage,
   onSendSuperLike,
   onReaction,
-  onBack
+  onBack,
+  injectInputText,
+  onConsumedInject,
 }: VIPChatSystemProps) => {
   const { hapticFeedback } = useTelegram();
   const [inputText, setInputText] = useState('');
@@ -239,6 +244,13 @@ export const VIPChatSystem = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (injectInputText && injectInputText.trim()) {
+      setInputText(injectInputText);
+      onConsumedInject?.();
+    }
+  }, [injectInputText, onConsumedInject]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

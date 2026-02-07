@@ -1,14 +1,82 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Phone, Send, User } from "lucide-react";
+import { ArrowRight, Phone, Send } from "lucide-react";
 import { authService } from "@/services/api";
+import { useTelegram } from "@/lib/telegram";
+
+// Имя бота из env или дефолтное
+const TELEGRAM_BOT_NAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME || "YouMeMeet_bot";
 
 export default function AuthGatePage() {
     const [identifier, setIdentifier] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [telegramLoading, setTelegramLoading] = useState(false);
     const router = useRouter();
+    const { initData, isReady } = useTelegram();
+
+    // Auto-login when opened inside Telegram Mini App (initData present)
+    useEffect(() => {
+        if (!isReady || !initData || telegramLoading || isLoading) return;
+        
+        // Проверяем, есть ли уже токен - если да, не делаем повторный логин
+        const existingToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+        if (existingToken) {
+            console.log("[Auth] Token exists, skipping telegram login, redirecting to home");
+            router.replace("/");
+            return;
+        }
+        
+        setTelegramLoading(true);
+        authService
+            .telegramLogin(initData)
+            .then((data) => {
+                console.log("[Auth] Telegram login success, has_profile:", data.has_profile);
+                if (data.has_profile) {
+                    router.replace("/");
+                } else {
+                    // Используем единый onboarding flow вместо /auth/setup
+                    router.replace("/onboarding");
+                }
+            })
+            .catch((err) => {
+                console.error("[Auth] Telegram login failed:", err);
+                setTelegramLoading(false);
+            });
+    }, [isReady, initData, router, telegramLoading, isLoading]);
+
+    const handleTelegramClick = () => {
+        // FIX: Prevent double-click
+        if (telegramLoading || isLoading) return;
+        
+        // Проверяем, есть ли initData (открыто внутри Telegram Mini App)
+        const initDataRaw =
+            (typeof window !== "undefined" && (window as any).Telegram?.WebApp?.initData) || initData;
+
+        if (initDataRaw && initDataRaw.length >= 10) {
+            // Уже внутри Mini App - делаем автовход
+            setTelegramLoading(true);
+            authService.telegramLogin(initDataRaw)
+                .then((data) => {
+                    console.log("[Auth] Telegram button login success, has_profile:", data.has_profile);
+                    if (data.has_profile) {
+                        router.replace("/");
+                    } else {
+                        // Используем единый onboarding flow
+                        router.replace("/onboarding");
+                    }
+                })
+                .catch((error: any) => {
+                    setTelegramLoading(false);
+                    alert(error?.message || "Ошибка входа через Telegram");
+                });
+            return;
+        }
+
+        // Не в Mini App - открываем бота в Telegram
+        window.open(`https://t.me/${TELEGRAM_BOT_NAME}`, "_blank");
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -16,19 +84,13 @@ export default function AuthGatePage() {
 
         setIsLoading(true);
         try {
-            const res: any = await authService.requestOtp(identifier);
-
-            if (res.debug_otp) {
-                // Show standard alert for dev mode
-                alert(`Ваш код для входа: ${res.debug_otp}`);
-            }
-
+            await authService.requestOtp(identifier);
+            // SEC-001: OTP is no longer returned in response, check server logs in dev mode
             router.push(`/auth/otp?phone=${encodeURIComponent(identifier)}`);
         } catch (error: any) {
             console.error("Login failed:", error);
             alert(error.message || "Ошибка входа");
         } finally {
-            // FIX (UX): Always reset loading state
             setIsLoading(false);
         }
     };
@@ -48,14 +110,23 @@ export default function AuthGatePage() {
                     Знакомства нового поколения
                 </p>
 
-                {/* Primary Action: Telegram */}
+                {/* Primary Action: Telegram — inside Mini App = login by initData; outside = open in Telegram */}
                 <button
-                    onClick={() => window.open('https://t.me/YouMeMeet_bot', '_blank')}
-                    className="w-full py-4 rounded-2xl bg-[#0088cc] text-white font-bold text-lg shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all active:scale-95 flex items-center justify-center gap-3 mb-8"
+                    type="button"
+                    onClick={handleTelegramClick}
+                    disabled={telegramLoading}
+                    className="w-full py-4 rounded-2xl bg-[#0088cc] text-white font-bold text-lg shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all active:scale-95 flex items-center justify-center gap-3 mb-8 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                    <Send size={24} />
+                    {telegramLoading ? (
+                        <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                        <Send size={24} />
+                    )}
                     <span>Войти через Telegram</span>
                 </button>
+                <p className="text-slate-500 text-sm text-center mb-4 -mt-4">
+                    {initData ? "После входа откроется анкета или главная." : "Нажмите кнопку, чтобы открыть бота и войти в приложение"}
+                </p>
 
                 <div className="flex items-center gap-4 w-full mb-8">
                     <div className="h-px bg-gray-200 flex-1"></div>

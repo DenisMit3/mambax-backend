@@ -323,10 +323,14 @@ async def get_filtered_profiles(
     
     profiles = []
     
+    # PERF-006: Batch проверка shadowban вместо N+1 запросов
+    from backend.services.security import get_shadowbanned_ids_batch
+    profile_ids = [str(p.id) for p in profiles_raw]
+    shadowbanned_ids = await get_shadowbanned_ids_batch(profile_ids)
+    
     for profile in profiles_raw:
-        # Skip shadowbanned users
-        from backend.services.security import is_shadowbanned
-        if await is_shadowbanned(str(profile.id)):
+        # Skip shadowbanned users (теперь O(1) lookup в set)
+        if str(profile.id) in shadowbanned_ids:
             continue
 
         # Фильтр по дистанции

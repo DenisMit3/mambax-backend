@@ -72,7 +72,7 @@ export default function UserDetailPage() {
 
     const handleUpdateStars = async () => {
         try {
-            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
             const token = localStorage.getItem('token');
             const response = await fetch(`${API_BASE}/admin/users/${userId}/stars`, {
                 method: 'POST',
@@ -107,7 +107,7 @@ export default function UserDetailPage() {
     const fetchUserDetails = async () => {
         setLoading(true);
         try {
-            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
             const token = localStorage.getItem('token');
             const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
                 headers: {
@@ -162,7 +162,7 @@ export default function UserDetailPage() {
         if (!confirm(`Are you sure you want to ${action} this user?`)) return;
 
         try {
-            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
             const token = localStorage.getItem('token');
             const response = await fetch(`${API_BASE}/admin/users/${userId}/action`, {
                 method: 'POST',

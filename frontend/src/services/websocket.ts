@@ -35,23 +35,33 @@ class WebSocketService {
         this.isConnecting = true;
 
         try {
-            this.socket = new WebSocket(`${this.url}/${token}`);
+            // FIX (SEC-005): Connect without token in URL, send via first message
+            this.socket = new WebSocket(this.url);
 
             this.socket.onopen = () => {
-                console.log("WebSocket connected");
-                this.isConnecting = false;
-                this.reconnectDelay = INITIAL_RECONNECT_DELAY; // FIX: Reset backoff on success
-                if (this.reconnectTimeout) {
-                    clearTimeout(this.reconnectTimeout);
-                    this.reconnectTimeout = null;
-                }
-                // FIX: Flush pending messages on reconnect
-                this.flushPendingMessages();
+                console.log("WebSocket connected, sending auth...");
+                // Send auth message immediately after connection
+                this.socket?.send(JSON.stringify({ type: "auth", token: this.token }));
             };
-
+            
             this.socket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+                    
+                    // Handle auth success
+                    if (data.type === "auth_success") {
+                        console.log("WebSocket authenticated");
+                        this.isConnecting = false;
+                        this.reconnectDelay = INITIAL_RECONNECT_DELAY;
+                        if (this.reconnectTimeout) {
+                            clearTimeout(this.reconnectTimeout);
+                            this.reconnectTimeout = null;
+                        }
+                        // Flush pending messages after auth
+                        this.flushPendingMessages();
+                        return;
+                    }
+                    
                     this.trigger(data.type, data);
                     // Also trigger wildcard handler
                     this.trigger('*', data);

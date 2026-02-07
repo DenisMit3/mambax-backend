@@ -75,16 +75,36 @@ export default function AIOnboardingFlow() {
         // Validation: Ensure user is logged in before starting
         const token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') || localStorage.getItem('token')) : null;
         if (!token) {
-            console.warn("No auth token found, redirecting to login");
+            console.warn("[Onboarding] No auth token found, redirecting to login");
             window.location.href = '/auth/phone';
             return;
         }
 
-        if (!initialMessageSent.current) {
-            initialMessageSent.current = true;
-            initialMessageSent.current = true;
-            addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
-        }
+        // FIX: Check if profile is already complete - prevent re-onboarding
+        const checkProfileStatus = async () => {
+            try {
+                const me = await authService.getMe();
+                if (me && me.is_complete === true) {
+                    console.log("[Onboarding] Profile already complete, redirecting to home");
+                    window.location.href = '/';
+                    return;
+                }
+                // Profile not complete - start onboarding
+                if (!initialMessageSent.current) {
+                    initialMessageSent.current = true;
+                    addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
+                }
+            } catch (e) {
+                console.error("[Onboarding] Failed to check profile status:", e);
+                // On error, still allow onboarding to proceed
+                if (!initialMessageSent.current) {
+                    initialMessageSent.current = true;
+                    addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
+                }
+            }
+        };
+        
+        checkProfileStatus();
     }, []);
 
     // FIX (MEM): Cleanup Object URLs on unmount to prevent memory leaks
@@ -184,7 +204,6 @@ export default function AIOnboardingFlow() {
         processStepData(currentStep.id, text, content);
         if (stepIndex < FLOW_STEPS.length - 1) {
             const nextStep = FLOW_STEPS[stepIndex + 1];
-            setStepIndex(prev => prev + 1);
             setStepIndex(prev => prev + 1);
             addAIMessage(nextStep.q, nextStep.type as any, nextStep.options, (nextStep as any).multiSelect, (nextStep as any).layoutType);
         }
@@ -302,7 +321,8 @@ export default function AIOnboardingFlow() {
             if (msg.includes('not found') || msg.includes('Unauthorized') || status === 404 || status === 401) {
                 alert('Сессия устарела. Пожалуйста, войдите заново.');
                 localStorage.removeItem('token');
-                window.location.href = '/';
+                localStorage.removeItem('accessToken');
+                window.location.href = '/auth/phone';
                 return;
             }
 

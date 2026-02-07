@@ -1,6 +1,7 @@
 # Interaction API - Лента анкет и обработка свайпов
 
 import uuid
+import json
 from uuid import UUID
 from typing import List, Optional
 
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
 
 from backend.core.security import verify_token
+from backend.core.redis import redis_manager  # PERF-009: Redis caching
 from backend.crud.interaction import (
     get_user_feed, 
     create_swipe, 
@@ -88,7 +90,18 @@ async def get_feed(
 ):
     """
     📱 Лента профилей с курсорной пагинацией (Infinite Scroll)
+    PERF-009: Redis кэширование на 30 секунд
     """
+    # PERF-009: Try cache first (short TTL for dating app freshness)
+    cache_key = f"feed:{current_user_id}:{cursor}:{limit}:{exclude_swiped}"
+    
+    try:
+        cached = await redis_manager.get_value(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        pass  # Cache miss or error, proceed to DB
+    
     result = await get_profiles_paginated(
         db=db,
         current_user_id=str(current_user_id),
@@ -97,7 +110,15 @@ async def get_feed(
         exclude_swiped=exclude_swiped
     )
     
-    return result.dict()
+    data = result.dict()
+    
+    # PERF-009: Cache for 30 seconds
+    try:
+        await redis_manager.set_value(cache_key, json.dumps(data, default=str), expire=30)
+    except Exception:
+        pass  # Don't fail if cache write fails
+    
+    return data
 
 
 @router.post("/swipe", response_model=SwipeResponse)

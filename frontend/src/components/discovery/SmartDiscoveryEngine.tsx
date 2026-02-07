@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, useMotionValue, useTransform, useAnimation, PanInfo, AnimatePresence } from 'framer-motion';
 import { Heart, MessageCircle, SlidersHorizontal, Zap, Grid, Layers } from 'lucide-react';
 import { UserProfile } from '@/services/api';
 import { ChevronDown, MapPin, Briefcase, GraduationCap, Ruler, Baby, Cigarette, Wine, Star as StarIcon, X } from 'lucide-react'; // Added icons for profile details
+import Image from 'next/image'; // PERF-017: Optimized images
 
 // --- Types ---
 interface User extends UserProfile {
@@ -115,7 +116,8 @@ export function SmartDiscoveryEngine({
         controls.set({ x: 0, y: 0, rotate: 0, opacity: 1 });
     }, [currentProfile, controls, x, y]);
 
-    const handleDragEnd = async (event: any, info: PanInfo) => {
+    // PERF-010: Мемоизация handleDragEnd
+    const handleDragEnd = useCallback(async (event: any, info: PanInfo) => {
         if (isAnimating) return;
 
         const threshold = 100;
@@ -130,9 +132,10 @@ export function SmartDiscoveryEngine({
         } else {
             controls.start({ x: 0, y: 0 });
         }
-    };
+    }, [isAnimating, swipe, controls]);
 
-    const swipe = async (direction: 'left' | 'right' | 'up') => {
+    // PERF-010: Мемоизация swipe функции
+    const swipe = useCallback(async (direction: 'left' | 'right' | 'up') => {
         if (!currentProfile || isAnimating) return;
 
         setLastDirection(direction);
@@ -174,7 +177,7 @@ export function SmartDiscoveryEngine({
         } finally {
             setIsAnimating(false);
         }
-    };
+    }, [currentProfile, isAnimating, expandedProfile, onSwipe, controls]);
 
     if (!currentProfile) {
         return (
@@ -230,7 +233,14 @@ export function SmartDiscoveryEngine({
                                     setViewMode('stack');
                                 }}
                             >
-                                <img src={user.photos?.[0] || '/placeholder.jpg'} className="w-full h-full object-cover" alt="" loading="lazy" />
+                                {/* PERF-017: Optimized grid images */}
+                                <Image 
+                                    src={user.photos?.[0] || '/placeholder.jpg'} 
+                                    alt={user.name || ''}
+                                    fill
+                                    sizes="(max-width: 768px) 50vw, 200px"
+                                    className="object-cover"
+                                />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                                 <div className="absolute bottom-2 left-3 text-white">
                                     <h3 className="font-bold text-sm leading-tight">{user.name}, {user.age}</h3>
@@ -260,17 +270,20 @@ export function SmartDiscoveryEngine({
                         {/* Next Card (Background) - Elastic Stack Effect */}
                         {nextProfile && (
                             <motion.div
-                                className="absolute inset-0 bg-zinc-800 m-2 mt-2 rounded-[32px] overflow-hidden origin-center -z-10 pointer-events-none"
+                                className="absolute inset-0 bg-zinc-800 m-2 mt-2 rounded-[32px] overflow-hidden origin-center -z-10 pointer-events-none will-change-transform"
                                 style={{
                                     scale: nextCardScale,
-                                    opacity: nextCardOpacity
+                                    opacity: nextCardOpacity,
+                                    transform: 'translateZ(0)' // PERF-004: Force GPU layer
                                 }}
                             >
-                                <img
+                                <Image
                                     src={nextProfile.photos?.[0] || '/placeholder.jpg'}
-                                    className="w-full h-full object-cover"
-                                    alt=""
-                                    loading="lazy"
+                                    alt={nextProfile.name || ''}
+                                    fill
+                                    sizes="100vw"
+                                    className="object-cover"
+                                    priority={false}
                                 />
                             </motion.div>
                         )}
@@ -278,8 +291,8 @@ export function SmartDiscoveryEngine({
                         {/* Current Card (Draggable) */}
                         <motion.div
                             key={currentProfile.id}
-                            className="absolute inset-0 bg-zinc-900 m-2 mt-2 rounded-[32px] overflow-hidden shadow-2xl cursor-grab active:cursor-grabbing border border-white/5 preserve-3d"
-                            style={{ x, y, rotate, rotateX, rotateY, perspective: 1000 }}
+                            className="absolute inset-0 bg-zinc-900 m-2 mt-2 rounded-[32px] overflow-hidden shadow-2xl cursor-grab active:cursor-grabbing border border-white/5 preserve-3d will-change-transform"
+                            style={{ x, y, rotate, rotateX, rotateY, perspective: 1000, transform: 'translateZ(0)' }}
                             drag
                             dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
                             dragElastic={0.6}

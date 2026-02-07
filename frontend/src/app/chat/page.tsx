@@ -1,8 +1,9 @@
-/* eslint-disable @next/next/no-img-element */
+/* FIX (PERF-002): Using next/image for optimization */
 'use client';
 
 import { Search, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState, useEffect, useDeferredValue } from 'react';
 import { authService, Match } from '@/services/api';
 import { motion } from 'framer-motion';
@@ -124,12 +125,12 @@ export default function ChatListPage() {
                                     <Link href={`/chat/${m.id}`} className="flex flex-col items-center space-y-1 group w-[64px]">
                                         <div className={`relative w-[56px] h-[56px] rounded-full p-0.5 ${m.user.is_premium ? 'bg-gradient-to-tr from-[#ff4b91] to-[#ff9e4a]' : 'bg-gradient-to-tr from-cyan-500 to-blue-500'} group-hover:scale-105 transition-transform duration-300`}>
                                             <div className="w-full h-full rounded-full overflow-hidden border-2 border-slate-950 relative">
-                                                <img
+                                                <Image
                                                     src={m.user.photos?.[0] || 'https://placehold.co/400x400/png'}
                                                     alt={m.user.name}
-                                                    loading="lazy"
-                                                    decoding="async"
-                                                    className="w-full h-full object-cover"
+                                                    fill
+                                                    sizes="56px"
+                                                    className="object-cover"
                                                 />
                                             </div>
                                             {/* Premium Badge */}
@@ -180,11 +181,13 @@ export default function ChatListPage() {
                                 }}
                             >
                                 <Link href={`/chat/${m.id}`} className="flex items-center space-x-3 p-2 -mx-2 rounded-xl hover:bg-white/5 transition active:scale-[0.99] group">
-                                    <div className="relative flex-shrink-0">
-                                        <img
+                                    <div className="relative flex-shrink-0 w-[52px] h-[52px]">
+                                        <Image
                                             src={m.user.photos?.[0] || 'https://placehold.co/400x400/png'}
                                             alt={m.user.name}
-                                            className="w-[52px] h-[52px] rounded-full object-cover"
+                                            fill
+                                            sizes="52px"
+                                            className="rounded-full object-cover"
                                         />
                                         {/* Online indicator on list item too? Optional */}
                                     </div>

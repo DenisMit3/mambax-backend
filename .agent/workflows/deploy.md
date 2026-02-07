@@ -6,7 +6,7 @@ description: Как деплоить фронтенд на Vercel
 
 ## Важная информация
 - **Проект**: silver-memory
-- **Production URL**: https://silver-memory-theta.vercel.app
+- **Production URL**: https://mambax-frontend.vercel.app
 - **GitHub**: DenisMit3/silver-memory
 
 ## Шаги для деплоя

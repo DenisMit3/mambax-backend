@@ -28,7 +28,7 @@ class OTPRequest(BaseModel):
 
 class OTPResponse(BaseModel):
     """Ответ на запрос OTP"""
-    otp: str = "0000"
+    otp: str = "000000"  # FIX: Updated to 6 digits
     message: Optional[str] = None
 
 

@@ -3,15 +3,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { VIPChatSystem, Message, ChatUser } from '@/components/chat/VIPChatSystem';
 import { GiftPicker } from '@/components/chat/GiftPicker';
+import { QuestionOfTheDayCard } from '@/components/chat/QuestionOfTheDayCard';
+import { ConversationPromptsButton } from '@/components/chat/ConversationPromptsButton';
+import { IcebreakersModal } from '@/components/chat/IcebreakersModal';
 import { useTelegram } from '@/lib/telegram';
 import { authService } from '@/services/api';
 import { useParams, useRouter } from 'next/navigation';
+import { Lightbulb } from 'lucide-react';
 
 export default function ChatPage() {
     const { id } = useParams() as { id: string };
     const router = useRouter();
     const { hapticFeedback } = useTelegram();
     const [showGiftPicker, setShowGiftPicker] = useState(false);
+    const [showIcebreakers, setShowIcebreakers] = useState(false);
+    const [injectInputText, setInjectInputText] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [user, setUser] = useState<ChatUser | null>(null);
     const [loading, setLoading] = useState(true);
@@ -378,6 +384,27 @@ export default function ChatPage() {
 
     return (
         <div className="absolute inset-0 flex flex-col bg-black overflow-hidden">
+            <div className="sticky top-0 z-10 flex flex-col gap-2 p-2 bg-black/80 backdrop-blur-sm border-b border-white/5">
+                <QuestionOfTheDayCard
+                    matchId={id}
+                    onBothAnswered={() => {}}
+                />
+                <div className="flex items-center gap-2">
+                    <ConversationPromptsButton
+                        matchId={id}
+                        onSelectPrompt={(text) => setInjectInputText(text)}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setShowIcebreakers(true)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white/90 text-sm transition-colors"
+                        title="Идеи для разговора"
+                    >
+                        <Lightbulb className="w-4 h-4 text-amber-400" />
+                        <span>Идеи</span>
+                    </button>
+                </div>
+            </div>
             <VIPChatSystem
                 user={user}
                 messages={messages}
@@ -387,6 +414,17 @@ export default function ChatPage() {
                 onSendSuperLike={() => setShowGiftPicker(true)}
                 onReaction={handleReaction}
                 onBack={() => router.back()}
+                injectInputText={injectInputText}
+                onConsumedInject={() => setInjectInputText('')}
+            />
+            <IcebreakersModal
+                isOpen={showIcebreakers}
+                onClose={() => setShowIcebreakers(false)}
+                matchId={id}
+                onSelectIcebreaker={(text) => {
+                    setInjectInputText(text);
+                    setShowIcebreakers(false);
+                }}
             />
 
             <GiftPicker

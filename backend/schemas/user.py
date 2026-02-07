@@ -78,7 +78,8 @@ class UserResponse(UserBase):
     verification_selfie: Optional[str] = None
     ux_preferences: Optional[UXPreferences] = None
     onboarding_completed_steps: Optional[dict] = None
-    
+    achievements: Optional[list] = None  # [{"badge": "...", "earned_at": "...", "level": 1}]
+
     class Config:
         from_attributes = True
 

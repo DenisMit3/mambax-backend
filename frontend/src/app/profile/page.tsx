@@ -8,7 +8,8 @@ import Image from "next/image";
 import { authService } from "@/services/api";
 import { httpClient } from "@/lib/http-client";
 import { ProfileMasterEditor } from "@/components/profile/ProfileMasterEditor";
-import { BottomNav } from "@/components/layout/BottomNav";
+import { BadgesSection } from "@/components/profile/BadgesSection";
+// PERF-007: BottomNav import removed - already in ClientLayout
 import { GlassCard } from "@/components/ui/GlassCard";
 import { TopUpModal } from "@/components/ui/TopUpModal";
 
@@ -144,6 +145,8 @@ export default function ProfilePage() {
                     </div>
                 </motion.div>
 
+                <BadgesSection achievements={profile?.achievements} />
+
                 {/* Menu Grid */}
                 <div className="grid grid-cols-2 gap-3 mb-6">
                     <button className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition text-left group">
@@ -195,7 +198,7 @@ export default function ProfilePage() {
                 </div>
             </div>
 
-            <BottomNav />
+            {/* PERF-007: BottomNav удален - уже есть в ClientLayout */}
 
             <TopUpModal
                 isOpen={showTopUp}

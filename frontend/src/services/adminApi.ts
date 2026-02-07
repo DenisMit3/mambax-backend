@@ -485,7 +485,7 @@ export async function exportAnalyticsData(
 
     // For CSV, we need to trigger a direct download
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
     const response = await fetch(`${baseUrl}/admin/analytics/export?${params.toString()}`, {
         headers: {

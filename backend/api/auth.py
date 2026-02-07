@@ -227,11 +227,12 @@ async def request_otp(data: OTPRequest, db: AsyncSession = Depends(get_db)):
         
         # Fallback to debug/console
         if settings.ENVIRONMENT == "development":
+            # FIX (SEC-001): Log OTP only to server console, never return in response
             logger.info(f"DEBUG OTP for {data.identifier}: {otp}")
-            msg = "OTP generated (Demo mode)."
+            msg = "OTP generated (Demo mode - check server logs)."
             if data.identifier.startswith("@") and not user:
                 msg += " (User not found in DB, cannot send to Telegram)"
-            return {"success": True, "message": msg, "debug_otp": otp}
+            return {"success": True, "message": msg}
         else:
             # In prod, logging exact OTP is careless, just log the event
             logger.info(f"OTP generated for {data.identifier}") 
@@ -251,6 +252,14 @@ async def login_otp(
     Вход по одноразовому коду (OTP).
     Если пользователь не найден - создает нового.
     """
+    # FIX (SEC-004): Rate limit OTP verification - max 5 attempts per 15 minutes
+    is_allowed = await redis_manager.rate_limit(f"otp_verify:{data.identifier}", limit=5, period=900)
+    if not is_allowed:
+        raise HTTPException(
+            status_code=429, 
+            detail="Too many failed attempts. Please try again later."
+        )
+    
     try:
         if not await verify_otp(data.identifier, data.otp):
             raise HTTPException(

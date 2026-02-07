@@ -169,7 +169,7 @@ class HttpClient {
     public logout() {
         this.clearToken();
         if (typeof window !== 'undefined') {
-            window.location.href = '/login';
+            window.location.href = '/auth/phone';
         }
     }
 

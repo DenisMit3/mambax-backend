@@ -1,9 +1,10 @@
-/* eslint-disable @next/next/no-img-element */
+/* FIX (PERF-002): Using next/image for optimization */
 "use client";
 
 import { motion, useMotionValue, useTransform, useAnimation, PanInfo } from "framer-motion";
 import { Gift, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 interface SwipeCardProps {
     name: string;
@@ -67,10 +68,13 @@ export function SwipeCard({
         >
             {/* Background Image */}
             <div className="relative w-full h-full">
-                <img
+                <Image
                     src={image}
                     alt={name}
-                    className="w-full h-full object-cover pointer-events-none"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 400px"
+                    className="object-cover pointer-events-none"
+                    priority
                 />
 
                 {/* Gradient Overlay */}

@@ -10,7 +10,12 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
                 // With SSR, we usually want to set some default staleTime
                 // above 0 to avoid refetching immediately on the client
                 staleTime: 60 * 1000,
+                // PERF-014: Garbage collection after 5 minutes to prevent memory leaks
+                gcTime: 5 * 60 * 1000,
                 retry: 1,
+                // PERF-014: Reduce unnecessary refetches
+                refetchOnWindowFocus: false,
+                refetchOnReconnect: true,
             },
         },
     }));

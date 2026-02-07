@@ -6,8 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc, text
 import uuid
 from collections import Counter
-from backend.models.interaction import Swipe
+from backend.models.interaction import Swipe, Match
 from backend.models.user import User
+from backend.models.chat import Message
 
 class AIService:
     """
@@ -284,6 +285,93 @@ class AIService:
         habits_match = (matches / 4) * 0.3
         
         return (interests_score + age_score + height_score + habits_match) * 100
+
+    async def generate_icebreakers(
+        self,
+        user1_id: str,
+        user2_id: str,
+        db: AsyncSession,
+        count: int = 3,
+    ) -> List[str]:
+        """Generate contextual icebreakers for a pair based on their profiles."""
+        try:
+            u1 = uuid.UUID(user1_id) if isinstance(user1_id, str) else user1_id
+            u2 = uuid.UUID(user2_id) if isinstance(user2_id, str) else user2_id
+            stmt1 = select(User).where(User.id == u1)
+            stmt2 = select(User).where(User.id == u2)
+            r1, r2 = await db.execute(stmt1), await db.execute(stmt2)
+            user1, user2 = r1.scalar_one_or_none(), r2.scalar_one_or_none()
+            if not user1 or not user2:
+                return await self._simulate_response("icebreaker", count)[0][:count]
+
+            interests1 = getattr(user1, "interests", None) or (user1.interests if hasattr(user1, "interests") else [])
+            interests2 = getattr(user2, "interests", None) or (user2.interests if hasattr(user2, "interests") else [])
+            if hasattr(user1, "interests_rel"):
+                interests1 = [i.tag for i in user1.interests_rel] if user1.interests_rel else interests1
+            if hasattr(user2, "interests_rel"):
+                interests2 = [i.tag for i in user2.interests_rel] if user2.interests_rel else interests2
+            bio1 = getattr(user1, "bio", "") or ""
+            bio2 = getattr(user2, "bio", "") or ""
+            common = list(set(interests1) & set(interests2)) if interests1 and interests2 else []
+            ctx = (
+                f"User1: interests={interests1[:10]}, bio={bio1[:200]}. "
+                f"User2: interests={interests2[:10]}, bio={bio2[:200]}. "
+                f"Common: {common[:5]}."
+            )
+            suggestions, _ = await self.generate_content("icebreaker", context=ctx, tone="friendly", count=count)
+            return suggestions[:count] if isinstance(suggestions, list) else [str(suggestions)]
+        except Exception as e:
+            print(f"Error generating icebreakers: {e}")
+            result, _ = await self._simulate_response("icebreaker", count)
+            return result[:count]
+
+    async def generate_conversation_prompts(
+        self,
+        match_id: str,
+        db: AsyncSession,
+        count: int = 3,
+    ) -> List[str]:
+        """Suggest ways to restart a stalled conversation from last messages."""
+        try:
+            mid = uuid.UUID(match_id) if isinstance(match_id, str) else match_id
+            stmt = (
+                select(Message)
+                .where(Message.match_id == mid)
+                .order_by(Message.created_at.desc())
+                .limit(5)
+            )
+            result = await db.execute(stmt)
+            messages = result.scalars().all()
+            if not messages:
+                return []
+            messages_text = "\n".join([f"{m.sender_id}: {m.text or '(media)'}" for m in reversed(messages)])
+            ctx = f"Conversation has stalled. Last messages:\n{messages_text}\nSuggest {count} ways to restart the conversation."
+            suggestions, _ = await self.generate_content("conversation_prompts", context=ctx, tone="friendly", count=count)
+            return suggestions[:count] if isinstance(suggestions, list) else [str(suggestions)]
+        except Exception as e:
+            print(f"Error generating conversation prompts: {e}")
+            return []
+
+    async def get_question_of_the_day(self) -> str:
+        """Get today's question (cached in Redis 24h)."""
+        from backend.core.redis import redis_manager
+        from datetime import date
+        today = date.today().isoformat()
+        key = f"qotd:{today}"
+        cached = await redis_manager.get_json(key)
+        if cached and isinstance(cached, str):
+            return cached
+        if isinstance(cached, dict) and cached.get("question"):
+            return cached["question"]
+        suggestions, _ = await self.generate_content(
+            "question",
+            context="Generate 1 fun, thought-provoking question for dating app users. Keep it light and engaging.",
+            tone="friendly",
+            count=1,
+        )
+        question = suggestions[0] if suggestions else "What's one thing that always makes you smile?"
+        await redis_manager.set_json(key, question, expire=86400)
+        return question
 
     async def suggest_smart_filters(
         self, 

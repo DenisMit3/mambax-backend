@@ -69,11 +69,10 @@ async def test_otp_flow(client: AsyncClient):
     resp = await client.post("/auth/request-otp", json={"identifier": phone})
     assert resp.status_code == 200
     # In test/dev mode, it might return the OTP or we relying on the fixed debug OTP logic in backend/auth.py
-    # Ideally we'd mock backend.auth.generate_otp, but implementation has a debug print.
-    # backend/auth.py verify_otp allows "0000" or "1111".
+    # backend/auth.py verify_otp allows "000000" (6 digits now).
     
     # 2. Login with valid fixed OTP
-    resp = await client.post("/auth/login", json={"identifier": phone, "otp": "0000"})
+    resp = await client.post("/auth/login", json={"identifier": phone, "otp": "000000"})
     assert resp.status_code == 200
     assert "access_token" in resp.json()
 

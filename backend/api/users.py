@@ -15,6 +15,7 @@ from backend.db.session import get_db
 from backend.schemas.user import UserResponse, Location, UserUpdate
 from backend.services.moderation import ModerationService
 from backend.services.geo import geo_service
+from backend.config.settings import settings  # FIX: Import for DEV endpoint checks
 import logging
 from pydantic import BaseModel
 
@@ -127,6 +128,48 @@ async def upload_photo(
     - Сохраняет файл локально в `static/uploads/`
     - Добавляет URL в список `photos` пользователя
     """
+    
+    # FIX (SEC-006): Validate file type and size
+    ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    
+    # Check content type
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_TYPES)}"
+        )
+    
+    # Check file size (read first chunk to verify)
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
+        )
+    
+    # Validate magic bytes (file signature)
+    MAGIC_BYTES = {
+        b'\xff\xd8\xff': 'image/jpeg',      # JPEG
+        b'\x89PNG': 'image/png',             # PNG
+        b'RIFF': 'image/webp',               # WebP (starts with RIFF)
+        b'GIF8': 'image/gif',                # GIF
+    }
+    
+    is_valid_signature = False
+    for magic, mime in MAGIC_BYTES.items():
+        if contents[:len(magic)] == magic:
+            is_valid_signature = True
+            break
+    
+    if not is_valid_signature:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file content. File signature does not match allowed image types."
+        )
+    
+    # Reset file position for storage service
+    await file.seek(0)
 
     # Save file via StorageService
     file_url = await storage_service.save_user_photo(file)
@@ -264,6 +307,7 @@ async def read_users_me(current_user = Depends(get_current_user)):
         is_complete=current_user.is_complete,
         verification_selfie=current_user.verification_selfie,
         ux_preferences=current_user.ux_preferences,
+        achievements=getattr(current_user, "achievements", None) or [],
     )
 
 
@@ -341,6 +385,10 @@ async def add_stars_dev(
     """
     DEV ONLY: Add stars to balance without payment.
     """
+    # FIX (SEC-003): Block in production
+    if settings.is_production:
+        raise HTTPException(status_code=404, detail="Not found")
+    
     current_user.stars_balance += data.amount
     await db.commit()
     return {"status": "ok", "new_balance": current_user.stars_balance}
@@ -355,6 +403,10 @@ async def spend_stars_dev(
     """
     DEV ONLY: Spend stars.
     """
+    # FIX (SEC-003): Block in production
+    if settings.is_production:
+        raise HTTPException(status_code=404, detail="Not found")
+    
     if current_user.stars_balance < data.amount:
         raise HTTPException(status_code=400, detail="Not enough stars")
         

@@ -98,28 +98,63 @@ class WebRTCSignalRequest(BaseModel):
     signal_data: dict
 
 
+class QOTDAnswerRequest(BaseModel):
+    match_id: str
+    answer: str
+
+
 # ============================================================================
 # WEBSOCKET ENDPOINT
 # ============================================================================
 
-@router.websocket("/chat/ws/{token}")
-async def websocket_endpoint(websocket: WebSocket, token: str):
+@router.websocket("/chat/ws")
+async def websocket_endpoint(websocket: WebSocket):
     """
     🔌 Unified WebSocket for Chat, Calls, and Real-time events.
-    Path: /chat/ws/{token}
+    Path: /chat/ws
+    
+    FIX (SEC-005): Token is now sent via first message instead of URL path
+    to prevent token leakage in server logs.
+    
+    First message must be: {"type": "auth", "token": "..."}
     """
-    # Verify token
+    # Accept connection first, then wait for auth message
+    await websocket.accept()
+    
     try:
-        user_id = verify_token(token)
-        if not user_id:
-            await websocket.close(code=4001, reason="Invalid token")
+        # Wait for auth message (timeout 10 seconds)
+        import asyncio
+        try:
+            data = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+            auth_msg = json.loads(data)
+            
+            if auth_msg.get("type") != "auth" or not auth_msg.get("token"):
+                await websocket.close(code=4001, reason="First message must be auth")
+                return
+            
+            token = auth_msg["token"]
+            user_id = verify_token(token)
+            if not user_id:
+                await websocket.close(code=4001, reason="Invalid token")
+                return
+                
+        except asyncio.TimeoutError:
+            await websocket.close(code=4001, reason="Auth timeout")
             return
+        except json.JSONDecodeError:
+            await websocket.close(code=4001, reason="Invalid auth message")
+            return
+            
     except Exception:
-        await websocket.close(code=4001, reason="Invalid token")
+        await websocket.close(code=4001, reason="Auth failed")
         return
     
-    # Connect
+    # Connect with verified user_id
     await manager.connect(websocket, user_id)
+    ACTIVE_USERS_GAUGE.inc()
+    
+    # Send auth success confirmation
+    await websocket.send_json({"type": "auth_success", "user_id": user_id})
     ACTIVE_USERS_GAUGE.inc()
 
     try:
@@ -275,6 +310,8 @@ async def handle_message(websocket: WebSocket, sender_id: str, data: dict):
         )
         MESSAGES_COUNTER.inc()
 
+        from backend.services.gamification import check_and_award_badge
+        await check_and_award_badge(sender_id, "conversationalist", db)
 
         # Broadcast payload
         content_extras = {}
@@ -322,75 +359,77 @@ async def handle_message(websocket: WebSocket, sender_id: str, data: dict):
             )
 
         # ============================================================
-        # AUTO-RESPONDER BOT (for testing)
+        # AUTO-RESPONDER BOT (for testing - DEVELOPMENT ONLY)
         # ============================================================
-        # Simulates a partner response after a short delay
-        import asyncio
-        import random
-        
-        BOT_RESPONSES = [
-            "Привет! 👋",
-            "Интересно! Расскажи подробнее 😊",
-            "О, круто! А ты чем занимаешься?",
-            "Хаха, смешно 😂",
-            "Согласна! 💯",
-            "Ммм, надо подумать... 🤔",
-            "Классно! А что ещё любишь?",
-            "Ого, вот это да!",
-            "А давай как-нибудь встретимся? ☕",
-            "Мне тоже нравится! 🥰"
-        ]
-        
-        # Capture values for the async task
-        _match_id = match_id
-        _sender_id = sender_id
-        _recipient_id = recipient_id
-        
-        async def send_bot_reply():
-            try:
-                await asyncio.sleep(random.uniform(1.5, 3.0))  # Random delay
-                
-                bot_text = random.choice(BOT_RESPONSES)
-                bot_msg_data = {
-                    "receiver_id": UUID(_sender_id),
-                    "text": bot_text,
-                    "type": "text",
-                    "audio_url": None,
-                    "duration": None,
-                    "photo_url": None
-                }
-                
-                # Create NEW database session for async task
-                async with async_session_maker() as bot_db:
-                    # Save bot message to database
-                    bot_db_msg = await crud_chat.create_message(
-                        bot_db,
-                        UUID(_match_id),
-                        UUID(_recipient_id),  # Bot sends from their ID
-                        bot_msg_data
-                    )
+        # PERF-015: Only run in development to avoid production load
+        if settings.ENVIRONMENT == "development":
+            # Simulates a partner response after a short delay
+            import asyncio
+            import random
+            
+            BOT_RESPONSES = [
+                "Привет! 👋",
+                "Интересно! Расскажи подробнее 😊",
+                "О, круто! А ты чем занимаешься?",
+                "Хаха, смешно 😂",
+                "Согласна! 💯",
+                "Ммм, надо подумать... 🤔",
+                "Классно! А что ещё любишь?",
+                "Ого, вот это да!",
+                "А давай как-нибудь встретимся? ☕",
+                "Мне тоже нравится! 🥰"
+            ]
+            
+            # Capture values for the async task
+            _match_id = match_id
+            _sender_id = sender_id
+            _recipient_id = recipient_id
+            
+            async def send_bot_reply():
+                try:
+                    await asyncio.sleep(random.uniform(1.5, 3.0))  # Random delay
                     
-                    # Send via WebSocket to original sender
-                    bot_ws_msg = {
+                    bot_text = random.choice(BOT_RESPONSES)
+                    bot_msg_data = {
+                        "receiver_id": UUID(_sender_id),
+                        "text": bot_text,
                         "type": "text",
-                        "id": str(bot_db_msg.id),
-                        "message_id": str(bot_db_msg.id),
-                        "match_id": str(bot_db_msg.match_id),
-                        "sender_id": str(bot_db_msg.sender_id),
-                        "receiver_id": str(bot_db_msg.receiver_id),
-                        "content": bot_db_msg.text,
-                        "text": bot_db_msg.text,
-                        "created_at": bot_db_msg.created_at.isoformat(),
-                        "timestamp": bot_db_msg.created_at.isoformat()
+                        "audio_url": None,
+                        "duration": None,
+                        "photo_url": None
                     }
                     
-                    await manager.send_personal(_sender_id, bot_ws_msg)
-                    print(f"🤖 Bot replied to {_sender_id[:8]}...: {bot_text}")
-            except Exception as e:
-                print(f"❌ Bot reply error: {e}")
-        
-        # Run bot reply in background (fire and forget)
-        asyncio.create_task(send_bot_reply())
+                    # Create NEW database session for async task
+                    async with async_session_maker() as bot_db:
+                        # Save bot message to database
+                        bot_db_msg = await crud_chat.create_message(
+                            bot_db,
+                            UUID(_match_id),
+                            UUID(_recipient_id),  # Bot sends from their ID
+                            bot_msg_data
+                        )
+                        
+                        # Send via WebSocket to original sender
+                        bot_ws_msg = {
+                            "type": "text",
+                            "id": str(bot_db_msg.id),
+                            "message_id": str(bot_db_msg.id),
+                            "match_id": str(bot_db_msg.match_id),
+                            "sender_id": str(bot_db_msg.sender_id),
+                            "receiver_id": str(bot_db_msg.receiver_id),
+                            "content": bot_db_msg.text,
+                            "text": bot_db_msg.text,
+                            "created_at": bot_db_msg.created_at.isoformat(),
+                            "timestamp": bot_db_msg.created_at.isoformat()
+                        }
+                        
+                        await manager.send_personal(_sender_id, bot_ws_msg)
+                        print(f"🤖 Bot replied to {_sender_id[:8]}...: {bot_text}")
+                except Exception as e:
+                    print(f"❌ Bot reply error: {e}")
+            
+            # Run bot reply in background (fire and forget)
+            asyncio.create_task(send_bot_reply())
 
 async def handle_typing(user_id: str, data: dict):
     match_id = data.get("match_id")
@@ -575,6 +614,159 @@ async def get_history(
 @router.get("/chat/reactions")
 async def get_reactions_endpoint():
     return {"reactions": AVAILABLE_REACTIONS}
+
+
+@router.get("/chat/icebreakers")
+async def get_icebreakers(
+    match_id: str = Query(..., description="Match ID"),
+    refresh: bool = Query(False, description="Bypass cache"),
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db),
+):
+    """Get AI-generated icebreakers for a match (cached 24h)."""
+    from backend.models.interaction import Match
+    from backend.services.ai import ai_service
+
+    match_obj = await db.get(Match, UUID(match_id))
+    if not match_obj:
+        raise HTTPException(status_code=404, detail="Match not found")
+    u1, u2 = str(match_obj.user1_id), str(match_obj.user2_id)
+    if current_user not in (u1, u2):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    cache_key = f"icebreakers:{match_id}"
+    if not refresh:
+        cached = await redis_manager.get_json(cache_key)
+        if cached and isinstance(cached, list) and len(cached) > 0:
+            return {"icebreakers": cached}
+
+    icebreakers = await ai_service.generate_icebreakers(u1, u2, db, count=3)
+    await redis_manager.set_json(cache_key, icebreakers, expire=86400)
+    return {"icebreakers": icebreakers}
+
+
+@router.post("/chat/icebreakers/used")
+async def record_icebreaker_used(
+    match_id: str = Query(..., description="Match ID"),
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db),
+):
+    """Record that user used an icebreaker (for badge progress)."""
+    from backend.models.interaction import Match
+    from backend.services.gamification import check_and_award_badge
+
+    match_obj = await db.get(Match, UUID(match_id))
+    if not match_obj:
+        raise HTTPException(status_code=404, detail="Match not found")
+    if current_user not in (str(match_obj.user1_id), str(match_obj.user2_id)):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    r = await redis_manager.get_redis()
+    if r:
+        key = f"icebreaker_used_count:{current_user}"
+        try:
+            await r.incr(key)
+            await r.expire(key, 86400 * 365)
+        except Exception:
+            pass
+    await check_and_award_badge(current_user, "icebreaker_master", db)
+    return {"status": "ok"}
+
+
+@router.get("/chat/conversation-prompts")
+async def get_conversation_prompts(
+    match_id: str = Query(..., description="Match ID"),
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db),
+):
+    """Get prompts to restart a stalled conversation (if last message > 24h)."""
+    from backend.models.interaction import Match
+    from backend.models.chat import Message
+    from backend.services.ai import ai_service
+    from datetime import datetime, timedelta
+
+    match_obj = await db.get(Match, UUID(match_id))
+    if not match_obj:
+        raise HTTPException(status_code=404, detail="Match not found")
+    if current_user not in (str(match_obj.user1_id), str(match_obj.user2_id)):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    stmt = (
+        select(Message)
+        .where(Message.match_id == match_obj.id)
+        .order_by(Message.created_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    last_msg = result.scalar_one_or_none()
+    threshold = datetime.utcnow() - timedelta(hours=24)
+    stalled = last_msg is None or (last_msg.created_at.replace(tzinfo=None) < threshold)
+
+    if not stalled:
+        return {"prompts": [], "stalled": False}
+
+    cache_key = f"conversation_prompts:{match_id}"
+    cached = await redis_manager.get_json(cache_key)
+    if cached and isinstance(cached, list) and len(cached) > 0:
+        return {"prompts": cached, "stalled": True}
+
+    prompts = await ai_service.generate_conversation_prompts(match_id, db, count=3)
+    await redis_manager.set_json(cache_key, prompts, expire=3600)
+    return {"prompts": prompts, "stalled": True}
+
+
+@router.get("/chat/question-of-day")
+async def get_question_of_day(current_user: str = Depends(auth.get_current_user)):
+    """Get today's question of the day (cached 24h globally)."""
+    from backend.services.ai import ai_service
+    from datetime import date
+    question = await ai_service.get_question_of_the_day()
+    return {"question": question, "date": date.today().isoformat()}
+
+
+@router.post("/chat/question-of-day/answer")
+async def post_question_of_day_answer(
+    req: QOTDAnswerRequest,
+    current_user: str = Depends(auth.get_current_user),
+):
+    """Save QOTD answer and notify if both partners answered."""
+    from backend.models.interaction import Match
+    from datetime import date
+    from backend.db.session import async_session_maker
+
+    today = date.today().isoformat()
+    async with async_session_maker() as db:
+        match_obj = await db.get(Match, UUID(req.match_id))
+        if not match_obj:
+            raise HTTPException(status_code=404, detail="Match not found")
+        u1, u2 = str(match_obj.user1_id), str(match_obj.user2_id)
+        if current_user not in (u1, u2):
+            raise HTTPException(status_code=403, detail="Access denied")
+        partner_id = u2 if current_user == u1 else u1
+
+    key_me = f"qotd_answer:{req.match_id}:{current_user}:{today}"
+    key_partner = f"qotd_answer:{req.match_id}:{partner_id}:{today}"
+    await redis_manager.set_json(key_me, {"answer": req.answer}, expire=86400)
+    partner_answered = await redis_manager.get_json(key_partner) is not None
+
+    r = await redis_manager.get_redis()
+    if r:
+        count_key = f"qotd_answer_count:{current_user}"
+        try:
+            await r.incr(count_key)
+            await r.expire(count_key, 86400 * 365)
+        except Exception:
+            pass
+    from backend.services.gamification import check_and_award_badge
+    from backend.db.session import async_session_maker
+    async with async_session_maker() as db:
+        await check_and_award_badge(current_user, "daily_questioner", db)
+
+    if partner_answered:
+        await manager.send_personal(current_user, {"type": "qotd_both_answered", "match_id": req.match_id})
+        await manager.send_personal(partner_id, {"type": "qotd_both_answered", "match_id": req.match_id})
+
+    return {"status": "saved", "partner_answered": partner_answered}
 
 @router.post("/chat/call/initiate")
 async def initiate_call_endpoint(

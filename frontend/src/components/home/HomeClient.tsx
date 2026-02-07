@@ -42,18 +42,19 @@ export function HomeClient() {
             // Priority 1: Check for Telegram Init Data (Native Flow)
             if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
                 try {
-                    console.log("Found Telegram InitData, attempting native login...");
+                    console.log("[Home] Found Telegram InitData, attempting native login...");
                     await authService.telegramLogin(window.Telegram.WebApp.initData);
                     setIsAuth(true);
                     return;
                 } catch (e) {
-                    console.error("Telegram Native Login Failed:", e);
+                    console.error("[Home] Telegram Native Login Failed:", e);
                     // Fallthrough to token check
                 }
             }
 
             // Priority 2: Check for existing token (Web/Dev Flow)
             const hasToken = httpClient.isAuthenticated();
+            console.log("[Home] Token check:", hasToken);
             if (!hasToken) {
                 router.replace('/auth/phone');
             } else {
@@ -116,8 +117,9 @@ export function HomeClient() {
     useEffect(() => {
         if (meError) {
             const e = meError as any;
+            console.log("[Home] meError:", e?.response?.status, e?.status, e?.statusCode);
             if (e?.response?.status === 401 || e?.status === 401 || e?.statusCode === 401) {
-                console.log("Session expired (me), redirecting...");
+                console.log("[Home] Session expired (me), redirecting...");
                 localStorage.removeItem('accessToken');
                 router.replace('/auth/phone');
             }
@@ -126,10 +128,11 @@ export function HomeClient() {
 
     useEffect(() => {
         if (me) {
+            console.log("[Home] User loaded, is_complete:", me.is_complete);
             // Critical: If user profile is not complete, force onboarding
             // Photos can be added later in profile settings
             if (me.is_complete === false) {
-                console.log("Profile incomplete, redirecting to onboarding...");
+                console.log("[Home] Profile incomplete, redirecting to onboarding...");
                 router.replace('/onboarding');
             }
         }

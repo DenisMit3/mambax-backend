@@ -55,6 +55,31 @@ The primary realtime channel is via WebSocket:
 *   `typing`: Typing indicator status.
 *   `read`: Read receipt acknowledgment.
 *   `call`: WebRTC signaling.
+*   `qotd_both_answered`: Both partners answered Question of the Day (payload: `match_id`).
+*   `badge_earned`: User earned a gamification badge (payload: `badge`, `title`).
+
+### Chat REST Endpoints
+
+#### Icebreakers & Prompts
+*   **GET /chat/icebreakers** — AI-generated icebreakers for a match (cached 24h).
+    *   Query: `match_id` (required), `refresh` (optional, bypass cache).
+    *   Response: `{"icebreakers": ["...", "...", "..."]}`
+
+*   **POST /chat/icebreakers/used** — Record that user used an icebreaker (for badge progress).
+    *   Query: `match_id` (required).
+    *   Response: `{"status": "ok"}`
+
+*   **GET /chat/conversation-prompts** — Prompts to restart a stalled conversation (if last message > 24h).
+    *   Query: `match_id` (required).
+    *   Response: `{"prompts": ["...", "...", "..."], "stalled": true|false}`
+
+#### Question of the Day
+*   **GET /chat/question-of-day** — Today's question (cached 24h globally).
+    *   Response: `{"question": "...", "date": "YYYY-MM-DD"}`
+
+*   **POST /chat/question-of-day/answer** — Save QOTD answer; notifies both users if partner also answered.
+    *   Body: `{"match_id": "...", "answer": "..."}`.
+    *   Response: `{"status": "saved", "partner_answered": true|false}`
 
 ### Media Upload
 *   `POST /chat/upload`: Upload media for chat (photos/voice).

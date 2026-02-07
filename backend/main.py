@@ -133,6 +133,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=allowed_origin_regex,  # FIX: Enable Vercel preview deployments and local network
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

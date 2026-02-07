@@ -10,7 +10,8 @@ function OtpContent() {
     const router = useRouter();
     const phone = searchParams.get("phone") || "";
 
-    const [otp, setOtp] = useState(["", "", "", ""]);
+    // FIX: 6 digits OTP instead of 4
+    const [otp, setOtp] = useState(["", "", "", "", "", ""]);
     const [loading, setLoading] = useState(false);
     const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -30,13 +31,13 @@ function OtpContent() {
         newOtp[index] = value;
         setOtp(newOtp);
 
-        // Auto focus next
-        if (value && index < 3) {
+        // Auto focus next (6 digits now)
+        if (value && index < 5) {
             inputs.current[index + 1]?.focus();
         }
 
-        // Auto submit
-        if (index === 3 && value) {
+        // Auto submit on last digit
+        if (index === 5 && value) {
             handleComplete(newOtp.join(""));
         }
     };
@@ -60,9 +61,9 @@ function OtpContent() {
                 router.push("/onboarding");
             }
         } catch (error) {
-            // Dev hint
-            alert("Код неверный (Попробуйте 0000)");
-            setOtp(["", "", "", ""]);
+            // Dev hint - updated for 6 digits
+            alert("Код неверный (Попробуйте 000000)");
+            setOtp(["", "", "", "", "", ""]);
             setLoading(false);
             inputs.current[0]?.focus();
         }
@@ -97,14 +98,14 @@ function OtpContent() {
                             onKeyDown={(e) => handleKeyDown(i, e)}
                             onPaste={(e) => {
                                 e.preventDefault();
-                                const pastedData = e.clipboardData.getData('text').slice(0, 4).split('');
-                                if (pastedData.length === 4 && pastedData.every(c => /\d/.test(c))) {
-                                    setOtp(pastedData as [string, string, string, string]);
-                                    // FIX: Call directly instead of setTimeout
+                                // FIX: 6 digits instead of 4
+                                const pastedData = e.clipboardData.getData('text').slice(0, 6).split('');
+                                if (pastedData.length === 6 && pastedData.every(c => /\d/.test(c))) {
+                                    setOtp(pastedData as [string, string, string, string, string, string]);
                                     handleComplete(pastedData.join(""));
                                 }
                             }}
-                            className={`w-14 h-16 bg-white/5 border rounded-2xl text-center text-3xl font-mono text-white outline-none transition-all duration-300
+                            className={`w-11 h-14 bg-white/5 border rounded-2xl text-center text-2xl font-mono text-white outline-none transition-all duration-300
                                 ${digit
                                     ? 'border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)] scale-105'
                                     : 'border-white/10 focus:border-white/30 focus:bg-white/10'

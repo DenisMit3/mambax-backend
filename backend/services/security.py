@@ -221,6 +221,32 @@ async def is_shadowbanned(user_id: str) -> bool:
     return await redis_manager.client.exists(f"shadowban:{user_id}")
 
 
+async def get_shadowbanned_ids_batch(user_ids: list[str]) -> set[str]:
+    """
+    PERF-006: Batch проверка shadowban - O(1) вместо O(N)
+    Проверяет список пользователей за один запрос к Redis
+    """
+    if not user_ids:
+        return set()
+    
+    try:
+        client = redis_manager.client
+        if not client:
+            return set()
+        
+        # Используем pipeline для batch запроса
+        pipe = client.pipeline()
+        for uid in user_ids:
+            pipe.exists(f"shadowban:{uid}")
+        
+        results = await pipe.execute()
+        return {uid for uid, is_banned in zip(user_ids, results) if is_banned}
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Batch shadowban check failed: {e}")
+        return set()
+
+
 async def get_shadowban_info(user_id: str) -> Optional[str]:
     """Получить информацию о shadowban"""
     reason = await redis_manager.client.get(f"shadowban:{user_id}")
