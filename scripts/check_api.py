@@ -93,8 +93,8 @@ def test_auth():
     else:
         warn(f"Request OTP (may need Telegram): Status {res['status']}")
     
-    # Login with demo OTP
-    res = request("POST", "/auth/login", {"identifier": test_phone, "otp": "0000"})
+    # Login with demo OTP (6 digits after SEC-002)
+    res = request("POST", "/auth/login", {"identifier": test_phone, "otp": "000000"})
     if res["ok"] and "access_token" in res["data"]:
         ok(f"Login successful, got token")
         return res["data"]["access_token"]

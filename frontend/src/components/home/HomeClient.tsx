@@ -39,27 +39,33 @@ export function HomeClient() {
     // Check authentication on mount
     useEffect(() => {
         const checkAuth = async () => {
-            // Priority 1: Check for Telegram Init Data (Native Flow)
+            // Priority 1: Check for existing valid token FIRST
+            // This prevents unnecessary re-authentication on every page load
+            const hasToken = httpClient.isAuthenticated();
+            console.log("[Home] Token check:", hasToken);
+            
+            if (hasToken) {
+                // Token exists - use it, don't re-authenticate
+                setIsAuth(true);
+                return;
+            }
+
+            // Priority 2: No token - try Telegram Init Data (Native Flow)
             if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
                 try {
-                    console.log("[Home] Found Telegram InitData, attempting native login...");
+                    console.log("[Home] No token, attempting Telegram native login...");
                     await authService.telegramLogin(window.Telegram.WebApp.initData);
                     setIsAuth(true);
                     return;
                 } catch (e) {
                     console.error("[Home] Telegram Native Login Failed:", e);
-                    // Fallthrough to token check
+                    // Fallthrough to redirect
                 }
             }
 
-            // Priority 2: Check for existing token (Web/Dev Flow)
-            const hasToken = httpClient.isAuthenticated();
-            console.log("[Home] Token check:", hasToken);
-            if (!hasToken) {
-                router.replace('/auth/phone');
-            } else {
-                setIsAuth(true);
-            }
+            // No token and no Telegram data - redirect to login
+            console.log("[Home] No auth method available, redirecting to login...");
+            router.replace('/auth/phone');
         };
 
         checkAuth();

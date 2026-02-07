@@ -132,7 +132,7 @@ function OtpContent() {
                 </button>
 
                 <p className="mt-8 text-xs text-slate-600 font-mono">
-                    DEV HINT: Используйте код <span className="text-slate-400">0000</span>
+                    DEV HINT: Используйте код <span className="text-slate-400">000000</span>
                 </p>
             </div>
         </div>

@@ -20,30 +20,47 @@ export default function AuthGatePage() {
     useEffect(() => {
         if (!isReady || !initData || telegramLoading || isLoading) return;
         
-        // Проверяем, есть ли уже токен - если да, не делаем повторный логин
+        // Проверяем, есть ли уже токен - если да, валидируем его перед редиректом
         const existingToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
         if (existingToken) {
-            console.log("[Auth] Token exists, skipping telegram login, redirecting to home");
-            router.replace("/");
+            // Validate token by calling /users/me before redirecting
+            authService.getMe()
+                .then((user) => {
+                    console.log("[Auth] Token valid, user:", user.name, "redirecting to home");
+                    router.replace("/");
+                })
+                .catch((err) => {
+                    console.log("[Auth] Token invalid, clearing and proceeding with Telegram login:", err);
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('token');
+                    // Now proceed with Telegram login
+                    performTelegramLogin();
+                });
             return;
         }
         
-        setTelegramLoading(true);
-        authService
-            .telegramLogin(initData)
-            .then((data) => {
-                console.log("[Auth] Telegram login success, has_profile:", data.has_profile);
-                if (data.has_profile) {
-                    router.replace("/");
-                } else {
-                    // Используем единый onboarding flow вместо /auth/setup
-                    router.replace("/onboarding");
-                }
-            })
-            .catch((err) => {
-                console.error("[Auth] Telegram login failed:", err);
-                setTelegramLoading(false);
-            });
+        // No token - proceed with Telegram login
+        performTelegramLogin();
+        
+        function performTelegramLogin() {
+            if (!initData) return; // Guard against undefined
+            setTelegramLoading(true);
+            authService
+                .telegramLogin(initData)
+                .then((data) => {
+                    console.log("[Auth] Telegram login success, has_profile:", data.has_profile);
+                    if (data.has_profile) {
+                        router.replace("/");
+                    } else {
+                        // Используем единый onboarding flow вместо /auth/setup
+                        router.replace("/onboarding");
+                    }
+                })
+                .catch((err) => {
+                    console.error("[Auth] Telegram login failed:", err);
+                    setTelegramLoading(false);
+                });
+        }
     }, [isReady, initData, router, telegramLoading, isLoading]);
 
     const handleTelegramClick = () => {

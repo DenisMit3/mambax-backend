@@ -30,7 +30,7 @@ describe('authService', () => {
             }),
         });
 
-        const result = await authService.login('123', '0000');
+        const result = await authService.login('123', '000000');
         expect(result).toEqual({
             access_token: 'fake-token',
             token_type: 'bearer',
@@ -46,7 +46,7 @@ describe('authService', () => {
             expect.objectContaining({
                 method: 'POST',
                 headers: expect.any(Headers), // HttpClient uses Headers object now
-                body: JSON.stringify({ identifier: '123', otp: '0000' })
+                body: JSON.stringify({ identifier: '123', otp: '000000' })
             })
         );
     });

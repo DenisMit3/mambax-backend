@@ -137,15 +137,17 @@ export default function ChatPage() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         // Use standard API URL or relative if proxied. Assuming process.env or fallback.
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'localhost:8001';
-        const wsUrl = `${protocol}//${apiUrl.replace('http://', '').replace('https://', '')}/chat/ws/${token}`;
+        // FIX (SEC-005): Token is now sent via first message, not in URL
+        const wsUrl = `${protocol}//${apiUrl.replace('http://', '').replace('https://', '')}/chat/ws`;
 
         console.log('Connecting to WS:', wsUrl);
 
         const socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
-            console.log('WS Connected');
-            // Re-sync messages could happen here
+            console.log('WS Connected, sending auth...');
+            // FIX (SEC-005): Send auth message immediately after connection
+            socket.send(JSON.stringify({ type: 'auth', token }));
         };
 
         socket.onmessage = (event) => {

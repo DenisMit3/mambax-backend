@@ -8,7 +8,7 @@ test.describe('Swipe and Match Flow', () => {
         await page.click('button:has-text("Continue")');
         // Wait for transition
         await page.waitForTimeout(1000);
-        await page.keyboard.type('0000');
+        await page.keyboard.type('000000');
         await expect(page).toHaveURL(/.*feed.*/);
     });
 

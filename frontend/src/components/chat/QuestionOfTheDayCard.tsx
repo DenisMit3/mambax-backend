@@ -64,10 +64,21 @@ export function QuestionOfTheDayCard({
   useEffect(() => {
     const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
     if (!token) return;
+    
+    // FIX: Use getWsUrl() for consistent WebSocket URL across the app
+    // This ensures it works both with Next.js proxy and direct API connection
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/chat/ws/${token}`;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.host;
+    const cleanHost = apiUrl.replace('http://', '').replace('https://', '');
+    // FIX (SEC-005): Token is now sent via first message, not in URL
+    const wsUrl = `${protocol}//${cleanHost}/chat/ws`;
     const socket = new WebSocket(wsUrl);
+    
+    socket.onopen = () => {
+      // FIX (SEC-005): Send auth message immediately after connection
+      socket.send(JSON.stringify({ type: 'auth', token }));
+    };
+    
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);

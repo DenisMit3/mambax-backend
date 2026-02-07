@@ -23,14 +23,14 @@ test.describe('Authentication Flow', () => {
         // 2. OTP Screen
         await expect(page.locator('text=Enter OTP')).toBeVisible();
 
-        // Fill OTP (0000 for test users)
-        // Assuming 4 digits inputs or single input
+        // Fill OTP (000000 for test users - 6 digits after SEC-002)
+        // Assuming 6 digits inputs or single input
         const otpInput = page.locator('input[autocomplete="one-time-code"]');
         if (await otpInput.count() > 0) {
-            await otpInput.fill('0000');
+            await otpInput.fill('000000');
         } else {
             // Maybe multiple inputs
-            await page.keyboard.type('0000');
+            await page.keyboard.type('000000');
         }
 
         // 3. Profile Setup (if new) or Home (if existing)

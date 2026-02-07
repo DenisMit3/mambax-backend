@@ -57,11 +57,14 @@ def validate_telegram_data(init_data: str) -> dict | None:
 
         received_hash = parsed_data.pop("hash")
         
-        # FIX: Check auth_date to prevent replay attacks (max 5 minutes old)
+        # FIX: Check auth_date to prevent replay attacks
+        # Increased to 1 hour (3600s) because Telegram may cache initData longer,
+        # especially on slow connections or when Mini App is backgrounded
         auth_date = int(parsed_data.get("auth_date", 0))
         current_time = datetime.utcnow().timestamp()
-        if current_time - auth_date > 300:  # 5 minutes
-            logger.warning(f"Telegram auth_date too old: {current_time - auth_date}s")
+        max_age = 3600  # 1 hour - balance between security and UX
+        if current_time - auth_date > max_age:
+            logger.warning(f"Telegram auth_date too old: {current_time - auth_date}s (max: {max_age}s)")
             return None
         
         # Sort keys alphabetically

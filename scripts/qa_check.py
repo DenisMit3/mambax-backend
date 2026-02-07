@@ -82,14 +82,14 @@ async def check_qa():
             async with httpx.AsyncClient() as client:
                 # 1. Request OTP
                 otp_payload = {"identifier": "+79062148253"}
-                # Note: The API technically doesn't require requesting OTP to login with debug code 0000 in dev
+                # Note: The API technically doesn't require requesting OTP to login with debug code 000000 in dev
                 # But let's follow flow roughly.
                 await client.post(f"{BASE_URL}/auth/request-otp", json=otp_payload) # Add request call
                 
-                # 2. Login
+                # 2. Login (6 digits OTP after SEC-002)
                 login_payload = {
                     "identifier": "+79062148253",
-                    "otp": "0000"
+                    "otp": "000000"
                 }
                 login_resp = await client.post(f"{BASE_URL}/auth/login", json=login_payload)
                 
