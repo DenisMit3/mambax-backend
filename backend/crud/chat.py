@@ -18,7 +18,7 @@ async def create_message(
         type=msg_data.get("type", "text"),
         audio_url=msg_data.get("audio_url"),
         photo_url=msg_data.get("photo_url"),
-        duration=str(msg_data.get("duration")) if msg_data.get("duration") else None,
+        duration=float(msg_data.get("duration")) if msg_data.get("duration") is not None else None,
         created_at=datetime.utcnow()
     )
     db.add(msg)

@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 # Core & DB
 from backend.core.config import settings
+from backend.config.settings import settings as app_settings
 from backend.core.redis import redis_manager
 from backend.db.session import get_db, async_session_maker
 
@@ -49,23 +50,33 @@ def validate_telegram_data(init_data: str) -> dict | None:
     """
     try:
         if not TELEGRAM_BOT_TOKEN:
+             logger.error("TELEGRAM_BOT_TOKEN not configured - Telegram auth will fail")
              raise ValueError("TELEGRAM_BOT_TOKEN not configured")
         
         parsed_data = dict(parse_qsl(init_data))
         if "hash" not in parsed_data:
+            logger.warning("Telegram validation failed: hash not found in initData")
             return None
 
         received_hash = parsed_data.pop("hash")
         
         # FIX: Check auth_date to prevent replay attacks
-        # Increased to 1 hour (3600s) because Telegram may cache initData longer,
-        # especially on slow connections or when Mini App is backgrounded
+        # Increased to 24 hours (86400s) because Telegram may cache initData longer,
+        # especially on slow connections, when Mini App is backgrounded,
+        # or when users have time sync issues on their devices
         auth_date = int(parsed_data.get("auth_date", 0))
         current_time = datetime.utcnow().timestamp()
-        max_age = 3600  # 1 hour - balance between security and UX
-        if current_time - auth_date > max_age:
-            logger.warning(f"Telegram auth_date too old: {current_time - auth_date}s (max: {max_age}s)")
-            return None
+        max_age = 86400  # 24 hours - balance between security and UX
+        age_seconds = current_time - auth_date
+        
+        # В режиме разработки пропускаем проверку auth_date для удобства отладки
+        if app_settings.ENVIRONMENT == "development":
+            logger.info(f"Development mode: skipping auth_date validation (age: {age_seconds:.0f}s)")
+        else:
+            if age_seconds > max_age:
+                logger.warning(f"Telegram auth_date too old: {age_seconds:.0f}s (max: {max_age}s)")
+                return None
+            logger.debug(f"Telegram auth_date valid: {age_seconds:.0f}s (max: {max_age}s)")
         
         # Sort keys alphabetically
         data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed_data.items()))

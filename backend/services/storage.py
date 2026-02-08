@@ -109,14 +109,17 @@ class StorageService:
                 print(f"Failed to delete file {file_url}: {e}")
 
     async def save_gift_image(self, file: UploadFile) -> str:
-        return await self._save_file(file, "gifts")
+        file_url = await self._save_file(file, "gifts")
+        return self.get_cdn_url(file_url)
 
     async def save_user_photo(self, file: UploadFile) -> str:
-        return await self._save_file(file, "uploads")
+        file_url = await self._save_file(file, "uploads")
+        return self.get_cdn_url(file_url)
     
     async def save_verification_photo(self, file: UploadFile) -> str:
         # In prod this should be a private bucket
-        return await self._save_file(file, "verifications")
+        file_url = await self._save_file(file, "verifications")
+        return self.get_cdn_url(file_url)
 
     async def save_voice_message(self, file: UploadFile) -> tuple[str, float]:
         import subprocess
@@ -163,5 +166,16 @@ class StorageService:
             if output_path.exists(): os.remove(output_path)
             print(f"FFmpeg error: {e}")
             raise HTTPException(500, "Voice processing failed")
+
+    def get_cdn_url(self, file_url: str) -> str:
+        """
+        Convert local URL to CDN URL if configured.
+        PERF: CDN integration for faster static file delivery.
+        """
+        cdn_domain = os.getenv("CDN_DOMAIN")  # e.g., "cdn.mambax.com"
+        if cdn_domain and file_url.startswith("/static/"):
+            return f"https://{cdn_domain}{file_url}"
+        return file_url
+
 
 storage_service = StorageService()

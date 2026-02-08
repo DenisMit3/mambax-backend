@@ -40,6 +40,18 @@ async def get_profiles(
     return await crud.get_profiles(db, skip, limit, exclude_user_id=current_user)
 
 
+def _hash_filters(filters: SearchFilters, skip: int, limit: int) -> str:
+    """Generate hash for cache key based on filter parameters"""
+    import hashlib
+    filter_str = f"{filters.age_min}:{filters.age_max}:{filters.gender}:{filters.distance_km}:" \
+                 f"{filters.height_min}:{filters.height_max}:{filters.verified_only}:{filters.with_photos_only}:" \
+                 f"{sorted(filters.interests or [])}:{sorted(filters.smoking or [])}:" \
+                 f"{sorted(filters.drinking or [])}:{sorted(filters.education or [])}:" \
+                 f"{sorted(filters.looking_for or [])}:{sorted(filters.children or [])}:" \
+                 f"{skip}:{limit}"
+    return hashlib.md5(filter_str.encode()).hexdigest()[:16]
+
+
 @router.post("/discover")
 async def discover_profiles(
     skip: int = 0,
@@ -65,11 +77,8 @@ async def discover_profiles(
 ):
     """
     🔍 Поиск профилей с расширенными фильтрами
+    PERF: Redis кэширование на 5 минут
     """
-    
-    # Получаем VIP статус
-    user = await crud.get_user_profile(db, current_user)
-    is_vip = user.is_vip if user else False
     
     filters = SearchFilters(
         age_min=age_min,
@@ -88,6 +97,19 @@ async def discover_profiles(
         with_photos_only=with_photos_only
     )
     
+    # PERF: Redis cache for /discover endpoint (TTL 5 minutes)
+    cache_key = f"discover:{current_user}:{_hash_filters(filters, skip, limit)}"
+    
+    try:
+        cached = await redis_manager.get_json(cache_key)
+        if cached:
+            return {"profiles": cached.get("profiles", []), "total": cached.get("total", 0), "cached": True}
+    except Exception as e:
+        logger.warning(f"Redis cache read error: {e}")
+    
+    # Получаем VIP статус
+    user = await crud.get_user_profile(db, current_user)
+    is_vip = user.is_vip if user else False
 
     res = await get_filtered_profiles(
         db=db,
@@ -106,6 +128,12 @@ async def discover_profiles(
             p_interests = set(profile.get("interests", []))
             profile["common_interests"] = list(p_interests & current_interests)
             profile["compatibility_score"] = ai_service.calculate_compatibility(user_profile, profile)
+    
+    # PERF: Cache result for 5 minutes
+    try:
+        await redis_manager.set_json(cache_key, res, expire=300)
+    except Exception as e:
+        logger.warning(f"Redis cache write error: {e}")
             
     return res
 
@@ -362,7 +390,7 @@ async def upload_file(
     Unified Secure Upload for Discovery/Profile.
     Uses StorageService for cross-platform consistency.
     """
-    # 1. Save file via unified storage service
+    # 1. Save file via unified storage service (returns CDN URL if configured)
     file_url = await storage_service.save_user_photo(file)
     
     # 2. Real Moderation Check on the actual file content
@@ -390,5 +418,6 @@ async def upload_file(
         storage_service.delete_file(file_url)
         raise HTTPException(status_code=500, detail="Moderation temporary unavailable. Please try later.")
 
+    # URL already includes CDN prefix from storage_service.save_user_photo()
     return {"url": file_url}
 

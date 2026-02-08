@@ -16,6 +16,8 @@ interface SwipeCardProps {
     onProfileClick?: () => void;
     compatibilityScore?: number;
     commonInterests?: string[];
+    /** PERF: Only set true for the first visible card when absolutely necessary */
+    isHero?: boolean;
 }
 
 export function SwipeCard({
@@ -27,7 +29,8 @@ export function SwipeCard({
     onGiftClick,
     onProfileClick,
     compatibilityScore,
-    commonInterests
+    commonInterests,
+    isHero = false
 }: SwipeCardProps) {
     const x = useMotionValue(0);
     const controls = useAnimation();
@@ -74,7 +77,8 @@ export function SwipeCard({
                     fill
                     sizes="(max-width: 768px) 100vw, 400px"
                     className="object-cover pointer-events-none"
-                    priority
+                    priority={isHero}
+                    loading={isHero ? undefined : "lazy"}
                 />
 
                 {/* Gradient Overlay */}

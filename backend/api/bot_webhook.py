@@ -156,9 +156,40 @@ async def delete_webhook():
 # HEALTH CHECK
 # ============================================================================
 
+@router.get("/bot/health")
+async def bot_health():
+    """
+    Проверка работоспособности Telegram бота.
+    Возвращает информацию о боте и его статусе.
+    Используется для мониторинга и отладки.
+    """
+    if not BOT_TOKEN:
+        logger.warning("Bot health check: BOT_TOKEN not configured")
+        return {
+            "status": "error",
+            "message": "BOT_TOKEN not configured"
+        }
+    
+    try:
+        bot, _ = get_bot_and_dp()
+        bot_info = await bot.get_me()
+        logger.info(f"Bot health check successful: @{bot_info.username}")
+        return {
+            "status": "ok",
+            "bot_username": bot_info.username,
+            "bot_id": bot_info.id,
+            "bot_name": bot_info.first_name
+        }
+    except Exception as e:
+        logger.error(f"Bot health check failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
 @router.get("/bot/status")
 async def bot_status():
-    """Статус бота"""
+    """Статус бота с информацией о webhook"""
     if not BOT_TOKEN:
         return {
             "status": "error",

@@ -182,6 +182,16 @@ async def swipe(
         await redis_manager.client.lpush(history_key, str(swipe_data.to_user_id))
         await redis_manager.client.ltrim(history_key, 0, 99)  # Keep last 100
 
+    # PERF: Invalidate discover cache on swipe to ensure fresh results
+    try:
+        # Delete all discover cache keys for this user
+        pattern = f"discover:{current_user_id}:*"
+        keys = await redis_manager.client.keys(pattern)
+        if keys:
+            await redis_manager.client.delete(*keys)
+    except Exception:
+        pass  # Don't fail swipe if cache invalidation fails
+
     return SwipeResponse(success=True, is_match=is_match)
 
 

@@ -42,6 +42,12 @@ async def lifespan(app: FastAPI):
     # Startup: Create tables
     if len(settings.SECRET_KEY) < 32:
         raise RuntimeError(f"SECRET_KEY too short ({len(settings.SECRET_KEY)} chars). Must be 32+ characters.")
+    
+    # Проверка TELEGRAM_BOT_TOKEN
+    if not os.getenv("TELEGRAM_BOT_TOKEN"):
+        logger.warning("⚠️  TELEGRAM_BOT_TOKEN not configured - Telegram authentication will not work")
+    else:
+        logger.info("✅ Telegram bot configured")
         
     logger.info("Starting up: Creating database tables...")
     try:

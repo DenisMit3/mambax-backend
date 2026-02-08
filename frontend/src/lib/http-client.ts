@@ -112,6 +112,29 @@ class HttpClient {
             return;
         }
 
+        // Отправлять критические ошибки аутентификации Telegram в Sentry
+        if (error.status === 401 && typeof window !== 'undefined') {
+            const hasTelegramData = !!window.Telegram?.WebApp?.initData;
+            const isTelegramAuthError = error.message?.toLowerCase().includes('telegram') || 
+                                        error.data?.detail?.toLowerCase().includes('telegram') ||
+                                        hasTelegramData;
+            
+            if (isTelegramAuthError) {
+                Sentry.captureException(error, {
+                    tags: {
+                        error_type: 'telegram_auth_failure',
+                        initData_present: hasTelegramData,
+                        error_message: error.message || 'Unknown'
+                    },
+                    extra: {
+                        url: error.url,
+                        status: error.status,
+                        detail: error.data?.detail
+                    }
+                });
+            }
+        }
+
         if (process.env.NODE_ENV === 'development') {
             // Use warn for typical API errors to reduce console noise, error for unexpected
             if (error.status && error.status >= 400 && error.status < 500) {

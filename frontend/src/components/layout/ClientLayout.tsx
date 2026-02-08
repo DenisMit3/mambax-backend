@@ -8,6 +8,7 @@ import QueryProvider from '@/providers/QueryProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BadgeEarnedToast } from '@/components/ui/BadgeEarnedToast';
 import { useTelegram } from '@/lib/telegram';
+import { measurePerformance } from '@/lib/performance';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -29,18 +30,50 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     // Show Nav on Home, Likes, Profile, Search, Chat List. Hide on Chat Room.
     const showGlobalNav = !hideNav && !isChatRoom;
 
+    // PERF: Register Service Worker and measure performance
     useEffect(() => {
         // Register PWA Service Worker
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js')
                 .then(registration => {
                     console.log('SW Registered:', registration);
+                    // Check for updates periodically
+                    setInterval(() => registration.update(), 60 * 60 * 1000);
                 })
                 .catch(err => {
                     console.log('SW Registration failed:', err);
                 });
         }
+        
+        // PERF: Measure Core Web Vitals
+        measurePerformance();
     }, []);
+
+    // SECURITY: Clear SW cache on auth changes (logout/login)
+    useEffect(() => {
+        const clearSwCache = () => {
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_API_CACHE' });
+            }
+        };
+
+        // Listen for auth change events
+        window.addEventListener('auth-logout', clearSwCache);
+        window.addEventListener('auth-login', clearSwCache);
+
+        return () => {
+            window.removeEventListener('auth-logout', clearSwCache);
+            window.removeEventListener('auth-login', clearSwCache);
+        };
+    }, []);
+    
+    // PERF: Prefetch critical routes for faster navigation
+    useEffect(() => {
+        router.prefetch('/chat');
+        router.prefetch('/profile');
+        router.prefetch('/discover');
+        router.prefetch('/likes');
+    }, [router]);
 
     // Telegram Back Button Management
     useEffect(() => {

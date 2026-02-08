@@ -302,13 +302,33 @@ async def login_telegram(
     Принимает init_data (строка запуска), валидирует её через бота
     и возвращает токен.
     """
+    # Логирование входящего запроса
+    init_data_length = len(data.init_data) if data.init_data else 0
+    logger.info(f"Telegram login attempt, initData length: {init_data_length}")
+    
+    # Проверка на пустой initData
+    if not data.init_data or not data.init_data.strip():
+        logger.error("Telegram login failed: empty initData received")
+        raise HTTPException(
+            status_code=401, 
+            detail="Empty Telegram data. Please restart the bot with /start command."
+        )
+    
     auth_data = validate_telegram_data(data.init_data)
     
-    if not auth_data:         
-        raise HTTPException(status_code=401, detail="Invalid Telegram data")
+    if not auth_data:
+        # Логируем первые 50 символов для отладки (без чувствительных данных)
+        safe_preview = data.init_data[:50] if len(data.init_data) > 50 else data.init_data
+        logger.error(f"Telegram validation failed for initData: {safe_preview}...")
+        raise HTTPException(
+            status_code=401, 
+            detail="Invalid Telegram data. Please restart the bot with /start command."
+        )
 
     telegram_id = str(auth_data["id"])
     username = auth_data.get("username")
+    
+    logger.info(f"Telegram validation successful for user: {telegram_id} (username: {username})")
     
     # Find or Create User
     user = await get_user_by_telegram_id(db, telegram_id)
@@ -317,6 +337,8 @@ async def login_telegram(
         # Generate random password placeholder for security
         import secrets
         random_pwd = secrets.token_urlsafe(32)
+        
+        logger.info(f"Creating new user from Telegram: {telegram_id} (username: {username})")
         
         user = User(
             telegram_id=telegram_id,
@@ -333,14 +355,18 @@ async def login_telegram(
         db.add(user)
         await db.commit()
         await db.refresh(user)
+        logger.info(f"New user created successfully: {user.id} (telegram_id: {telegram_id})")
     elif username and user.username != username:
         # Update username if changed
+        logger.info(f"Updating username for user {user.id}: {user.username} -> {username}")
         user.username = username
         await db.commit()
     
     # Security Check: Banned/inactive users
     if not user.is_active or (user.status and str(user.status).lower() == "banned"):
+            logger.warning(f"Telegram login blocked for banned/inactive user: {user.id}")
             raise HTTPException(status_code=401, detail="User account is disabled or banned")
     
     access_token = create_access_token(user.id)
+    logger.info(f"Telegram login successful for user: {user.id}")
     return TokenResponse(access_token=access_token, has_profile=user.is_complete)

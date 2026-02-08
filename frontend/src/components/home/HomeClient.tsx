@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authService, UserProfile } from '@/services/api';
 import { motion } from 'framer-motion';
@@ -9,6 +9,7 @@ import { httpClient } from "@/lib/http-client"; // Import httpClient
 import { useRouter } from 'next/navigation';
 import { useTelegram } from '@/lib/telegram';
 import { MatchModal } from '@/components/discovery/MatchModal';
+import { TelegramAuthError } from '@/components/auth/TelegramAuthError';
 
 // FIX: Move API_BASE outside component to avoid recreation
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
@@ -35,41 +36,103 @@ export function HomeClient() {
     const { user, hapticFeedback } = useTelegram(); // Assuming useTelegram provides user context or similar
     const [isAuth, setIsAuth] = useState(false);
     const [matchData, setMatchData] = useState<{ isOpen: boolean; user?: any; partner?: any } | null>(null);
+    
+    // Telegram auth error handling states
+    const [authError, setAuthError] = useState<string | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
+    const [isRetrying, setIsRetrying] = useState(false);
+    const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    
+    // Max retry attempts for Telegram auth
+    const MAX_RETRY_ATTEMPTS = 2;
+
+    // Cleanup retry timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    // Check authentication function - extracted for reuse
+    const checkAuth = useCallback(async () => {
+        // Priority 1: Check for existing valid token FIRST
+        // This prevents unnecessary re-authentication on every page load
+        const hasToken = httpClient.isAuthenticated();
+        console.log("[Home] Token check:", hasToken);
+        
+        if (hasToken) {
+            // Token exists - use it, don't re-authenticate
+            setIsAuth(true);
+            setAuthError(null);
+            return;
+        }
+
+        // Priority 2: No token - try Telegram Init Data (Native Flow)
+        if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
+            // Проверить, что initData не пустой
+            const initData = window.Telegram.WebApp.initData;
+            if (!initData || !initData.trim()) {
+                console.error("[Home] Empty initData from Telegram");
+                setAuthError("Telegram данные отсутствуют. Попробуйте перезапустить бот командой /start");
+                setIsRetrying(false);
+                return;
+            }
+            
+            try {
+                console.log("[Home] Attempting Telegram login, retry:", retryCount);
+                setIsRetrying(true);
+                await authService.telegramLogin(initData);
+                setIsAuth(true);
+                setAuthError(null);
+                setRetryCount(0);
+                setIsRetrying(false);
+                return;
+            } catch (e: any) {
+                console.error("[Home] Telegram Login Failed:", e);
+                setIsRetrying(false);
+                
+                // Попытка повторной аутентификации (максимум MAX_RETRY_ATTEMPTS раз)
+                if (retryCount < MAX_RETRY_ATTEMPTS) {
+                    const nextRetry = retryCount + 1;
+                    setRetryCount(nextRetry);
+                    console.log(`[Home] Scheduling retry ${nextRetry}/${MAX_RETRY_ATTEMPTS} in ${1000 * nextRetry}ms`);
+                    
+                    retryTimeoutRef.current = setTimeout(() => {
+                        checkAuth();
+                    }, 1000 * nextRetry); // Exponential backoff: 1s, 2s
+                    return;
+                }
+                
+                // После MAX_RETRY_ATTEMPTS неудачных попыток показать ошибку
+                const errorMessage = e.message || e.data?.detail || '';
+                setAuthError(
+                    errorMessage.toLowerCase().includes("auth_date") || errorMessage.toLowerCase().includes("expired")
+                        ? "Данные Telegram устарели. Пожалуйста, перезапустите бот командой /start"
+                        : "Ошибка входа через Telegram. Попробуйте позже или используйте вход по телефону."
+                );
+                return;
+            }
+        }
+
+        // No token and no Telegram data - redirect to login
+        console.log("[Home] No auth method available, redirecting to login...");
+        router.replace('/auth/phone');
+    }, [retryCount, router]);
 
     // Check authentication on mount
     useEffect(() => {
-        const checkAuth = async () => {
-            // Priority 1: Check for existing valid token FIRST
-            // This prevents unnecessary re-authentication on every page load
-            const hasToken = httpClient.isAuthenticated();
-            console.log("[Home] Token check:", hasToken);
-            
-            if (hasToken) {
-                // Token exists - use it, don't re-authenticate
-                setIsAuth(true);
-                return;
-            }
-
-            // Priority 2: No token - try Telegram Init Data (Native Flow)
-            if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
-                try {
-                    console.log("[Home] No token, attempting Telegram native login...");
-                    await authService.telegramLogin(window.Telegram.WebApp.initData);
-                    setIsAuth(true);
-                    return;
-                } catch (e) {
-                    console.error("[Home] Telegram Native Login Failed:", e);
-                    // Fallthrough to redirect
-                }
-            }
-
-            // No token and no Telegram data - redirect to login
-            console.log("[Home] No auth method available, redirecting to login...");
-            router.replace('/auth/phone');
-        };
-
         checkAuth();
-    }, [router]);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    
+    // Handler for retry button
+    const handleRetry = useCallback(() => {
+        setAuthError(null);
+        setRetryCount(0);
+        setIsRetrying(true);
+        checkAuth();
+    }, [checkAuth]);
 
     // Filters state - ideally persist this in URL or LocalStorage
     const [filters, setFilters] = useState({
@@ -277,6 +340,18 @@ export function HomeClient() {
         }
     }, [profiles, isLoading, cachedProfiles, queryClient, filters]);
 
+    // Show Telegram Auth Error screen
+    if (authError) {
+        return (
+            <TelegramAuthError 
+                error={authError}
+                onRetry={handleRetry}
+                retryCount={retryCount}
+                isRetrying={isRetrying}
+            />
+        );
+    }
+
     // Handle Loading
     if (isLoading) {
         return (
@@ -289,6 +364,11 @@ export function HomeClient() {
                     />
                     <div className="mt-8 text-center text-primary-red font-mono text-[10px] uppercase tracking-[0.3em]">
                         Загрузка анкет...
+                        {retryCount > 0 && (
+                            <div className="text-gray-500 mt-2 normal-case tracking-normal">
+                                Попытка {retryCount + 1} из {MAX_RETRY_ATTEMPTS + 1}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

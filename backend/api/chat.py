@@ -453,19 +453,40 @@ async def handle_read(user_id: str, data: dict):
     message_ids = data.get("message_ids")
     sender_id = data.get("sender_id") # Legacy
     
-    if match_id:
-        res = await mark_as_read(match_id, user_id, message_ids)
-        broadcast_ids = res.get("updated_ids") or message_ids
+    if match_id and message_ids:
+        # FIX: Verify user is the receiver and only broadcast if something was updated
+        from backend.crud import chat as crud_chat
+        from backend.models.chat import Message
         
-        # Notify sender
-        recipient_id = data.get("recipient_id") or sender_id
-        if recipient_id and broadcast_ids:
-            await manager.send_personal(recipient_id, {
-                "type": "read",
-                "match_id": match_id,
-                "reader_id": user_id,
-                "message_ids": broadcast_ids
-            })
+        async with async_session_maker() as db:
+            # Verify at least one message belongs to this user as receiver
+            valid_message_ids = []
+            for mid in message_ids:
+                try:
+                    msg = await db.get(Message, UUID(mid))
+                    if msg and str(msg.receiver_id) == user_id:
+                        valid_message_ids.append(UUID(mid))
+                except:
+                    pass
+            
+            if not valid_message_ids:
+                return  # No valid messages to mark as read
+            
+            rowcount = await crud_chat.mark_messages_as_read(db, valid_message_ids, UUID(user_id))
+            
+            # Only broadcast if something was actually updated
+            if rowcount > 0:
+                broadcast_ids = [str(mid) for mid in valid_message_ids]
+                
+                # Notify sender
+                recipient_id = data.get("recipient_id") or sender_id
+                if recipient_id and broadcast_ids:
+                    await manager.send_personal(recipient_id, {
+                        "type": "read",
+                        "match_id": match_id,
+                        "reader_id": user_id,
+                        "message_ids": broadcast_ids
+                    })
 
 async def handle_reaction(user_id: str, data: dict):
     message_id = data.get("message_id")
@@ -732,7 +753,6 @@ async def post_question_of_day_answer(
     """Save QOTD answer and notify if both partners answered."""
     from backend.models.interaction import Match
     from datetime import date
-    from backend.db.session import async_session_maker
 
     today = date.today().isoformat()
     async with async_session_maker() as db:
@@ -758,7 +778,6 @@ async def post_question_of_day_answer(
         except Exception:
             pass
     from backend.services.gamification import check_and_award_badge
-    from backend.db.session import async_session_maker
     async with async_session_maker() as db:
         await check_and_award_badge(current_user, "daily_questioner", db)
 
@@ -862,20 +881,25 @@ async def mark_message_read(
     msg = await db.get(Message, message_id)
     if not msg:
         raise HTTPException(404, "Message not found")
-        
-    await crud_chat.mark_messages_as_read(db, [message_id], UUID(current_user))
     
-    # Broadcast
-    sender_id = str(msg.sender_id)
-    if sender_id != current_user:
-         await manager.send_personal(sender_id, {
-            "type": "read",
-            "message_ids": [str(message_id)],
-            "reader_id": current_user,
-            "match_id": str(msg.match_id)
-         })
+    # FIX: Verify current_user is the receiver of this message
+    if str(msg.receiver_id) != current_user:
+        raise HTTPException(403, "Only the receiver can mark messages as read")
+        
+    rowcount = await crud_chat.mark_messages_as_read(db, [message_id], UUID(current_user))
+    
+    # FIX: Only broadcast when update count > 0
+    if rowcount > 0:
+        sender_id = str(msg.sender_id)
+        if sender_id != current_user:
+             await manager.send_personal(sender_id, {
+                "type": "read",
+                "message_ids": [str(message_id)],
+                "reader_id": current_user,
+                "match_id": str(msg.match_id)
+             })
          
-    return {"status": "ok", "message_id": str(message_id)}
+    return {"status": "ok", "message_id": str(message_id), "updated": rowcount > 0}
 
 @router.post("/chat/send", response_model=MessageResponse)
 @router.post("/chat/send_message") # Alias for compatibility
@@ -913,6 +937,9 @@ async def send_message(
     db_msg = await crud_chat.create_message(db, UUID(msg.match_id), UUID(current_user), msg_data)
     MESSAGES_COUNTER.inc()
 
+    # Award conversationalist badge for REST message sends (mirroring WS handler)
+    from backend.services.gamification import check_and_award_badge
+    await check_and_award_badge(current_user, "conversationalist", db)
     
     # Try notify WS
     await manager.send_to_match(msg.match_id, current_user, receiver_id, {

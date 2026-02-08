@@ -140,6 +140,7 @@ export function DailyPicks() {
                         <img
                             src={pick.photos[0] || "https://placehold.co/200x300"}
                             alt={pick.name}
+                            loading="lazy"
                             className="w-full h-full object-cover"
                         />
 

@@ -10,8 +10,14 @@ const nextConfig: NextConfig = {
 
   // Experimental optimizations
   experimental: {
-    // Tree-shake unused package exports (smaller bundles)
-    optimizePackageImports: ['lucide-react', 'framer-motion', '@radix-ui/react-dialog'],
+    // PERF: Tree-shake unused package exports (smaller bundles)
+    optimizePackageImports: [
+      'lucide-react', 
+      'framer-motion', 
+      '@radix-ui/react-dialog',
+      '@tanstack/react-query',
+      'date-fns'
+    ],
   },
 
   // Security Headers

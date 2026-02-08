@@ -150,6 +150,7 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
                                 <img
                                     src={gift.image_url.startsWith("http") || gift.image_url.startsWith("/") ? gift.image_url : `/api_proxy/${gift.image_url}`}
                                     alt={gift.name}
+                                    loading="lazy"
                                     className="max-w-full max-h-full object-contain"
                                     onError={(e) => {
                                         (e.target as HTMLImageElement).style.display = "none";

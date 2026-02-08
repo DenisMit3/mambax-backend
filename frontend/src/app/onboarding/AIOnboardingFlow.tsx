@@ -75,7 +75,25 @@ export default function AIOnboardingFlow() {
         // Validation: Ensure user is logged in before starting
         const token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') || localStorage.getItem('token')) : null;
         if (!token) {
-            console.warn("[Onboarding] No auth token found, redirecting to login");
+            // Попытаться восстановить сессию через Telegram
+            if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
+                const initData = window.Telegram.WebApp.initData;
+                if (initData && initData.trim()) {
+                    console.log("[Onboarding] Token lost, attempting re-auth via Telegram");
+                    authService.telegramLogin(initData)
+                        .then(() => {
+                            console.log("[Onboarding] Re-auth successful, continuing onboarding");
+                            // Продолжить onboarding - запустить проверку профиля
+                            checkProfileStatus();
+                        })
+                        .catch(err => {
+                            console.error("[Onboarding] Re-auth failed:", err);
+                            window.location.href = '/auth/phone';
+                        });
+                    return;
+                }
+            }
+            console.warn("[Onboarding] No auth token and no Telegram data available");
             window.location.href = '/auth/phone';
             return;
         }
@@ -94,9 +112,41 @@ export default function AIOnboardingFlow() {
                     initialMessageSent.current = true;
                     addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
                 }
-            } catch (e) {
+            } catch (e: any) {
                 console.error("[Onboarding] Failed to check profile status:", e);
-                // On error, still allow onboarding to proceed
+                
+                // Если ошибка 401 - попробовать восстановить через Telegram
+                if (e?.status === 401 || e?.message?.includes('Unauthorized')) {
+                    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
+                        const initData = window.Telegram.WebApp.initData;
+                        if (initData && initData.trim()) {
+                            console.log("[Onboarding] Session expired, attempting re-auth via Telegram");
+                            try {
+                                await authService.telegramLogin(initData);
+                                console.log("[Onboarding] Re-auth successful, retrying profile check");
+                                // Retry profile check after re-auth
+                                const me = await authService.getMe();
+                                if (me && me.is_complete === true) {
+                                    window.location.href = '/';
+                                    return;
+                                }
+                                if (!initialMessageSent.current) {
+                                    initialMessageSent.current = true;
+                                    addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
+                                }
+                                return;
+                            } catch (reAuthErr) {
+                                console.error("[Onboarding] Re-auth failed:", reAuthErr);
+                                window.location.href = '/auth/phone';
+                                return;
+                            }
+                        }
+                    }
+                    window.location.href = '/auth/phone';
+                    return;
+                }
+                
+                // On other errors, still allow onboarding to proceed
                 if (!initialMessageSent.current) {
                     initialMessageSent.current = true;
                     addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);

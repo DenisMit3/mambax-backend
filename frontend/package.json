@@ -10,7 +10,10 @@
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:ci": "jest --ci --coverage"
+    "test:ci": "jest --ci --coverage",
+    "perf:audit": "node scripts/performance-audit.js",
+    "perf:audit:prod": "node scripts/performance-audit.js https://mambax.app",
+    "lighthouse": "npx lhci autorun"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

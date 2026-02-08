@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, Uuid, Boolean, Index
+from sqlalchemy import String, Text, DateTime, ForeignKey, Uuid, Boolean, Index, Float
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.db.base import Base
@@ -62,8 +62,7 @@ class Message(Base):
         String(500),
         nullable=True,
     )
-    duration: Mapped[Optional[str]] = mapped_column(
-        String(50),
+    duration: Mapped[Optional[float]] = mapped_column(
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(

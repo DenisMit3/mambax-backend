@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { SwipeCard } from "@/components/ui/SwipeCard";
-import { SendGiftModal } from "@/components/gifts";
-import { BuySwipesModal } from "@/components/ui/BuySwipesModal";
-import { TopUpModal } from "@/components/ui/TopUpModal";
 import { X, Heart, Star, MessageCircle } from "lucide-react";
 import { authService } from "@/services/api";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,6 +12,22 @@ import { useProfiles, useSwipeStatus, useLikeMutation, Profile } from "@/hooks/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { DailyPicks } from "@/components/discovery/DailyPicks";
+
+// PERF: Dynamic imports for modals (code splitting)
+const SendGiftModal = dynamic(() => import("@/components/gifts").then(m => ({ default: m.SendGiftModal })), {
+    ssr: false,
+    loading: () => null
+});
+
+const BuySwipesModal = dynamic(() => import("@/components/ui/BuySwipesModal").then(m => ({ default: m.BuySwipesModal })), {
+    ssr: false,
+    loading: () => null
+});
+
+const TopUpModal = dynamic(() => import("@/components/ui/TopUpModal").then(m => ({ default: m.TopUpModal })), {
+    ssr: false,
+    loading: () => null
+});
 
 export default function DiscoverPage() {
     const router = useRouter();

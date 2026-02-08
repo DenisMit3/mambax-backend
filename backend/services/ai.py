@@ -302,7 +302,8 @@ class AIService:
             r1, r2 = await db.execute(stmt1), await db.execute(stmt2)
             user1, user2 = r1.scalar_one_or_none(), r2.scalar_one_or_none()
             if not user1 or not user2:
-                return await self._simulate_response("icebreaker", count)[0][:count]
+                result, _ = await self._simulate_response("icebreaker", count)
+                return result[:count]
 
             interests1 = getattr(user1, "interests", None) or (user1.interests if hasattr(user1, "interests") else [])
             interests2 = getattr(user2, "interests", None) or (user2.interests if hasattr(user2, "interests") else [])

@@ -108,6 +108,7 @@ export const SwipeCard = ({
                     <motion.img
                         src={profile.photos[currentPhotoIndex]}
                         alt={profile.name}
+                        loading="lazy"
                         className="h-full w-full object-cover"
                         initial={{ scale: 1.1 }}
                         animate={{ scale: 1 }}

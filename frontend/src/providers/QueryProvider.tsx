@@ -7,11 +7,10 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
     const [queryClient] = useState(() => new QueryClient({
         defaultOptions: {
             queries: {
-                // With SSR, we usually want to set some default staleTime
-                // above 0 to avoid refetching immediately on the client
-                staleTime: 60 * 1000,
-                // PERF-014: Garbage collection after 5 minutes to prevent memory leaks
-                gcTime: 5 * 60 * 1000,
+                // PERF: Increased staleTime to 5 minutes for better caching
+                staleTime: 5 * 60 * 1000, // 5 minutes
+                // PERF-014: Garbage collection after 10 minutes to prevent memory leaks
+                gcTime: 10 * 60 * 1000,
                 retry: 1,
                 // PERF-014: Reduce unnecessary refetches
                 refetchOnWindowFocus: false,

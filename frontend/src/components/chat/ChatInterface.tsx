@@ -69,6 +69,10 @@ export const ChatInterface = ({
     const [showReactions, setShowReactions] = useState<string | null>(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showIcebreakers, setShowIcebreakers] = useState(false);
+    const [showConversationPrompts, setShowConversationPrompts] = useState(false);
+    const [conversationPrompts, setConversationPrompts] = useState<string[]>([]);
+    const [isConversationStalled, setIsConversationStalled] = useState(false);
+    const [loadingPrompts, setLoadingPrompts] = useState(false);
 
     // Voice & Audio
     const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -77,6 +81,10 @@ export const ChatInterface = ({
     // Optimistic UI
     const [localMessages, setLocalMessages] = useState<Message[]>(chat.messages);
     const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
+
+    // FIX: Local typing state with 10s timeout
+    const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         setLocalMessages(chat.messages);
@@ -89,6 +97,43 @@ export const ChatInterface = ({
             return () => clearTimeout(t);
         }
     }, [chat.matchId, chat.messages.length]);
+
+    // Check if conversation is stalled (last message > 24h ago)
+    useEffect(() => {
+        if (chat.messages.length === 0) {
+            setIsConversationStalled(false);
+            return;
+        }
+        const lastMessage = chat.messages[chat.messages.length - 1];
+        const lastMessageTime = new Date(lastMessage.timestamp).getTime();
+        const now = Date.now();
+        const hoursSinceLastMessage = (now - lastMessageTime) / (1000 * 60 * 60);
+        setIsConversationStalled(hoursSinceLastMessage >= 24);
+    }, [chat.messages]);
+
+    // Fetch conversation prompts when stalled conversation modal is opened
+    const handleOpenConversationPrompts = useCallback(async () => {
+        if (!isConversationStalled) return;
+        
+        setLoadingPrompts(true);
+        setShowConversationPrompts(true);
+        
+        try {
+            const token = getToken();
+            const response = await fetch(`/api/chat/conversation-prompts?match_id=${chat.matchId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                setConversationPrompts(data.prompts || []);
+            }
+        } catch (error) {
+            console.error('Failed to fetch conversation prompts:', error);
+        } finally {
+            setLoadingPrompts(false);
+        }
+    }, [chat.matchId, isConversationStalled]);
 
     const allMessages = [...localMessages, ...optimisticMessages];
 
@@ -132,20 +177,47 @@ export const ChatInterface = ({
             }
         };
 
+        // FIX: Implement typing handler with 10s timeout
         const handleTyping = (data: any) => {
-            // Typing handled by parent 'chat' prop?
-            // "if (data.type === 'typing' ... setChatTyping(true)"
-            // Logic seems to be needed here if 'chat.isTyping' is not auto-updated
+            if (data.type === 'typing' && data.user_id !== currentUserId) {
+                if (data.is_typing) {
+                    setIsPartnerTyping(true);
+                    
+                    // Clear existing timeout
+                    if (typingTimeoutRef.current) {
+                        clearTimeout(typingTimeoutRef.current);
+                    }
+                    
+                    // Set 10s timeout to auto-clear typing indicator
+                    typingTimeoutRef.current = setTimeout(() => {
+                        setIsPartnerTyping(false);
+                    }, 10000);
+                } else {
+                    // Explicitly stopped typing
+                    setIsPartnerTyping(false);
+                    if (typingTimeoutRef.current) {
+                        clearTimeout(typingTimeoutRef.current);
+                        typingTimeoutRef.current = null;
+                    }
+                }
+            }
         };
 
         wsService.on('read', handleReadReceipt);
         wsService.on('message', handleMessageConfirmed);
+        wsService.on('typing', handleTyping);
 
         return () => {
             wsService.off('read', handleReadReceipt);
             wsService.off('message', handleMessageConfirmed);
+            wsService.off('typing', handleTyping);
+            
+            // Cleanup typing timeout on unmount
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
         };
-    }, []);
+    }, [currentUserId, haptic]);
 
     // Auto-read effect
     useEffect(() => {
@@ -260,6 +332,7 @@ export const ChatInterface = ({
                         <img
                             src={otherParticipant?.photo || '/placeholder.svg?height=40&width=40'}
                             alt={otherParticipant?.name}
+                            loading="lazy"
                             className="w-10 h-10 rounded-full object-cover"
                         />
                         {otherParticipant?.isOnline && (
@@ -282,14 +355,28 @@ export const ChatInterface = ({
                 </div>
 
                 <div className="flex items-center space-x-2">
-                    <AnimatedButton
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowIcebreakers(true)}
-                        title="Идеи для разговора"
-                    >
-                        <Lightbulb className="w-4 h-4 text-amber-400" />
-                    </AnimatedButton>
+                    {/* Show icebreakers button for new chats (no messages) */}
+                    {chat.messages.length === 0 && (
+                        <AnimatedButton
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowIcebreakers(true)}
+                            title="Идеи для разговора"
+                        >
+                            <Lightbulb className="w-4 h-4 text-amber-400" />
+                        </AnimatedButton>
+                    )}
+                    {/* Show conversation prompts button only when conversation is stalled (>24h) */}
+                    {isConversationStalled && chat.messages.length > 0 && (
+                        <AnimatedButton
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleOpenConversationPrompts}
+                            title="Возобновить разговор"
+                        >
+                            <Lightbulb className="w-4 h-4 text-amber-400" />
+                        </AnimatedButton>
+                    )}
                     {isPremium && (
                         <>
                             <AnimatedButton
@@ -325,6 +412,73 @@ export const ChatInterface = ({
                 }}
             />
 
+            {/* Conversation Prompts Modal for stalled conversations */}
+            <AnimatePresence>
+                {showConversationPrompts && (
+                    <motion.div
+                        className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowConversationPrompts(false)}
+                    >
+                        <motion.div
+                            className="w-full max-w-lg bg-gray-900 rounded-t-3xl p-6 border-t border-white/10"
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '100%' }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                                <Lightbulb className="w-5 h-5 text-amber-400" />
+                                Возобновить разговор
+                            </h3>
+                            <p className="text-sm text-gray-400 mb-4">
+                                Разговор затих? Вот несколько идей, чтобы его оживить:
+                            </p>
+                            
+                            {loadingPrompts ? (
+                                <div className="flex justify-center py-8">
+                                    <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            ) : conversationPrompts.length > 0 ? (
+                                <div className="space-y-3">
+                                    {conversationPrompts.map((prompt, index) => (
+                                        <motion.button
+                                            key={index}
+                                            className="w-full p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-left text-white transition-colors"
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: index * 0.1 }}
+                                            onClick={() => {
+                                                setMessage(prompt);
+                                                setShowConversationPrompts(false);
+                                                inputRef.current?.focus();
+                                            }}
+                                        >
+                                            {prompt}
+                                        </motion.button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-center text-gray-500 py-4">
+                                    Не удалось загрузить подсказки
+                                </p>
+                            )}
+                            
+                            <button
+                                className="w-full mt-4 py-3 text-gray-400 hover:text-white transition-colors"
+                                onClick={() => setShowConversationPrompts(false)}
+                            >
+                                Закрыть
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 <AnimatePresence>
@@ -352,6 +506,7 @@ export const ChatInterface = ({
                                     <img
                                         src={otherParticipant?.photo || '/placeholder.svg?height=32&width=32'}
                                         alt=""
+                                        loading="lazy"
                                         className="w-8 h-8 rounded-full object-cover mr-2 mt-auto"
                                     />
                                 )}
@@ -376,6 +531,7 @@ export const ChatInterface = ({
                                                 <img
                                                     src={msg.text}
                                                     alt="Shared image"
+                                                    loading="lazy"
                                                     className="w-full h-auto max-w-xs"
                                                 />
                                             </div>
@@ -457,34 +613,11 @@ export const ChatInterface = ({
                                                         initial={false}
                                                         animate={msg.isRead ? "read" : "unread"}
                                                     >
-                                                        <AnimatePresence mode="wait">
-                                                            {msg.isRead ? (
-                                                                <motion.div
-                                                                    key="avatar"
-                                                                    initial={{ scale: 0, opacity: 0 }}
-                                                                    animate={{ scale: 1, opacity: 1 }}
-                                                                    exit={{ scale: 0, opacity: 0 }}
-                                                                    className="w-4 h-4 rounded-full border border-white/20 overflow-hidden shadow-sm"
-                                                                >
-                                                                    <img
-                                                                        src={otherParticipant?.photo || '/placeholder.jpg'}
-                                                                        alt=""
-                                                                        className="w-full h-full object-cover"
-                                                                    />
-                                                                </motion.div>
-                                                            ) : (
-                                                                <motion.div
-                                                                    key="checks"
-                                                                    initial={{ opacity: 0 }}
-                                                                    animate={{ opacity: 1 }}
-                                                                    exit={{ opacity: 0 }}
-                                                                    className="flex -space-x-1"
-                                                                >
-                                                                    <Check className="w-3 h-3 text-gray-500" />
-                                                                    <Check className="w-3 h-3 text-gray-500" />
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
+                                                        {/* FIX: Double-check icons - gray when unread, blue when read */}
+                                                        <div className="flex -space-x-1">
+                                                            <Check className={`w-3 h-3 ${msg.isRead ? 'text-blue-500' : 'text-gray-500'}`} />
+                                                            <Check className={`w-3 h-3 ${msg.isRead ? 'text-blue-500' : 'text-gray-500'}`} />
+                                                        </div>
                                                     </motion.div>
                                                 )}
                                             </div>
@@ -525,7 +658,7 @@ export const ChatInterface = ({
 
                 {/* Typing Indicator */}
                 <AnimatePresence>
-                    {chat.isTyping && (
+                    {(chat.isTyping || isPartnerTyping) && (
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -535,6 +668,7 @@ export const ChatInterface = ({
                             <img
                                 src={otherParticipant?.photo || '/placeholder.svg?height=32&width=32'}
                                 alt=""
+                                loading="lazy"
                                 className="w-8 h-8 rounded-full object-cover"
                             />
                             <div className="bg-gray-800 rounded-2xl px-4 py-2">

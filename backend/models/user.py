@@ -71,6 +71,10 @@ class User(Base):
         Index("idx_users_gender_age", "gender", "age"),
         Index("idx_users_active_created", "is_active", "created_at"),
         Index("idx_users_lat_lon", "latitude", "longitude"),
+        # PERF: Additional indexes for discover queries optimization
+        Index("idx_users_complete_active", "is_complete", "is_active", "created_at"),
+        Index("idx_users_vip_verified", "is_vip", "is_verified"),
+        Index("idx_users_gender_age_active", "gender", "age", "is_active"),
     )
     
     id: Mapped[uuid.UUID] = mapped_column(
