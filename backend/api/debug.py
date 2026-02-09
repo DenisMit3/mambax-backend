@@ -262,3 +262,37 @@ async def migrate_database():
         return {"status": "success", "message": msg, "added": added_columns}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@router.post("/reset-profile/{telegram_id}")
+async def reset_user_profile(telegram_id: str):
+    """
+    Reset user's is_complete flag to force re-onboarding.
+    Use telegram_id to identify the user.
+    """
+    try:
+        async with database.async_session() as session:
+            # Find user by telegram_id
+            result = await session.execute(
+                select(models.User).where(models.User.telegram_id == telegram_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                return {"status": "error", "message": f"User with telegram_id {telegram_id} not found"}
+            
+            # Reset profile completion
+            old_status = user.is_complete
+            user.is_complete = False
+            user.photos = []  # Clear photos to ensure onboarding is required
+            
+            await session.commit()
+            
+            return {
+                "status": "success",
+                "message": f"Profile reset for user {user.name} (telegram_id: {telegram_id})",
+                "old_is_complete": old_status,
+                "new_is_complete": False
+            }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
