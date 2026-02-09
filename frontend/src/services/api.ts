@@ -45,7 +45,7 @@ interface GiftListResponse {
 
 export type UserRole = 'user' | 'moderator' | 'admin';
 export type SubscriptionTier = 'free' | 'plus' | 'premium' | 'vip';
-export type Gender = 'male' | 'female';
+export type Gender = 'male' | 'female' | 'other';
 
 export interface UserLocation {
     lat: number;
