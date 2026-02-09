@@ -3,13 +3,30 @@ import { test, expect } from '@playwright/test';
 test.describe('Swipe and Match Flow', () => {
     // Authenticate before tests
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
-        await page.locator('input[type="tel"]').fill('+79000000001');
-        await page.click('button:has-text("Continue")');
-        // Wait for transition
-        await page.waitForTimeout(1000);
-        await page.keyboard.type('000000');
-        await expect(page).toHaveURL(/.*feed.*/);
+        // Go to auth page
+        await page.goto('/auth/phone');
+        await page.waitForLoadState('networkidle');
+        
+        // Find phone input (can be type="text" with placeholder)
+        const phoneInput = page.locator('input[placeholder*="999"]').first();
+        await expect(phoneInput).toBeVisible({ timeout: 10000 });
+        await phoneInput.fill('+79000000001');
+        
+        // Click submit button
+        await page.click('button:has-text("Получить код")');
+        
+        // Wait for OTP page
+        await page.waitForURL('**/auth/otp**', { timeout: 10000 });
+        
+        // Fill OTP (6 digits)
+        const otpInputs = page.locator('input[inputmode="numeric"]');
+        await expect(otpInputs.first()).toBeVisible({ timeout: 5000 });
+        for (let i = 0; i < 6; i++) {
+            await otpInputs.nth(i).fill('0');
+        }
+        
+        // Wait for redirect after OTP
+        await page.waitForURL(/.*(discover|feed|profile|\/)$/, { timeout: 15000 });
     });
 
     test('User can swipe right and match', async ({ page }) => {
