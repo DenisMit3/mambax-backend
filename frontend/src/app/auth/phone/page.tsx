@@ -62,10 +62,31 @@ export default function AuthGatePage() {
             setTelegramLoading(true);
             authService
                 .telegramLogin(initData)
-                .then((data) => {
+                .then(async (data) => {
                     console.log("[Auth] Telegram login success, has_profile:", data.has_profile);
+                    
+                    // FIX: Even if has_profile is true, verify profile is actually complete
+                    // by checking for photos and real data
                     if (data.has_profile) {
-                        router.replace("/");
+                        try {
+                            const me = await authService.getMe();
+                            console.log("[Auth] Profile check - photos:", me.photos?.length, "gender:", me.gender);
+                            
+                            // Profile is only truly complete if user has photos and real gender
+                            const hasPhotos = me.photos && me.photos.length > 0;
+                            const hasRealGender = me.gender && me.gender !== 'other';
+                            
+                            if (!hasPhotos || !hasRealGender) {
+                                console.log("[Auth] Profile incomplete (no photos or gender=other), redirecting to onboarding");
+                                router.replace("/onboarding");
+                                return;
+                            }
+                            
+                            router.replace("/");
+                        } catch (e) {
+                            console.error("[Auth] Failed to verify profile:", e);
+                            router.replace("/onboarding");
+                        }
                     } else {
                         // Используем единый onboarding flow вместо /auth/setup
                         router.replace("/onboarding");
@@ -90,10 +111,29 @@ export default function AuthGatePage() {
             // Уже внутри Mini App - делаем автовход
             setTelegramLoading(true);
             authService.telegramLogin(initDataRaw)
-                .then((data) => {
+                .then(async (data) => {
                     console.log("[Auth] Telegram button login success, has_profile:", data.has_profile);
+                    
+                    // FIX: Even if has_profile is true, verify profile is actually complete
                     if (data.has_profile) {
-                        router.replace("/");
+                        try {
+                            const me = await authService.getMe();
+                            console.log("[Auth] Button - Profile check - photos:", me.photos?.length, "gender:", me.gender);
+                            
+                            const hasPhotos = me.photos && me.photos.length > 0;
+                            const hasRealGender = me.gender && me.gender !== 'other';
+                            
+                            if (!hasPhotos || !hasRealGender) {
+                                console.log("[Auth] Button - Profile incomplete, redirecting to onboarding");
+                                router.replace("/onboarding");
+                                return;
+                            }
+                            
+                            router.replace("/");
+                        } catch (e) {
+                            console.error("[Auth] Button - Failed to verify profile:", e);
+                            router.replace("/onboarding");
+                        }
                     } else {
                         // Используем единый onboarding flow
                         router.replace("/onboarding");

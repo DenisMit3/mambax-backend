@@ -67,10 +67,14 @@ export function HomeClient() {
             // This ensures we redirect to onboarding if profile is incomplete
             try {
                 const me = await authService.getMe();
-                console.log("[Home] Token valid, is_complete:", me.is_complete);
+                console.log("[Home] Token valid, is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
                 
-                // Critical: If profile is not complete, redirect to onboarding BEFORE showing home
-                if (me.is_complete === false) {
+                // Critical: Check BOTH is_complete flag AND actual profile data
+                // Profile needs: photos AND real gender (not 'other')
+                const hasPhotos = me.photos && me.photos.length > 0;
+                const hasRealGender = me.gender && me.gender !== 'other';
+                
+                if (me.is_complete === false || !hasPhotos || !hasRealGender) {
                     console.log("[Home] Profile incomplete, redirecting to onboarding...");
                     router.replace('/onboarding');
                     return;
@@ -215,10 +219,13 @@ export function HomeClient() {
 
     useEffect(() => {
         if (me) {
-            console.log("[Home] User loaded, is_complete:", me.is_complete);
-            // Critical: If user profile is not complete, force onboarding
-            // Photos can be added later in profile settings
-            if (me.is_complete === false) {
+            console.log("[Home] User loaded, is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
+            
+            // Critical: Check BOTH is_complete flag AND actual profile data
+            const hasPhotos = me.photos && me.photos.length > 0;
+            const hasRealGender = me.gender && me.gender !== 'other';
+            
+            if (me.is_complete === false || !hasPhotos || !hasRealGender) {
                 console.log("[Home] Profile incomplete, redirecting to onboarding...");
                 router.replace('/onboarding');
             }
