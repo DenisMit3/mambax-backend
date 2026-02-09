@@ -14,7 +14,7 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="💘  Открыть MambaX", 
-                web_app=WebAppInfo(url=FRONTEND_URL)
+                web_app=WebAppInfo(url=f"{FRONTEND_URL}/onboarding")
             )
         ],
         [
@@ -37,7 +37,7 @@ def get_back_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="💘  Открыть приложение", 
-                web_app=WebAppInfo(url=FRONTEND_URL)
+                web_app=WebAppInfo(url=f"{FRONTEND_URL}/onboarding")
             )
         ],
         [
