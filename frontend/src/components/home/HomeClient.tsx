@@ -63,10 +63,28 @@ export function HomeClient() {
         console.log("[Home] Token check:", hasToken);
         
         if (hasToken) {
-            // Token exists - use it, don't re-authenticate
-            setIsAuth(true);
-            setAuthError(null);
-            return;
+            // FIX: Validate token by checking profile BEFORE setting isAuth
+            // This ensures we redirect to onboarding if profile is incomplete
+            try {
+                const me = await authService.getMe();
+                console.log("[Home] Token valid, is_complete:", me.is_complete);
+                
+                // Critical: If profile is not complete, redirect to onboarding BEFORE showing home
+                if (me.is_complete === false) {
+                    console.log("[Home] Profile incomplete, redirecting to onboarding...");
+                    router.replace('/onboarding');
+                    return;
+                }
+                
+                setIsAuth(true);
+                setAuthError(null);
+                return;
+            } catch (e: any) {
+                console.log("[Home] Token validation failed:", e);
+                // Token invalid - clear and continue to Telegram auth
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('token');
+            }
         }
 
         // Priority 2: No token - try Telegram Init Data (Native Flow)

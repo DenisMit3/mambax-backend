@@ -95,10 +95,17 @@ class HttpClient {
     private handleUnauthorized() {
         // Only clear token in browser context to avoid side effects on server
         if (typeof window !== 'undefined') {
-            console.warn('Unauthorized access detected. Clearing token and redirecting.');
+            console.warn('Unauthorized access detected. Clearing token.');
             localStorage.removeItem('token');
             localStorage.removeItem('accessToken'); // Clear both just in case
-            window.location.href = '/auth/phone';
+            
+            // FIX: Prevent redirect loop - only redirect if not already on auth page
+            const currentPath = window.location.pathname;
+            if (!currentPath.startsWith('/auth/')) {
+                // Set flag to prevent Telegram auto-login loop
+                sessionStorage.setItem('auth_redirect_reason', 'unauthorized');
+                window.location.href = '/auth/phone';
+            }
         }
         this.customToken = null;
     }

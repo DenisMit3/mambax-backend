@@ -20,14 +20,29 @@ export default function AuthGatePage() {
     useEffect(() => {
         if (!isReady || !initData || telegramLoading || isLoading) return;
         
+        // FIX: Check if we were redirected due to 401 - prevent auto-login loop
+        const redirectReason = sessionStorage.getItem('auth_redirect_reason');
+        if (redirectReason === 'unauthorized') {
+            console.log("[Auth] Redirected due to 401, clearing flag and waiting for manual action");
+            sessionStorage.removeItem('auth_redirect_reason');
+            // Don't auto-login, let user click the button manually
+            return;
+        }
+        
         // Проверяем, есть ли уже токен - если да, валидируем его перед редиректом
         const existingToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
         if (existingToken) {
             // Validate token by calling /users/me before redirecting
             authService.getMe()
                 .then((user) => {
-                    console.log("[Auth] Token valid, user:", user.name, "redirecting to home");
-                    router.replace("/");
+                    console.log("[Auth] Token valid, user:", user.name, "is_complete:", user.is_complete);
+                    // FIX: Check profile completion status
+                    if (user.is_complete === false) {
+                        console.log("[Auth] Profile incomplete, redirecting to onboarding");
+                        router.replace("/onboarding");
+                    } else {
+                        router.replace("/");
+                    }
                 })
                 .catch((err) => {
                     console.log("[Auth] Token invalid, clearing and proceeding with Telegram login:", err);

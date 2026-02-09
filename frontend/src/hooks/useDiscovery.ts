@@ -30,11 +30,11 @@ export function useProfiles() {
         queryKey: ['profiles', 'feed'],
         queryFn: async () => {
             const data = await authService.getProfiles();
-            // The API might return { items: [] } or just []
-            // Based on DiscoverPage: setProfiles(data) -> implies data is Profile[]
-            // But api.ts says: return response.json() from /feed
-            // Let's assume it returns an array for now based on existing usage
-            return data as unknown as Profile[];
+            // FIX: API returns PaginatedResponse<UserProfile> with { items: [...] }
+            // Extract items array from paginated response
+            const apiResponse = data as any;
+            const profiles = apiResponse?.items || (Array.isArray(data) ? data : []);
+            return profiles as Profile[];
         },
         staleTime: 1000 * 60 * 5, // 5 minutes
         refetchOnWindowFocus: false,
