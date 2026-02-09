@@ -296,3 +296,81 @@ async def reset_user_profile(telegram_id: str):
             }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@router.delete("/clear-all-users")
+async def clear_all_users():
+    """
+    DANGER: Delete ALL users and related data from database.
+    This prepares the database for fresh start with new users.
+    """
+    try:
+        async with database.async_session() as session:
+            # Count users before deletion
+            result = await session.execute(select(models.User))
+            users = result.scalars().all()
+            user_count = len(users)
+            
+            if user_count == 0:
+                return {"status": "ok", "message": "Database already empty", "deleted_users": 0}
+            
+            # Delete in correct order to respect foreign keys
+            # 1. Delete messages
+            await session.execute(text("DELETE FROM messages"))
+            
+            # 2. Delete matches
+            await session.execute(text("DELETE FROM matches"))
+            
+            # 3. Delete swipes/interactions
+            try:
+                await session.execute(text("DELETE FROM swipes"))
+            except:
+                pass
+            
+            try:
+                await session.execute(text("DELETE FROM interactions"))
+            except:
+                pass
+            
+            # 4. Delete user interests
+            try:
+                await session.execute(text("DELETE FROM user_interests"))
+            except:
+                pass
+            
+            # 5. Delete user photos
+            try:
+                await session.execute(text("DELETE FROM user_photos"))
+            except:
+                pass
+                
+            # 6. Delete gift transactions
+            try:
+                await session.execute(text("DELETE FROM gift_transactions"))
+            except:
+                pass
+            
+            # 7. Delete notifications
+            try:
+                await session.execute(text("DELETE FROM notifications"))
+            except:
+                pass
+            
+            # 8. Delete reports
+            try:
+                await session.execute(text("DELETE FROM reports"))
+            except:
+                pass
+            
+            # 9. Finally delete users
+            await session.execute(text("DELETE FROM users"))
+            
+            await session.commit()
+            
+            return {
+                "status": "success",
+                "message": f"Database cleared! Deleted {user_count} users and all related data.",
+                "deleted_users": user_count
+            }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
