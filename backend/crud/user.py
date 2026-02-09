@@ -294,9 +294,16 @@ async def update_profile(db: AsyncSession, user_id: str, update_data: UserCreate
             interest = UserInterest(user_id=user.id, tag=tag)
             user.interests_rel.append(interest)
 
-    # Auto-complete profile logic (name, age, gender are required; photos optional)
-    if not user.is_complete and user.name and user.age and user.gender:
-        user.is_complete = True
+    # Auto-complete profile logic: requires name, age, real gender (not OTHER), and at least 1 photo
+    # This prevents auto-completion for users who just logged in via Telegram without onboarding
+    if not user.is_complete:
+        has_name = bool(user.name and len(user.name) > 1)
+        has_age = bool(user.age and user.age >= 18)
+        has_real_gender = bool(user.gender and user.gender != Gender.OTHER)
+        has_photos = bool(user.photos and len(user.photos) > 0)
+        
+        if has_name and has_age and has_real_gender and has_photos:
+            user.is_complete = True
 
     # Update UX Preferences
     if hasattr(update_data, 'ux_preferences') and update_data.ux_preferences is not None:
