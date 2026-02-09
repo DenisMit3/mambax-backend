@@ -105,7 +105,36 @@ export function HomeClient() {
             try {
                 console.log("[Home] Attempting Telegram login, retry:", retryCount);
                 setIsRetrying(true);
-                await authService.telegramLogin(initData);
+                const loginResult = await authService.telegramLogin(initData);
+                console.log("[Home] Telegram login success, has_profile:", loginResult.has_profile);
+                
+                // FIX: Check if profile is complete BEFORE setting isAuth
+                // New users (has_profile=false) should go to onboarding
+                if (!loginResult.has_profile) {
+                    console.log("[Home] New user, redirecting to onboarding...");
+                    router.replace('/onboarding');
+                    return;
+                }
+                
+                // Existing user - verify profile is actually complete
+                try {
+                    const me = await authService.getMe();
+                    console.log("[Home] Profile check - photos:", me.photos?.length, "gender:", me.gender);
+                    
+                    const hasPhotos = me.photos && me.photos.length > 0;
+                    const hasRealGender = me.gender && me.gender !== 'other';
+                    
+                    if (!hasPhotos || !hasRealGender) {
+                        console.log("[Home] Profile incomplete (no photos or wrong gender), redirecting to onboarding...");
+                        router.replace('/onboarding');
+                        return;
+                    }
+                } catch (profileErr) {
+                    console.error("[Home] Failed to verify profile:", profileErr);
+                    router.replace('/onboarding');
+                    return;
+                }
+                
                 setIsAuth(true);
                 setAuthError(null);
                 setRetryCount(0);
