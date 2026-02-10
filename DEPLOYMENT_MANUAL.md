@@ -1,7 +1,7 @@
 # 🚀 Deployment Manual
 
 ## 1. Environment Configuration
-Ensure the following variables are set in your production environment (Railway, Vercel, .env):
+Ensure the following variables are set in your production environment (Render, Vercel, .env):
 
 ### Core
 - `TELEGRAM_BOT_TOKEN`: Token from BotFather

@@ -18,14 +18,14 @@
 
 1. **Меню бота** (Menu Button):
    - Выберите `Configure menu button`
-   - Введите URL: `https://mambax.vercel.app` (ваш Vercel URL)
+   - Введите URL: `https://mambax-frontend.vercel.app` (ваш Vercel URL)
    - Введите текст кнопки: `Open MambaX`
 
 2. **Web App настройки**:
    ```
    /mybots → Bot Settings → Domain → Set Domain
    ```
-   Введите ваш домен: `mambax.vercel.app`
+   Введите ваш домен: `mambax-frontend.vercel.app`
 
 3. **Описание бота**:
    ```
@@ -66,10 +66,10 @@
 TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
 
 # Frontend URL (для WebApp)
-FRONTEND_URL=https://mambax.vercel.app
+FRONTEND_URL=https://mambax-frontend.vercel.app
 
 # Backend URL (для API)
-BACKEND_URL=https://your-backend.up.railway.app
+BACKEND_URL=https://mambax-api.onrender.com
 ```
 
 ## Шаг 4: Запуск бота
@@ -77,29 +77,26 @@ BACKEND_URL=https://your-backend.up.railway.app
 ### Локально (для тестирования):
 
 ```bash
-cd backend
-python bot.py
+# Из корня проекта
+python run_bot.py
 ```
 
 Вы должны увидеть:
 ```
-==================================================
-🚀 Starting MambaX Bot...
-Frontend URL: https://mambax.vercel.app
-==================================================
-✅ Bot is running! Press Ctrl+C to stop.
+🚀 Starting Bot in POLLING mode...
+Run polling for bot @YouMeMeet_bot
 ```
 
-### На сервере (Railway) - WEBHOOK режим:
+### На сервере (Render) - WEBHOOK режим:
 
 В продакшене используется **webhook** вместо polling — это эффективнее и надёжнее.
 
-**Шаг 1: Добавьте переменные в Railway**
+**Шаг 1: Добавьте переменные в Render**
 
 ```bash
 TELEGRAM_BOT_TOKEN=your-bot-token
-FRONTEND_URL=https://mambax.vercel.app
-WEBHOOK_URL=https://your-railway-url.up.railway.app
+FRONTEND_URL=https://mambax-frontend.vercel.app
+WEBHOOK_URL=https://mambax-api.onrender.com
 ```
 
 **Шаг 2: Webhook регистрируется автоматически**
@@ -108,15 +105,15 @@ WEBHOOK_URL=https://your-railway-url.up.railway.app
 
 ```bash
 # Проверить статус бота
-curl https://your-backend.up.railway.app/bot/status
+curl https://mambax-api.onrender.com/bot/status
 
 # Настроить webhook (если не настроен автоматически)
-curl -X POST https://your-backend.up.railway.app/bot/setup-webhook \
+curl -X POST https://mambax-api.onrender.com/bot/setup-webhook \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://your-backend.up.railway.app"}'
+  -d '{"url": "https://mambax-api.onrender.com"}'
 
 # Удалить webhook (переключиться на polling)
-curl -X POST https://your-backend.up.railway.app/bot/delete-webhook
+curl -X POST https://mambax-api.onrender.com/bot/delete-webhook
 ```
 
 **Эндпоинты бота:**
@@ -128,8 +125,8 @@ curl -X POST https://your-backend.up.railway.app/bot/delete-webhook
 | `/bot/delete-webhook` | POST | Удалить webhook |
 | `/bot/webhook/{token}` | POST | Webhook endpoint (внутренний) |
 
-**Примечание:** В polling режиме (локально) бот запускается отдельно: `python bot.py`
-В webhook режиме (Railway) бот интегрирован в FastAPI и не требует отдельного процесса.
+**Примечание:** В polling режиме (локально) бот запускается отдельно: `python run_bot.py`
+В webhook режиме (Render) бот интегрирован в FastAPI и не требует отдельного процесса.
 
 ## Шаг 5: Тестирование
 
@@ -166,7 +163,7 @@ await send_match_notification(
 
 ### Бот не отвечает
 - Проверьте, что токен верный
-- Убедитесь, что бот запущен (`python bot.py`)
+- Убедитесь, что бот запущен (`python run_bot.py`)
 - Проверьте логи на ошибки
 
 ### WebApp не открывается
@@ -185,8 +182,8 @@ await send_match_notification(
 - [ ] Скопирован токен
 - [ ] Настроен Menu Button
 - [ ] Добавлен домен в Bot Settings
-- [ ] TELEGRAM_BOT_TOKEN в .env / Railway
-- [ ] FRONTEND_URL в .env / Railway
+- [ ] TELEGRAM_BOT_TOKEN в .env / Render
+- [ ] FRONTEND_URL в .env / Render
 - [ ] Бот запущен и отвечает на /start
 - [ ] WebApp открывается по кнопке
 

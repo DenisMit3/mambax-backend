@@ -9,7 +9,7 @@
 - **Локальный PostgreSQL** - ЗАПРЕЩЕН (`localhost:5432`, `127.0.0.1:5432`)
 - **Docker PostgreSQL** - ЗАПРЕЩЕН (не использовать postgres в docker-compose)
 - **Supabase** - НЕ ИСПОЛЬЗОВАТЬ (проект мигрировал на Neon)
-- **Railway PostgreSQL** - НЕ ИСПОЛЬЗОВАТЬ
+- **Railway PostgreSQL** - НЕ ИСПОЛЬЗОВАТЬ (проект мигрировал на Render)
 - **Любые другие БД** - ЗАПРЕЩЕНЫ
 
 ### Запрещенные паттерны в коде
@@ -73,9 +73,9 @@ DATABASE_URL=postgresql+asyncpg://neondb_owner:npg_vjOPMFZV5K9n@ep-still-band-ag
 DATABASE_URL=postgresql+asyncpg://neondb_owner:npg_vjOPMFZV5K9n@ep-still-band-agqygsk6-pooler.c-2.eu-central-1.aws.neon.tech/neondb?ssl=require
 ```
 
-### Vercel Environment Variables
+### Render Environment Variables
 Те же credentials должны быть установлены в:
-- Vercel Dashboard → mambax-backend → Settings → Environment Variables
+- Render Dashboard → mambax-api → Environment
 
 ## 🗄️ Структура БД
 

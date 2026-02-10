@@ -8,7 +8,7 @@ Telegram Bot Webhook Integration
 - WEBHOOK: для продакшена (интегрировано в main.py)
 
 Настройка webhook:
-1. Задеплоить бэкенд на Railway
+1. Задеплоить бэкенд на Render
 2. Установить WEBHOOK_URL в переменных окружения
 3. Бот автоматически зарегистрирует webhook при старте
 """
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 WEBHOOK_PATH = f"/bot/webhook/{BOT_TOKEN}" if BOT_TOKEN else "/bot/webhook/invalid"
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://mambax-production.up.railway.app
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://mambax-api.onrender.com
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "mambax-secret-token-change-in-prod")
 
 # ============================================================================

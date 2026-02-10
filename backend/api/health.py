@@ -97,7 +97,7 @@ async def health_check(full: bool = False):
 @router.get("/health/live")
 async def liveness_probe():
     """
-    Kubernetes/Railway liveness probe.
+    Kubernetes/Render liveness probe.
     Returns 200 if the application is running.
     """
     return {"status": "alive"}
@@ -106,7 +106,7 @@ async def liveness_probe():
 @router.get("/health/ready")
 async def readiness_probe():
     """
-    Kubernetes/Railway readiness probe.
+    Kubernetes/Render readiness probe.
     Returns 200 if the application is ready to accept traffic.
     """
     db_check = await check_database()

@@ -126,7 +126,7 @@ class Settings(BaseSettings):
         
         # Проверка что это Neon
         if "neon.tech" not in v_lower and "neon" not in v_lower:
-            # Разрешаем другие облачные PostgreSQL (Supabase, Railway) но предупреждаем
+            # Разрешаем другие облачные PostgreSQL (Supabase, Render) но предупреждаем
             import warnings
             warnings.warn(
                 f"DATABASE_URL не содержит 'neon.tech'. "

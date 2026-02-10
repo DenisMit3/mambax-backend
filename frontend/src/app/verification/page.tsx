@@ -11,7 +11,7 @@ import Image from "next/image";
 // We will use relative path if proxy is set up or assume same host if not.
 // But api.ts logic is complex. We'll use authService.getMe() to get base URL implicitly? No.
 // We will assume the same API_URL as api.ts.
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://mambax-backend.up.railway.app";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api_proxy";
 
 export default function VerificationPage() {
     const [status, setStatus] = useState<any>(null);

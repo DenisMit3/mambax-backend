@@ -50,7 +50,7 @@ const nextConfig: NextConfig = {
               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
               img-src 'self' blob: data: https:;
               font-src 'self' data: https://fonts.gstatic.com;
-              connect-src 'self' https://*.sentry.io https://app.posthog.com wss://*.railway.app ws://localhost:* ws://192.168.1.136:* http://localhost:* http://192.168.1.136:*; 
+              connect-src 'self' https://*.sentry.io https://app.posthog.com wss://*.onrender.com ws://localhost:* ws://192.168.1.136:* http://localhost:* http://192.168.1.136:*; 
               frame-ancestors 'self' https://web.telegram.org https://*.telegram.org;
               form-action 'self';
             `.replace(/\s{2,}/g, ' ').trim(),
