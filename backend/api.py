@@ -827,5 +827,715 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
+# ============================================
+# ONBOARDING ENDPOINTS
+# ============================================
+
+class OnboardingStepRequest(BaseModel):
+    step_name: str
+    completed: bool = True
+
+
+@app.post("/api/onboarding/complete-step")
+async def complete_onboarding_step(
+    data: OnboardingStepRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Mark onboarding step as completed"""
+    # Get current steps
+    result = await db.execute(
+        text("SELECT onboarding_completed_steps FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    steps = row[0] if row and row[0] else {}
+    
+    # Update step
+    steps[data.step_name] = data.completed
+    
+    # Save
+    await db.execute(
+        text("UPDATE users SET onboarding_completed_steps = :steps WHERE id = :user_id"),
+        {"steps": json.dumps(steps), "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "step": data.step_name, "completed": data.completed, "all_steps": steps}
+
+
+@app.get("/api/onboarding/status")
+async def get_onboarding_status(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get onboarding progress"""
+    result = await db.execute(
+        text("SELECT onboarding_completed_steps FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    steps = row[0] if row and row[0] else {}
+    
+    required_steps = [
+        "interactive_tour_completed",
+        "first_swipe_done",
+        "first_filter_opened",
+        "profile_completion_prompted"
+    ]
+    
+    is_complete = all(steps.get(key) for key in required_steps) if steps else False
+    
+    return {
+        "completed_steps": steps,
+        "is_onboarding_complete": is_complete
+    }
+
+
+@app.post("/api/onboarding/reset")
+async def reset_onboarding(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Reset onboarding progress"""
+    empty_steps = {
+        "interactive_tour_completed": False,
+        "first_swipe_done": False,
+        "first_filter_opened": False,
+        "profile_completion_prompted": False
+    }
+    
+    await db.execute(
+        text("UPDATE users SET onboarding_completed_steps = :steps WHERE id = :user_id"),
+        {"steps": json.dumps(empty_steps), "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "message": "Onboarding reset successfully"}
+
+
+# ============================================
+# SAFETY ENDPOINTS (Block & Report)
+# ============================================
+
+class BlockRequest(BaseModel):
+    user_id: str
+    reason: Optional[str] = None
+
+
+class ReportRequest(BaseModel):
+    user_id: str
+    reason: str
+    description: Optional[str] = None
+
+
+@app.post("/api/safety/block")
+async def block_user(
+    data: BlockRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Block a user"""
+    if data.user_id == current_user_id:
+        raise HTTPException(status_code=400, detail="Cannot block yourself")
+    
+    # Check if already blocked
+    existing = await db.execute(
+        text("SELECT id FROM blocks WHERE blocker_id = :blocker AND blocked_id = :blocked"),
+        {"blocker": current_user_id, "blocked": data.user_id}
+    )
+    
+    if existing.fetchone():
+        return {"success": True, "message": "User already blocked"}
+    
+    # Create block
+    await db.execute(
+        text("""
+            INSERT INTO blocks (blocker_id, blocked_id, reason, created_at)
+            VALUES (:blocker, :blocked, :reason, NOW())
+        """),
+        {"blocker": current_user_id, "blocked": data.user_id, "reason": data.reason}
+    )
+    await db.commit()
+    
+    return {"success": True, "message": "User blocked"}
+
+
+@app.delete("/api/safety/block/{user_id}")
+async def unblock_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Unblock a user"""
+    await db.execute(
+        text("DELETE FROM blocks WHERE blocker_id = :blocker AND blocked_id = :blocked"),
+        {"blocker": current_user_id, "blocked": user_id}
+    )
+    await db.commit()
+    
+    return {"success": True, "message": "User unblocked"}
+
+
+@app.get("/api/safety/blocked")
+async def get_blocked_users(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get list of blocked users"""
+    result = await db.execute(text("""
+        SELECT b.blocked_id::text, b.reason, b.created_at, u.name, u.photos
+        FROM blocks b
+        JOIN users u ON b.blocked_id = u.id
+        WHERE b.blocker_id = :user_id
+        ORDER BY b.created_at DESC
+    """), {"user_id": current_user_id})
+    
+    rows = result.fetchall()
+    
+    blocked = []
+    for row in rows:
+        blocked.append({
+            "id": row[0],
+            "reason": row[1],
+            "blocked_at": row[2].isoformat() if row[2] else None,
+            "name": row[3],
+            "photo": row[4][0] if row[4] else None
+        })
+    
+    return {"blocked": blocked, "total": len(blocked)}
+
+
+@app.post("/api/safety/report")
+async def report_user(
+    data: ReportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Report a user"""
+    if data.user_id == current_user_id:
+        raise HTTPException(status_code=400, detail="Cannot report yourself")
+    
+    result = await db.execute(
+        text("""
+            INSERT INTO reports (reporter_id, reported_user_id, reason, description, status, created_at)
+            VALUES (:reporter, :reported, :reason, :description, 'pending', NOW())
+            RETURNING id::text
+        """),
+        {
+            "reporter": current_user_id,
+            "reported": data.user_id,
+            "reason": data.reason,
+            "description": data.description
+        }
+    )
+    await db.commit()
+    
+    report_id = result.fetchone()[0]
+    
+    return {"success": True, "report_id": report_id, "message": "Report submitted"}
+
+
+# ============================================
+# GIFTS ENDPOINTS
+# ============================================
+
+@app.get("/api/gifts/catalog")
+async def get_gift_catalog(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get available virtual gifts"""
+    # Get categories
+    cat_result = await db.execute(text("""
+        SELECT id::text, name, description, icon, sort_order
+        FROM gift_categories
+        WHERE is_active = true
+        ORDER BY sort_order
+    """))
+    categories = [
+        {"id": r[0], "name": r[1], "description": r[2], "icon": r[3], "sort_order": r[4]}
+        for r in cat_result.fetchall()
+    ]
+    
+    # Get gifts
+    gift_result = await db.execute(text("""
+        SELECT 
+            id::text, name, description, image_url, animation_url,
+            price, currency, is_animated, is_premium, is_limited,
+            category_id::text, times_sent
+        FROM virtual_gifts
+        WHERE is_active = true
+        AND (available_until IS NULL OR available_until > NOW())
+        ORDER BY sort_order, price
+    """))
+    
+    gifts = []
+    for r in gift_result.fetchall():
+        gifts.append({
+            "id": r[0],
+            "name": r[1],
+            "description": r[2],
+            "image_url": r[3],
+            "animation_url": r[4],
+            "price": float(r[5]),
+            "currency": r[6],
+            "is_animated": r[7],
+            "is_premium": r[8],
+            "is_limited": r[9],
+            "category_id": r[10],
+            "times_sent": r[11]
+        })
+    
+    return {"categories": categories, "gifts": gifts, "total_gifts": len(gifts)}
+
+
+class SendGiftRequest(BaseModel):
+    gift_id: str
+    receiver_id: str
+    message: Optional[str] = None
+    is_anonymous: bool = False
+
+
+@app.post("/api/gifts/send")
+async def send_gift(
+    data: SendGiftRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Send a virtual gift to another user"""
+    if data.receiver_id == current_user_id:
+        raise HTTPException(status_code=400, detail="Cannot send gift to yourself")
+    
+    # Get gift
+    gift_result = await db.execute(
+        text("SELECT id, name, price, currency, is_active FROM virtual_gifts WHERE id = :gift_id"),
+        {"gift_id": data.gift_id}
+    )
+    gift = gift_result.fetchone()
+    
+    if not gift or not gift[4]:
+        raise HTTPException(status_code=404, detail="Gift not found")
+    
+    gift_price = float(gift[2])
+    
+    # Check sender balance
+    balance_result = await db.execute(
+        text("SELECT stars_balance FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    balance = balance_result.fetchone()
+    current_balance = float(balance[0]) if balance and balance[0] else 0
+    
+    if current_balance < gift_price:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient balance. Required: {gift_price}, Available: {current_balance}"
+        )
+    
+    # Deduct from sender
+    await db.execute(
+        text("UPDATE users SET stars_balance = stars_balance - :price WHERE id = :user_id"),
+        {"price": gift_price, "user_id": current_user_id}
+    )
+    
+    # Add 10% bonus to receiver
+    receiver_bonus = int(gift_price * 0.1)
+    if receiver_bonus > 0:
+        await db.execute(
+            text("UPDATE users SET stars_balance = COALESCE(stars_balance, 0) + :bonus WHERE id = :user_id"),
+            {"bonus": receiver_bonus, "user_id": data.receiver_id}
+        )
+    
+    # Create transaction
+    result = await db.execute(
+        text("""
+            INSERT INTO gift_transactions 
+            (sender_id, receiver_id, gift_id, price_paid, currency, message, is_anonymous, status, created_at)
+            VALUES (:sender, :receiver, :gift_id, :price, :currency, :message, :is_anonymous, 'completed', NOW())
+            RETURNING id::text, created_at
+        """),
+        {
+            "sender": current_user_id,
+            "receiver": data.receiver_id,
+            "gift_id": data.gift_id,
+            "price": gift_price,
+            "currency": gift[3],
+            "message": data.message,
+            "is_anonymous": data.is_anonymous
+        }
+    )
+    
+    # Update gift stats
+    await db.execute(
+        text("UPDATE virtual_gifts SET times_sent = times_sent + 1 WHERE id = :gift_id"),
+        {"gift_id": data.gift_id}
+    )
+    
+    await db.commit()
+    row = result.fetchone()
+    
+    return {
+        "success": True,
+        "transaction_id": row[0],
+        "gift_name": gift[1],
+        "price_paid": gift_price,
+        "receiver_bonus": receiver_bonus,
+        "created_at": row[1].isoformat() if row[1] else None
+    }
+
+
+@app.get("/api/gifts/received")
+async def get_received_gifts(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get gifts received by current user"""
+    result = await db.execute(text("""
+        SELECT 
+            gt.id::text, gt.sender_id::text, gt.gift_id::text, gt.price_paid,
+            gt.message, gt.is_anonymous, gt.is_read, gt.created_at,
+            g.name as gift_name, g.image_url,
+            u.name as sender_name, u.photos as sender_photos
+        FROM gift_transactions gt
+        JOIN virtual_gifts g ON gt.gift_id = g.id
+        LEFT JOIN users u ON gt.sender_id = u.id
+        WHERE gt.receiver_id = :user_id
+        ORDER BY gt.created_at DESC
+        LIMIT :limit
+    """), {"user_id": current_user_id, "limit": limit})
+    
+    rows = result.fetchall()
+    
+    gifts = []
+    for r in rows:
+        gifts.append({
+            "id": r[0],
+            "sender_id": None if r[5] else r[1],  # Hide if anonymous
+            "gift_id": r[2],
+            "price_paid": float(r[3]),
+            "message": r[4],
+            "is_anonymous": r[5],
+            "is_read": r[6],
+            "created_at": r[7].isoformat() if r[7] else None,
+            "gift_name": r[8],
+            "gift_image": r[9],
+            "sender_name": "Anonymous" if r[5] else r[10],
+            "sender_photo": None if r[5] else (r[11][0] if r[11] else None)
+        })
+    
+    # Get unread count
+    unread_result = await db.execute(
+        text("SELECT COUNT(*) FROM gift_transactions WHERE receiver_id = :user_id AND is_read = false"),
+        {"user_id": current_user_id}
+    )
+    unread_count = unread_result.scalar() or 0
+    
+    return {"gifts": gifts, "total": len(gifts), "unread_count": unread_count}
+
+
+@app.get("/api/gifts/sent")
+async def get_sent_gifts(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get gifts sent by current user"""
+    result = await db.execute(text("""
+        SELECT 
+            gt.id::text, gt.receiver_id::text, gt.gift_id::text, gt.price_paid,
+            gt.message, gt.is_anonymous, gt.created_at,
+            g.name as gift_name, g.image_url,
+            u.name as receiver_name, u.photos as receiver_photos
+        FROM gift_transactions gt
+        JOIN virtual_gifts g ON gt.gift_id = g.id
+        JOIN users u ON gt.receiver_id = u.id
+        WHERE gt.sender_id = :user_id
+        ORDER BY gt.created_at DESC
+        LIMIT :limit
+    """), {"user_id": current_user_id, "limit": limit})
+    
+    rows = result.fetchall()
+    
+    gifts = []
+    for r in rows:
+        gifts.append({
+            "id": r[0],
+            "receiver_id": r[1],
+            "gift_id": r[2],
+            "price_paid": float(r[3]),
+            "message": r[4],
+            "is_anonymous": r[5],
+            "created_at": r[6].isoformat() if r[6] else None,
+            "gift_name": r[7],
+            "gift_image": r[8],
+            "receiver_name": r[9],
+            "receiver_photo": r[10][0] if r[10] else None
+        })
+    
+    # Get total spent
+    spent_result = await db.execute(
+        text("SELECT COALESCE(SUM(price_paid), 0) FROM gift_transactions WHERE sender_id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    total_spent = float(spent_result.scalar() or 0)
+    
+    return {"gifts": gifts, "total": len(gifts), "total_spent": total_spent}
+
+
+# ============================================
+# UX SETTINGS ENDPOINTS
+# ============================================
+
+class UXPreferencesUpdate(BaseModel):
+    sounds_enabled: Optional[bool] = None
+    haptic_enabled: Optional[bool] = None
+    reduced_motion: Optional[bool] = None
+
+
+@app.get("/api/settings/ux")
+async def get_ux_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get UX preferences"""
+    result = await db.execute(
+        text("SELECT ux_preferences FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    defaults = {
+        "sounds_enabled": True,
+        "haptic_enabled": True,
+        "reduced_motion": False
+    }
+    
+    prefs = row[0] if row and row[0] else {}
+    return {**defaults, **prefs}
+
+
+@app.put("/api/settings/ux")
+async def update_ux_settings(
+    data: UXPreferencesUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update UX preferences"""
+    # Get current
+    result = await db.execute(
+        text("SELECT ux_preferences FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    prefs = row[0] if row and row[0] else {}
+    
+    # Update
+    update_data = data.model_dump(exclude_unset=True)
+    prefs.update(update_data)
+    
+    # Save
+    await db.execute(
+        text("UPDATE users SET ux_preferences = :prefs WHERE id = :user_id"),
+        {"prefs": json.dumps(prefs), "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return prefs
+
+
+# ============================================
+# VISIBILITY SETTINGS
+# ============================================
+
+class VisibilitySettings(BaseModel):
+    show_online_status: Optional[bool] = None
+    show_last_seen: Optional[bool] = None
+    show_distance: Optional[bool] = None
+    show_age: Optional[bool] = None
+    read_receipts: Optional[bool] = None
+
+
+@app.get("/api/settings/visibility")
+async def get_visibility_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get visibility settings"""
+    result = await db.execute(
+        text("SELECT visibility_settings FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    defaults = {
+        "show_online_status": True,
+        "show_last_seen": True,
+        "show_distance": True,
+        "show_age": True,
+        "read_receipts": True
+    }
+    
+    settings = row[0] if row and row[0] else {}
+    return {**defaults, **settings}
+
+
+@app.put("/api/settings/visibility")
+async def update_visibility_settings(
+    data: VisibilitySettings,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update visibility settings"""
+    result = await db.execute(
+        text("SELECT visibility_settings FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    settings = row[0] if row and row[0] else {}
+    
+    update_data = data.model_dump(exclude_unset=True)
+    settings.update(update_data)
+    
+    await db.execute(
+        text("UPDATE users SET visibility_settings = :settings WHERE id = :user_id"),
+        {"settings": json.dumps(settings), "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return settings
+
+
+# ============================================
+# BALANCE & PAYMENTS
+# ============================================
+
+@app.get("/api/balance")
+async def get_balance(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user's stars balance"""
+    result = await db.execute(
+        text("SELECT stars_balance, is_vip, subscription_tier FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    return {
+        "stars_balance": float(row[0]) if row and row[0] else 0,
+        "is_vip": row[1] if row else False,
+        "subscription_tier": row[2] if row else "free"
+    }
+
+
+@app.get("/api/pricing")
+async def get_pricing():
+    """Get current pricing for features"""
+    return {
+        "swipe_pack": {"price": 10, "count": 10, "currency": "XTR"},
+        "superlike": {"price": 5, "count": 1, "currency": "XTR"},
+        "boost": {"price_per_hour": 25, "currency": "XTR"},
+        "top_up_packages": [
+            {"stars": 50, "label": "Starter"},
+            {"stars": 100, "label": "Basic"},
+            {"stars": 250, "label": "Popular"},
+            {"stars": 500, "label": "Best Value"}
+        ],
+        "subscriptions": {
+            "gold": {"price": 299, "duration_days": 30},
+            "platinum": {"price": 499, "duration_days": 30}
+        }
+    }
+
+
+# ============================================
+# QUESTION OF THE DAY
+# ============================================
+
+@app.get("/api/question-of-the-day")
+async def get_question_of_the_day(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get today's question"""
+    today = datetime.utcnow().date()
+    
+    # Try to get today's question
+    result = await db.execute(text("""
+        SELECT id::text, question_text, category, options
+        FROM daily_questions
+        WHERE active_date = :today AND is_active = true
+        LIMIT 1
+    """), {"today": today})
+    
+    row = result.fetchone()
+    
+    if not row:
+        # Fallback to random active question
+        result = await db.execute(text("""
+            SELECT id::text, question_text, category, options
+            FROM daily_questions
+            WHERE is_active = true
+            ORDER BY RANDOM()
+            LIMIT 1
+        """))
+        row = result.fetchone()
+    
+    if not row:
+        return {"question": None, "message": "No questions available"}
+    
+    # Check if user already answered
+    answered = await db.execute(
+        text("SELECT answer FROM question_answers WHERE user_id = :user_id AND question_id = :q_id"),
+        {"user_id": current_user_id, "q_id": row[0]}
+    )
+    user_answer = answered.fetchone()
+    
+    return {
+        "id": row[0],
+        "question": row[1],
+        "category": row[2],
+        "options": row[3] or [],
+        "already_answered": user_answer is not None,
+        "user_answer": user_answer[0] if user_answer else None
+    }
+
+
+class AnswerQuestionRequest(BaseModel):
+    question_id: str
+    answer: str
+
+
+@app.post("/api/question-of-the-day/answer")
+async def answer_question(
+    data: AnswerQuestionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Answer the question of the day"""
+    # Check if already answered
+    existing = await db.execute(
+        text("SELECT id FROM question_answers WHERE user_id = :user_id AND question_id = :q_id"),
+        {"user_id": current_user_id, "q_id": data.question_id}
+    )
+    
+    if existing.fetchone():
+        raise HTTPException(status_code=400, detail="Already answered this question")
+    
+    # Save answer
+    await db.execute(
+        text("""
+            INSERT INTO question_answers (user_id, question_id, answer, created_at)
+            VALUES (:user_id, :q_id, :answer, NOW())
+        """),
+        {"user_id": current_user_id, "q_id": data.question_id, "answer": data.answer}
+    )
+    await db.commit()
+    
+    return {"success": True, "message": "Answer saved"}
+
+
 # Vercel handler
 handler = app
