@@ -83,7 +83,10 @@ async def generate_report_task(report_id: uuid.UUID):
             db.add(report)
             await db.commit()
 
-async def _fetch_data_for_report(db: AsyncSession, report: CustomReport) -> pd.DataFrame:
+async def _fetch_data_for_report(db: AsyncSession, report: CustomReport):
+    if not PANDAS_AVAILABLE:
+        return None
+        
     report_type = report.report_type
     
     if report_type == "user_analytics":

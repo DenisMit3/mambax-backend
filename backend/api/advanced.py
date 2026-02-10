@@ -28,7 +28,8 @@ from backend import crud
 from backend.crud import advanced as advanced_crud
 from backend.services.ai import ai_service
 from backend.services.analytics import analytics_service
-from backend.services.reporting import generate_report_task
+# Lazy import for reporting (pandas dependency)
+generate_report_task = None
 
 router = APIRouter(prefix="/admin/advanced", tags=["advanced"])
 
@@ -474,8 +475,12 @@ async def generate_report(
     )
     saved = await advanced_crud.create_custom_report(db, new_report)
     
-    # Trigger background generation
-    background_tasks.add_task(generate_report_task, saved.id)
+    # Trigger background generation (lazy import for pandas)
+    try:
+        from backend.services.reporting import generate_report_task as _generate_report_task
+        background_tasks.add_task(_generate_report_task, saved.id)
+    except ImportError:
+        pass  # Pandas not available on serverless
     
     return {
         "status": "pending",
