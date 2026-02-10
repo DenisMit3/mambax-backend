@@ -8,17 +8,19 @@ Logic is distributed across backend/telegram_bot/handlers/
 import asyncio
 import os
 import logging
-from aiogram import Bot, Dispatcher
-from dotenv import load_dotenv
 from pathlib import Path
+
+# Load environment variables FIRST before any other imports
+from dotenv import load_dotenv
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
+load_dotenv()  # Also try root .env
+
+from aiogram import Bot, Dispatcher
 
 # Import Routers
 from backend.telegram_bot.handlers.commands import router as commands_router
 from backend.telegram_bot.handlers.payment import router as payment_router
-
-# Load environment variables
-env_path = Path(__file__).parent / ".env"
-load_dotenv(dotenv_path=env_path)
 
 # Configure logging
 logging.basicConfig(
