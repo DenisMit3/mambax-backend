@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authService } from '@/services/api';
+import { httpClient } from '@/lib/http-client';
 
 export interface Profile {
     id: string;
@@ -45,12 +46,8 @@ export function useSwipeStatus() {
     return useQuery({
         queryKey: ['swipe-status'],
         queryFn: async () => {
-            const token = localStorage.getItem("token");
-            const res = await fetch("/api_proxy/swipe-status", {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error("Failed to fetch swipe status");
-            return res.json() as Promise<SwipeStatus>;
+            // Используем httpClient вместо прямого fetch
+            return httpClient.get<SwipeStatus>("/api/swipes/status");
         },
         // Refetch often as swipes change
         refetchInterval: 30000,
@@ -77,12 +74,8 @@ export function usePrefetchProfiles() {
     return useQuery({
         queryKey: ['profiles', 'prefetch'],
         queryFn: async () => {
-            const token = localStorage.getItem("token");
-            const res = await fetch("/api_proxy/discover/prefetch?limit=10", {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (!res.ok) throw new Error("Prefetch failed");
-            return res.json() as Promise<Profile[]>;
+            // Используем httpClient вместо прямого fetch
+            return httpClient.get<Profile[]>("/api/discover/prefetch?limit=10");
         },
         staleTime: 1000 * 60 * 2, // 2 минуты
         refetchOnWindowFocus: false,
@@ -95,16 +88,8 @@ export function useUndoSwipe() {
 
     return useMutation({
         mutationFn: async () => {
-            const token = localStorage.getItem("token");
-            const res = await fetch("/api_proxy/undo-swipe", {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.detail || "Undo failed");
-            }
-            return res.json();
+            // Используем httpClient вместо прямого fetch
+            return httpClient.post("/api/undo-swipe");
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['profiles'] });
@@ -117,12 +102,8 @@ export function useDailyPicks() {
     return useQuery({
         queryKey: ['daily-picks'],
         queryFn: async () => {
-            const token = localStorage.getItem("token");
-            const res = await fetch("/api_proxy/discover/daily-picks", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error("Failed to fetch daily picks");
-            const data = await res.json();
+            // Используем httpClient вместо прямого fetch
+            const data = await httpClient.get<{ picks: Profile[] }>("/api/discover/daily-picks");
             return data.picks as Profile[];
         },
         staleTime: 1000 * 60 * 60 * 24, // 24 часа
@@ -133,12 +114,8 @@ export function useSmartFilters() {
     return useQuery({
         queryKey: ['smart-filters'],
         queryFn: async () => {
-            const token = localStorage.getItem("token");
-            const res = await fetch("/api_proxy/discover/smart-filters", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error("Failed to fetch smart filters");
-            return res.json();
+            // Используем httpClient вместо прямого fetch
+            return httpClient.get("/api/discover/smart-filters");
         },
         staleTime: 1000 * 60 * 30, // 30 минут
     });

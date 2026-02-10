@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { httpClient } from "@/lib/http-client";
 
 interface DailyPick {
     id: string;
@@ -24,28 +25,16 @@ export function DailyPicks() {
     const { data, isLoading } = useQuery({
         queryKey: ["daily-picks"],
         queryFn: async () => {
-            const token = localStorage.getItem("token");
-            const res = await fetch("/api_proxy/discover/daily-picks", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error("Failed to fetch daily picks");
-            return res.json();
+            // Используем httpClient вместо прямого fetch
+            return httpClient.get<{ picks: DailyPick[] }>("/api/discover/daily-picks");
         },
         staleTime: 1000 * 60 * 60 * 24, // 24 часа
     });
 
     const refreshMutation = useMutation({
         mutationFn: async () => {
-            const token = localStorage.getItem("token");
-            const res = await fetch("/api_proxy/discover/daily-picks/refresh", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.detail || "Refresh failed");
-            }
-            return res.json();
+            // Используем httpClient вместо прямого fetch
+            return httpClient.post("/api/discover/daily-picks/refresh");
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["daily-picks"] });

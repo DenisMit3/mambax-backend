@@ -16,6 +16,7 @@ import { ProfileSkeleton } from './ProfileSkeleton';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipGuide } from '@/components/onboarding/TooltipGuide';
 import { ContextualTooltip } from '@/components/onboarding/ContextualTooltip';
+import { httpClient } from '@/lib/http-client';
 
 interface Profile {
     id: string;
@@ -442,12 +443,8 @@ export const DiscoveryEngine = ({
                     window.location.href = '/profile/premium';
                 }}
                 onBuySwipes={async () => {
-                    // Buy swipes logic
-                    const token = localStorage.getItem("token");
-                    await fetch("/api_proxy/payments/buy-swipes", {
-                        method: "POST",
-                        headers: { "Authorization": `Bearer ${token}` }
-                    });
+                    // Buy swipes logic - используем httpClient
+                    await httpClient.post("/api/swipes/buy-pack");
                     await refetchStatus();
                     setShowLimitModal(false);
                 }}

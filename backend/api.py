@@ -6364,5 +6364,221 @@ async def create_partner(
     return {"status": "ok", "partner_id": None}
 
 
+# ============================================
+# ADDITIONAL MISSING ENDPOINTS
+# ============================================
+
+# --- UNDO SWIPE ---
+@app.post("/api/undo-swipe")
+async def undo_swipe(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Undo last swipe (alias for rewind)"""
+    # Check if user is VIP
+    vip_check = await db.execute(
+        text("SELECT is_vip FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    is_vip = vip_check.scalar()
+    
+    if not is_vip:
+        return {
+            "success": False,
+            "is_vip_feature": True,
+            "message": "Upgrade to VIP to use undo"
+        }
+    
+    # Get last swipe
+    result = await db.execute(text("""
+        SELECT id, to_user_id::text, action
+        FROM swipes
+        WHERE from_user_id = :user_id
+        ORDER BY timestamp DESC
+        LIMIT 1
+    """), {"user_id": current_user_id})
+    
+    last_swipe = result.fetchone()
+    
+    if not last_swipe:
+        return {"success": False, "message": "No swipes to undo"}
+    
+    # Delete the swipe
+    await db.execute(
+        text("DELETE FROM swipes WHERE id = :swipe_id"),
+        {"swipe_id": last_swipe[0]}
+    )
+    
+    # If it was a match, delete the match too
+    if last_swipe[2] in ('like', 'superlike'):
+        await db.execute(text("""
+            DELETE FROM matches 
+            WHERE (user1_id = :user1 AND user2_id = :user2)
+            OR (user1_id = :user2 AND user2_id = :user1)
+        """), {"user1": current_user_id, "user2": last_swipe[1]})
+    
+    await db.commit()
+    
+    return {
+        "success": True,
+        "undone_user_id": last_swipe[1],
+        "action": last_swipe[2]
+    }
+
+
+# --- DISCOVER SMART FILTERS ---
+@app.get("/api/discover/smart-filters")
+async def get_smart_filters(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get smart filter suggestions based on user preferences"""
+    # Get user data for personalized filters
+    user_result = await db.execute(
+        text("SELECT age, gender, interests FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    user = user_result.fetchone()
+    
+    user_age = user[0] if user else 25
+    
+    return {
+        "suggested_filters": {
+            "age_range": {
+                "min": max(18, user_age - 5),
+                "max": user_age + 5
+            },
+            "distance_km": 50,
+            "has_bio": True,
+            "has_photos": True,
+            "verified_only": False
+        },
+        "popular_filters": [
+            {"name": "Nearby", "distance_km": 10},
+            {"name": "Same age", "age_range": {"min": user_age - 2, "max": user_age + 2}},
+            {"name": "Verified only", "verified_only": True}
+        ]
+    }
+
+
+# --- DISCOVER DAILY PICKS REFRESH ---
+@app.post("/api/discover/daily-picks/refresh")
+async def refresh_daily_picks(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Refresh daily picks (VIP feature)"""
+    vip_check = await db.execute(
+        text("SELECT is_vip FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    is_vip = vip_check.scalar()
+    
+    if not is_vip:
+        return {
+            "success": False,
+            "is_vip_feature": True,
+            "message": "Upgrade to VIP to refresh daily picks"
+        }
+    
+    # Get new picks
+    result = await db.execute(text("""
+        SELECT 
+            u.id::text, u.name, u.age, u.bio, u.photos, u.interests, u.is_verified
+        FROM users u
+        WHERE u.is_active = true 
+        AND u.id != :current_user_id
+        AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0
+        AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
+        ORDER BY RANDOM()
+        LIMIT 5
+    """), {"current_user_id": current_user_id})
+    
+    rows = result.fetchall()
+    
+    picks = []
+    for r in rows:
+        picks.append({
+            "id": r[0],
+            "name": r[1],
+            "age": r[2],
+            "bio": r[3],
+            "photos": r[4] or [],
+            "interests": r[5] or [],
+            "is_verified": r[6] or False,
+            "match_reason": "Refreshed pick for you"
+        })
+    
+    return {
+        "success": True,
+        "picks": picks,
+        "date": datetime.utcnow().date().isoformat()
+    }
+
+
+# --- AUTH LOGIN (Phone + OTP) ---
+@app.post("/api/auth/login")
+async def auth_login(
+    identifier: str = Body(...),
+    otp: str = Body(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Login with phone and OTP"""
+    # In production, verify OTP
+    # For now, placeholder
+    return {
+        "access_token": None,
+        "token_type": "bearer",
+        "has_profile": False,
+        "is_new_user": True,
+        "message": "OTP verification not implemented - use Telegram auth"
+    }
+
+
+@app.post("/api/auth/login/email")
+async def auth_login_email(
+    email: str = Body(...),
+    password: str = Body(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Admin login with email"""
+    # Placeholder for admin auth
+    return {
+        "access_token": None,
+        "token_type": "bearer",
+        "has_profile": False,
+        "is_new_user": False,
+        "message": "Email auth not implemented - use Telegram auth"
+    }
+
+
+@app.post("/api/auth/request-otp")
+async def request_otp(
+    identifier: str = Body(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Request OTP code"""
+    return {
+        "status": "ok",
+        "message": "OTP sent (placeholder - not implemented)"
+    }
+
+
+# --- DELETE USER ---
+@app.delete("/api/users/me")
+async def delete_user_account(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Delete user account"""
+    await db.execute(
+        text("UPDATE users SET is_active = false, deleted_at = NOW() WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "message": "Account deleted"}
+
+
 # Vercel handler
 handler = app

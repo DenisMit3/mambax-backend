@@ -120,7 +120,8 @@ export const ChatInterface = ({
         
         try {
             const token = getToken();
-            const response = await fetch(`/api/chat/conversation-prompts?match_id=${chat.matchId}`, {
+            // Используем /api_proxy который проксирует на backend
+            const response = await fetch(`/api_proxy/api/chat/conversation-prompts?match_id=${chat.matchId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -266,8 +267,8 @@ export const ChatInterface = ({
         const token = localStorage.getItem('token'); // Simplification
 
         try {
-            // Upload
-            const response = await fetch('/api/chat/voice', {
+            // Upload - используем /api_proxy который проксирует на backend
+            const response = await fetch('/api_proxy/api/chat/voice', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
