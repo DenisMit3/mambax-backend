@@ -2331,5 +2331,833 @@ async def dev_set_vip(
     return {"success": True, "is_vip": is_vip}
 
 
+# ============================================
+# DISCOVER ENDPOINTS (Extended)
+# ============================================
+
+class DiscoverFilters(BaseModel):
+    age_min: int = 18
+    age_max: int = 100
+    gender: Optional[str] = None
+    distance_km: int = 50
+    verified_only: bool = False
+    with_photos_only: bool = True
+    interests: Optional[list] = None
+
+
+@app.post("/api/discover")
+async def discover_profiles(
+    filters: DiscoverFilters,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Discover profiles with filters"""
+    query = """
+        SELECT 
+            u.id::text, u.name, u.age, u.bio, u.photos, u.gender, 
+            u.is_vip, u.interests, u.is_verified
+        FROM users u
+        WHERE u.is_active = true 
+        AND u.id != :current_user_id
+        AND u.age >= :age_min AND u.age <= :age_max
+    """
+    params = {
+        "current_user_id": current_user_id,
+        "age_min": filters.age_min,
+        "age_max": filters.age_max,
+        "limit": limit,
+        "offset": skip
+    }
+    
+    if filters.gender:
+        query += " AND u.gender = :gender"
+        params["gender"] = filters.gender
+    
+    if filters.verified_only:
+        query += " AND u.is_verified = true"
+    
+    if filters.with_photos_only:
+        query += " AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0"
+    
+    # Exclude already swiped
+    query += " AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)"
+    
+    query += " ORDER BY RANDOM() LIMIT :limit OFFSET :offset"
+    
+    result = await db.execute(text(query), params)
+    rows = result.fetchall()
+    
+    profiles = []
+    for r in rows:
+        profiles.append({
+            "id": r[0],
+            "name": r[1],
+            "age": r[2],
+            "bio": r[3],
+            "photos": r[4] or [],
+            "gender": r[5],
+            "is_vip": r[6] or False,
+            "interests": r[7] or [],
+            "is_verified": r[8] or False
+        })
+    
+    return {"profiles": profiles, "total": len(profiles)}
+
+
+@app.get("/api/discover/daily-picks")
+async def get_daily_picks(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get AI-curated daily picks (5 profiles)"""
+    # Get user preferences
+    user_result = await db.execute(
+        text("SELECT gender, interests FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    user = user_result.fetchone()
+    
+    # Simple matching: opposite gender, similar interests
+    query = """
+        SELECT 
+            u.id::text, u.name, u.age, u.bio, u.photos, u.interests, u.is_verified
+        FROM users u
+        WHERE u.is_active = true 
+        AND u.id != :current_user_id
+        AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0
+        AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
+        ORDER BY 
+            CASE WHEN u.is_verified THEN 0 ELSE 1 END,
+            RANDOM()
+        LIMIT 5
+    """
+    
+    result = await db.execute(text(query), {"current_user_id": current_user_id})
+    rows = result.fetchall()
+    
+    picks = []
+    for r in rows:
+        picks.append({
+            "id": r[0],
+            "name": r[1],
+            "age": r[2],
+            "bio": r[3],
+            "photos": r[4] or [],
+            "interests": r[5] or [],
+            "is_verified": r[6] or False,
+            "match_reason": "Daily pick for you"
+        })
+    
+    return {"picks": picks, "date": datetime.utcnow().date().isoformat()}
+
+
+@app.get("/api/discover/prefetch")
+async def prefetch_profiles(
+    limit: int = Query(10, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Prefetch next profiles for smooth UX"""
+    result = await db.execute(text("""
+        SELECT id::text, name, age, photos
+        FROM users
+        WHERE is_active = true 
+        AND id != :current_user_id
+        AND photos IS NOT NULL AND array_length(photos, 1) > 0
+        AND id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
+        ORDER BY RANDOM()
+        LIMIT :limit
+    """), {"current_user_id": current_user_id, "limit": limit})
+    
+    rows = result.fetchall()
+    
+    return [
+        {
+            "id": r[0],
+            "name": r[1],
+            "age": r[2],
+            "photo": r[3][0] if r[3] else None
+        }
+        for r in rows
+    ]
+
+
+@app.get("/api/filters/options")
+async def get_filter_options():
+    """Get all available filter options for UI"""
+    return {
+        "gender": [
+            {"value": "male", "label": "Мужчина"},
+            {"value": "female", "label": "Женщина"},
+            {"value": "other", "label": "Другое"}
+        ],
+        "age": {"min": 18, "max": 100},
+        "distance": {"min": 1, "max": 500, "default": 50},
+        "interests": [
+            "Спорт", "Музыка", "Кино", "Путешествия", "Книги",
+            "Игры", "Кулинария", "Фотография", "Танцы", "Йога",
+            "Искусство", "Технологии", "Природа", "Животные"
+        ],
+        "looking_for": [
+            {"value": "relationship", "label": "Серьезные отношения"},
+            {"value": "dating", "label": "Свидания"},
+            {"value": "friends", "label": "Друзья"},
+            {"value": "chat", "label": "Общение"}
+        ]
+    }
+
+
+# ============================================
+# LOCATION ENDPOINT
+# ============================================
+
+class LocationUpdate(BaseModel):
+    lat: float
+    lon: float
+
+
+@app.post("/api/location")
+async def update_location(
+    data: LocationUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update user location"""
+    await db.execute(
+        text("UPDATE users SET latitude = :lat, longitude = :lon WHERE id = :user_id"),
+        {"lat": data.lat, "lon": data.lon, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "lat": data.lat, "lon": data.lon}
+
+
+# ============================================
+# CHAT ENDPOINTS (REST only, no WebSocket)
+# ============================================
+
+class TypingRequest(BaseModel):
+    match_id: str
+    is_typing: bool
+
+
+class MarkReadRequest(BaseModel):
+    match_id: str
+    message_ids: list
+
+
+class ReactionRequest(BaseModel):
+    message_id: str
+    emoji: Optional[str] = None
+
+
+@app.post("/api/chat/typing")
+async def set_typing(
+    data: TypingRequest,
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Set typing status (for polling-based clients)"""
+    # In serverless, we can't maintain WebSocket state
+    # This is a placeholder for clients that poll
+    return {"status": "ok", "match_id": data.match_id, "is_typing": data.is_typing}
+
+
+@app.post("/api/chat/read")
+async def mark_messages_read(
+    data: MarkReadRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Mark messages as read"""
+    if not data.message_ids:
+        return {"status": "ok", "updated": 0}
+    
+    # Verify user is receiver
+    placeholders = ", ".join([f":id{i}" for i in range(len(data.message_ids))])
+    params = {f"id{i}": mid for i, mid in enumerate(data.message_ids)}
+    params["user_id"] = current_user_id
+    
+    result = await db.execute(
+        text(f"""
+            UPDATE messages 
+            SET is_read = true, read_at = NOW()
+            WHERE id IN ({placeholders}) AND receiver_id = :user_id AND is_read = false
+        """),
+        params
+    )
+    await db.commit()
+    
+    return {"status": "ok", "updated": result.rowcount}
+
+
+@app.post("/api/chat/reaction")
+async def add_reaction(
+    data: ReactionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Add or remove reaction to message"""
+    if data.emoji:
+        # Add reaction
+        await db.execute(
+            text("""
+                INSERT INTO message_reactions (message_id, user_id, emoji, created_at)
+                VALUES (:message_id, :user_id, :emoji, NOW())
+                ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = :emoji
+            """),
+            {"message_id": data.message_id, "user_id": current_user_id, "emoji": data.emoji}
+        )
+    else:
+        # Remove reaction
+        await db.execute(
+            text("DELETE FROM message_reactions WHERE message_id = :message_id AND user_id = :user_id"),
+            {"message_id": data.message_id, "user_id": current_user_id}
+        )
+    
+    await db.commit()
+    return {"status": "ok", "emoji": data.emoji}
+
+
+@app.get("/api/chat/reactions")
+async def get_available_reactions():
+    """Get list of available reactions"""
+    return {
+        "reactions": ["❤️", "😂", "😮", "😢", "😡", "👍", "👎", "🔥", "💯", "🎉"]
+    }
+
+
+@app.get("/api/chat/unread")
+async def get_unread_counts(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get unread message counts per match"""
+    result = await db.execute(text("""
+        SELECT match_id::text, COUNT(*) as count
+        FROM messages
+        WHERE receiver_id = :user_id AND is_read = false
+        GROUP BY match_id
+    """), {"user_id": current_user_id})
+    
+    rows = result.fetchall()
+    
+    unread = {r[0]: r[1] for r in rows}
+    total = sum(unread.values())
+    
+    return {"unread": unread, "total": total}
+
+
+@app.get("/api/chat/icebreakers")
+async def get_icebreakers(
+    match_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get conversation starters for a match"""
+    # Verify match access
+    match_check = await db.execute(
+        text("SELECT user1_id, user2_id FROM matches WHERE id = :match_id"),
+        {"match_id": match_id}
+    )
+    match = match_check.fetchone()
+    
+    if not match or current_user_id not in (str(match[0]), str(match[1])):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get partner info for personalized icebreakers
+    partner_id = str(match[1]) if current_user_id == str(match[0]) else str(match[0])
+    
+    partner_result = await db.execute(
+        text("SELECT name, interests, bio FROM users WHERE id = :user_id"),
+        {"user_id": partner_id}
+    )
+    partner = partner_result.fetchone()
+    
+    # Generate icebreakers based on partner info
+    icebreakers = [
+        f"Привет! Как твои дела? 😊",
+        f"Привет {partner[0] if partner else ''}! Рад(а) познакомиться!",
+        "Что самое интересное произошло у тебя на этой неделе?",
+        "Какой твой любимый способ провести выходные?",
+        "Если бы ты мог(ла) поехать куда угодно прямо сейчас, куда бы отправился(ась)?"
+    ]
+    
+    # Add interest-based icebreaker if available
+    if partner and partner[1]:
+        interests = partner[1]
+        if interests:
+            icebreakers.append(f"Вижу, тебе нравится {interests[0]}! Расскажи подробнее?")
+    
+    return {"icebreakers": icebreakers[:5]}
+
+
+@app.get("/api/chat/gifs/search")
+async def search_gifs(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(20, ge=1, le=50)
+):
+    """Search GIFs (placeholder - integrate with Giphy/Tenor)"""
+    # Placeholder response - in production, integrate with Giphy API
+    return {
+        "gifs": [],
+        "query": q,
+        "message": "GIF search requires Giphy API integration"
+    }
+
+
+@app.get("/api/chat/gifs/trending")
+async def get_trending_gifs(
+    limit: int = Query(20, ge=1, le=50)
+):
+    """Get trending GIFs (placeholder)"""
+    return {
+        "gifs": [],
+        "message": "Trending GIFs requires Giphy API integration"
+    }
+
+
+# ============================================
+# PROFILE ENDPOINTS
+# ============================================
+
+class ProfileCreate(BaseModel):
+    name: str
+    age: int
+    gender: str
+    bio: Optional[str] = None
+    interests: Optional[list] = None
+
+
+@app.post("/api/profile")
+async def create_profile(
+    data: ProfileCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create/complete user profile"""
+    await db.execute(
+        text("""
+            UPDATE users 
+            SET name = :name, age = :age, gender = :gender, bio = :bio, 
+                interests = :interests, is_complete = true
+            WHERE id = :user_id
+        """),
+        {
+            "name": data.name,
+            "age": data.age,
+            "gender": data.gender,
+            "bio": data.bio,
+            "interests": data.interests or [],
+            "user_id": current_user_id
+        }
+    )
+    await db.commit()
+    
+    return {"status": "ok", "message": "Profile created"}
+
+
+@app.get("/api/profile/completion")
+async def get_profile_completion(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get profile completion status"""
+    result = await db.execute(
+        text("""
+            SELECT name, age, gender, bio, photos, interests, is_verified
+            FROM users WHERE id = :user_id
+        """),
+        {"user_id": current_user_id}
+    )
+    user = result.fetchone()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    completion = {
+        "name": bool(user[0]),
+        "age": bool(user[1]),
+        "gender": bool(user[2]),
+        "bio": bool(user[3]),
+        "photos": bool(user[4] and len(user[4]) > 0),
+        "interests": bool(user[5] and len(user[5]) > 0),
+        "verified": bool(user[6])
+    }
+    
+    completed = sum(completion.values())
+    total = len(completion)
+    percentage = int((completed / total) * 100)
+    
+    return {
+        "completion": completion,
+        "completed": completed,
+        "total": total,
+        "percentage": percentage,
+        "is_complete": percentage >= 70
+    }
+
+
+# ============================================
+# NEARBY USERS (Geo-based)
+# ============================================
+
+@app.get("/api/nearby")
+async def get_nearby_users(
+    lat: float = Query(...),
+    lon: float = Query(...),
+    radius_km: int = Query(50, ge=1, le=500),
+    limit: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get nearby users based on location"""
+    # Using Haversine formula for distance calculation
+    result = await db.execute(text("""
+        SELECT 
+            id::text, name, age, photos, gender,
+            (6371 * acos(
+                cos(radians(:lat)) * cos(radians(latitude)) *
+                cos(radians(longitude) - radians(:lon)) +
+                sin(radians(:lat)) * sin(radians(latitude))
+            )) AS distance_km
+        FROM users
+        WHERE is_active = true
+        AND id != :current_user_id
+        AND latitude IS NOT NULL AND longitude IS NOT NULL
+        AND photos IS NOT NULL AND array_length(photos, 1) > 0
+        AND id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
+        HAVING (6371 * acos(
+            cos(radians(:lat)) * cos(radians(latitude)) *
+            cos(radians(longitude) - radians(:lon)) +
+            sin(radians(:lat)) * sin(radians(latitude))
+        )) <= :radius
+        ORDER BY distance_km
+        LIMIT :limit
+    """), {
+        "lat": lat,
+        "lon": lon,
+        "radius": radius_km,
+        "current_user_id": current_user_id,
+        "limit": limit
+    })
+    
+    rows = result.fetchall()
+    
+    users = []
+    for r in rows:
+        users.append({
+            "id": r[0],
+            "name": r[1],
+            "age": r[2],
+            "photos": r[3] or [],
+            "gender": r[4],
+            "distance_km": round(r[5], 1) if r[5] else None
+        })
+    
+    return {"users": users, "total": len(users)}
+
+
+# ============================================
+# ACHIEVEMENTS & GAMIFICATION
+# ============================================
+
+@app.get("/api/achievements")
+async def get_achievements(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user achievements"""
+    result = await db.execute(
+        text("SELECT achievements FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    user_achievements = row[0] if row and row[0] else []
+    
+    # All available achievements
+    all_achievements = [
+        {"id": "first_match", "name": "Первый матч", "description": "Получите первый матч", "icon": "💕"},
+        {"id": "conversationalist", "name": "Душа компании", "description": "Отправьте 100 сообщений", "icon": "💬"},
+        {"id": "popular", "name": "Популярный", "description": "Получите 50 лайков", "icon": "⭐"},
+        {"id": "verified", "name": "Проверенный", "description": "Пройдите верификацию", "icon": "✅"},
+        {"id": "gift_giver", "name": "Щедрый", "description": "Отправьте 10 подарков", "icon": "🎁"},
+        {"id": "daily_active", "name": "Активный", "description": "Заходите 7 дней подряд", "icon": "🔥"},
+        {"id": "profile_complete", "name": "Полный профиль", "description": "Заполните профиль на 100%", "icon": "📝"},
+        {"id": "super_liker", "name": "Супер-лайкер", "description": "Используйте 10 супер-лайков", "icon": "💜"}
+    ]
+    
+    # Mark earned achievements
+    earned_ids = [a.get("badge") or a.get("id") for a in user_achievements] if user_achievements else []
+    
+    for achievement in all_achievements:
+        achievement["earned"] = achievement["id"] in earned_ids
+    
+    return {
+        "achievements": all_achievements,
+        "earned_count": len(earned_ids),
+        "total_count": len(all_achievements)
+    }
+
+
+# ============================================
+# ACTIVITY & ANALYTICS
+# ============================================
+
+@app.get("/api/activity/summary")
+async def get_activity_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user activity summary"""
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    week_ago = today - timedelta(days=7)
+    
+    # Swipes today
+    swipes_result = await db.execute(
+        text("SELECT COUNT(*) FROM swipes WHERE from_user_id = :user_id AND timestamp >= :today"),
+        {"user_id": current_user_id, "today": today}
+    )
+    swipes_today = swipes_result.scalar() or 0
+    
+    # Matches this week
+    matches_result = await db.execute(
+        text("""
+            SELECT COUNT(*) FROM matches 
+            WHERE (user1_id = :user_id OR user2_id = :user_id) AND created_at >= :week_ago
+        """),
+        {"user_id": current_user_id, "week_ago": week_ago}
+    )
+    matches_week = matches_result.scalar() or 0
+    
+    # Messages this week
+    messages_result = await db.execute(
+        text("SELECT COUNT(*) FROM messages WHERE sender_id = :user_id AND created_at >= :week_ago"),
+        {"user_id": current_user_id, "week_ago": week_ago}
+    )
+    messages_week = messages_result.scalar() or 0
+    
+    # Likes received this week
+    likes_result = await db.execute(
+        text("""
+            SELECT COUNT(*) FROM swipes 
+            WHERE to_user_id = :user_id AND action IN ('like', 'superlike') AND timestamp >= :week_ago
+        """),
+        {"user_id": current_user_id, "week_ago": week_ago}
+    )
+    likes_week = likes_result.scalar() or 0
+    
+    return {
+        "today": {
+            "swipes": swipes_today
+        },
+        "this_week": {
+            "matches": matches_week,
+            "messages": messages_week,
+            "likes_received": likes_week
+        }
+    }
+
+
+# ============================================
+# SUBSCRIPTION PLANS
+# ============================================
+
+@app.get("/api/subscriptions/plans")
+async def get_subscription_plans(
+    db: AsyncSession = Depends(get_db)
+):
+    """Get available subscription plans"""
+    result = await db.execute(text("""
+        SELECT id::text, name, tier, price, currency, duration_days, 
+               unlimited_swipes, unlimited_likes, see_who_likes, boost_per_month,
+               is_active, is_popular
+        FROM subscription_plans
+        WHERE is_active = true
+        ORDER BY price
+    """))
+    
+    rows = result.fetchall()
+    
+    plans = []
+    for r in rows:
+        plans.append({
+            "id": r[0],
+            "name": r[1],
+            "tier": r[2],
+            "price": float(r[3]),
+            "currency": r[4],
+            "duration_days": r[5],
+            "features": {
+                "unlimited_swipes": r[6],
+                "unlimited_likes": r[7],
+                "see_who_likes": r[8],
+                "boost_per_month": r[9]
+            },
+            "is_popular": r[11]
+        })
+    
+    # Fallback if no plans in DB
+    if not plans:
+        plans = [
+            {
+                "id": "free",
+                "name": "Free",
+                "tier": "free",
+                "price": 0,
+                "currency": "XTR",
+                "duration_days": 0,
+                "features": {
+                    "unlimited_swipes": False,
+                    "unlimited_likes": False,
+                    "see_who_likes": False,
+                    "boost_per_month": 0
+                },
+                "is_popular": False
+            },
+            {
+                "id": "gold",
+                "name": "Gold",
+                "tier": "gold",
+                "price": 299,
+                "currency": "XTR",
+                "duration_days": 30,
+                "features": {
+                    "unlimited_swipes": True,
+                    "unlimited_likes": True,
+                    "see_who_likes": True,
+                    "boost_per_month": 1
+                },
+                "is_popular": True
+            },
+            {
+                "id": "platinum",
+                "name": "Platinum",
+                "tier": "platinum",
+                "price": 499,
+                "currency": "XTR",
+                "duration_days": 30,
+                "features": {
+                    "unlimited_swipes": True,
+                    "unlimited_likes": True,
+                    "see_who_likes": True,
+                    "boost_per_month": 5
+                },
+                "is_popular": False
+            }
+        ]
+    
+    return {"plans": plans}
+
+
+@app.get("/api/subscriptions/my")
+async def get_my_subscription(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get current user's subscription"""
+    result = await db.execute(text("""
+        SELECT 
+            us.id::text, us.status, us.starts_at, us.expires_at,
+            sp.name, sp.tier
+        FROM user_subscriptions us
+        JOIN subscription_plans sp ON us.plan_id = sp.id
+        WHERE us.user_id = :user_id AND us.status = 'active'
+        ORDER BY us.expires_at DESC
+        LIMIT 1
+    """), {"user_id": current_user_id})
+    
+    row = result.fetchone()
+    
+    if not row:
+        return {
+            "has_subscription": False,
+            "tier": "free",
+            "plan_name": "Free"
+        }
+    
+    return {
+        "has_subscription": True,
+        "subscription_id": row[0],
+        "status": row[1],
+        "starts_at": row[2].isoformat() if row[2] else None,
+        "expires_at": row[3].isoformat() if row[3] else None,
+        "plan_name": row[4],
+        "tier": row[5]
+    }
+
+
+# ============================================
+# SEARCH USERS
+# ============================================
+
+@app.get("/api/search/users")
+async def search_users(
+    q: str = Query(..., min_length=2),
+    limit: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Search users by name"""
+    result = await db.execute(text("""
+        SELECT id::text, name, age, photos, is_verified
+        FROM users
+        WHERE is_active = true
+        AND id != :current_user_id
+        AND name ILIKE :query
+        LIMIT :limit
+    """), {"current_user_id": current_user_id, "query": f"%{q}%", "limit": limit})
+    
+    rows = result.fetchall()
+    
+    users = []
+    for r in rows:
+        users.append({
+            "id": r[0],
+            "name": r[1],
+            "age": r[2],
+            "photo": r[3][0] if r[3] else None,
+            "is_verified": r[4]
+        })
+    
+    return {"users": users, "total": len(users)}
+
+
+# ============================================
+# FEEDBACK
+# ============================================
+
+class FeedbackRequest(BaseModel):
+    type: str  # bug, feature, other
+    message: str
+    rating: Optional[int] = None
+
+
+@app.post("/api/feedback")
+async def submit_feedback(
+    data: FeedbackRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Submit user feedback"""
+    await db.execute(
+        text("""
+            INSERT INTO feedback (user_id, type, message, rating, created_at)
+            VALUES (:user_id, :type, :message, :rating, NOW())
+        """),
+        {
+            "user_id": current_user_id,
+            "type": data.type,
+            "message": data.message,
+            "rating": data.rating
+        }
+    )
+    await db.commit()
+    
+    return {"status": "ok", "message": "Feedback submitted. Thank you!"}
+
+
 # Vercel handler
 handler = app
