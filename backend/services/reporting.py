@@ -1,11 +1,18 @@
 
 import os
 import uuid
-import pandas as pd
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 from tempfile import NamedTemporaryFile
+
+# Pandas is optional (too heavy for Vercel 250MB limit)
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    pd = None
+    PANDAS_AVAILABLE = False
 
 from backend.database import AsyncSessionLocal
 from backend.models.advanced import CustomReport, AIUsageLog
@@ -16,6 +23,10 @@ async def generate_report_task(report_id: uuid.UUID):
     """
     Background task to generate a report file.
     """
+    if not PANDAS_AVAILABLE:
+        print("Pandas not available - report generation disabled on serverless")
+        return
+        
     async with AsyncSessionLocal() as db:
         report = await db.get(CustomReport, report_id)
         if not report:
