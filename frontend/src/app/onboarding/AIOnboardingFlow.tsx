@@ -60,6 +60,8 @@ export default function AIOnboardingFlow() {
     const [stepIndex, setStepIndex] = useState(0);
     const [inputValue, setInputValue] = useState('');
     const [showSummary, setShowSummary] = useState(false);
+    const [isInitializing, setIsInitializing] = useState(true); // NEW: Loading state
+    const [initError, setInitError] = useState<string | null>(null); // NEW: Error state
     const [userData, setUserData] = useState<UserData>({
         name: '', gender: 'male', age: 18, interests: [], bio: '', photos: [], details: {}
     });
@@ -77,6 +79,8 @@ export default function AIOnboardingFlow() {
         
         const initOnboarding = async () => {
             console.log("[Onboarding] Starting initialization...");
+            setIsInitializing(true);
+            setInitError(null);
             
             // Step 1: Check for existing token
             let token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') || localStorage.getItem('token')) : null;
@@ -87,22 +91,35 @@ export default function AIOnboardingFlow() {
                 const initData = window.Telegram.WebApp.initData;
                 if (initData && initData.trim()) {
                     console.log("[Onboarding] No token, attempting Telegram auth...");
+                    console.log("[Onboarding] initData length:", initData.length);
                     try {
                         const result = await authService.telegramLogin(initData);
                         console.log("[Onboarding] Telegram auth success, has_profile:", result.has_profile);
                         token = localStorage.getItem('accessToken');
-                    } catch (err) {
+                    } catch (err: any) {
                         console.error("[Onboarding] Telegram auth failed:", err);
-                        window.location.href = '/auth/phone';
+                        const errorMsg = err?.message || err?.data?.detail || 'Unknown error';
+                        setInitError(`Ошибка авторизации: ${errorMsg}`);
+                        setIsInitializing(false);
                         return;
                     }
                 }
             }
             
-            // Step 3: Still no token - redirect to login
+            // Step 3: Still no token and no Telegram data - show error instead of redirect
             if (!token) {
-                console.warn("[Onboarding] No auth available, redirecting to login");
-                window.location.href = '/auth/phone';
+                const hasTelegramData = typeof window !== 'undefined' && !!window.Telegram?.WebApp?.initData;
+                console.warn("[Onboarding] No auth available, hasTelegramData:", hasTelegramData);
+                
+                if (!hasTelegramData) {
+                    // Not in Telegram Mini App - redirect to login
+                    window.location.href = '/auth/phone';
+                    return;
+                }
+                
+                // In Telegram but auth failed - show error
+                setInitError("Не удалось авторизоваться. Попробуйте перезапустить бот командой /start");
+                setIsInitializing(false);
                 return;
             }
             
@@ -124,6 +141,7 @@ export default function AIOnboardingFlow() {
                 // Profile incomplete - start onboarding
                 console.log("[Onboarding] Profile incomplete, starting onboarding flow");
                 initialMessageSent.current = true;
+                setIsInitializing(false);
                 addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
                 
             } catch (e: any) {
@@ -148,13 +166,18 @@ export default function AIOnboardingFlow() {
                                 }
                                 
                                 initialMessageSent.current = true;
+                                setIsInitializing(false);
                                 addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
                                 return;
-                            } catch (reAuthErr) {
+                            } catch (reAuthErr: any) {
                                 console.error("[Onboarding] Re-auth failed:", reAuthErr);
+                                setInitError(`Ошибка повторной авторизации: ${reAuthErr?.message || 'Unknown'}`);
+                                setIsInitializing(false);
+                                return;
                             }
                         }
                     }
+                    // No Telegram data for re-auth
                     window.location.href = '/auth/phone';
                     return;
                 }
@@ -162,6 +185,7 @@ export default function AIOnboardingFlow() {
                 // On other errors, still allow onboarding
                 console.log("[Onboarding] Starting onboarding despite error");
                 initialMessageSent.current = true;
+                setIsInitializing(false);
                 addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
             }
         };
@@ -431,6 +455,31 @@ export default function AIOnboardingFlow() {
     return (
         <div className="fixed inset-0 bg-[#0f0f11] flex items-center justify-center z-[100] font-sans text-white">
             <div className="w-full h-full sm:h-[90vh] sm:max-w-[420px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-[#1c1c1e] sm:shadow-2xl relative flex flex-col overflow-hidden">
+                {/* Loading State */}
+                {isInitializing && (
+                    <div className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center">
+                        <div className="w-16 h-16 border-2 border-[#ff4b91]/30 rounded-full border-t-[#ff4b91] animate-spin mb-4" />
+                        <p className="text-gray-400 text-sm">Загрузка...</p>
+                    </div>
+                )}
+                
+                {/* Error State */}
+                {initError && !isInitializing && (
+                    <div className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-6 text-center">
+                        <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                            <X size={32} className="text-red-500" />
+                        </div>
+                        <h2 className="text-xl font-bold mb-2">Ошибка</h2>
+                        <p className="text-gray-400 text-sm mb-6">{initError}</p>
+                        <button 
+                            onClick={() => window.location.reload()}
+                            className="px-6 py-3 bg-[#ff4b91] rounded-full text-white font-bold"
+                        >
+                            Попробовать снова
+                        </button>
+                    </div>
+                )}
+                
                 {showSummary ? (
                     <div className="absolute inset-0 bg-white z-50 animate-in fade-in duration-500 font-sans text-slate-900 flex flex-col">
 
