@@ -10,7 +10,14 @@ import ssl
 from typing import AsyncGenerator, Optional
 from contextlib import contextmanager, asynccontextmanager
 
-import psycopg2
+# psycopg2 only needed for Windows local dev, not on Vercel
+psycopg2 = None
+if sys.platform == 'win32':
+    try:
+        import psycopg2
+    except ImportError:
+        pass  # Not available, will use async only
+
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -39,7 +46,7 @@ if "neon.tech" not in DATABASE_URL and "neon" not in DATABASE_URL.lower():
             "Получите бесплатную БД на https://neon.tech"
         )
 
-# Parse connection params from URL for psycopg2
+# Parse connection params from URL for psycopg2 (only if available)
 def _parse_neon_url(url: str) -> dict:
     """Parse Neon URL into connection params for psycopg2"""
     # postgresql+asyncpg://user:pass@host/db?ssl=require
@@ -57,7 +64,8 @@ def _parse_neon_url(url: str) -> dict:
         }
     raise ValueError(f"Cannot parse DATABASE_URL: {url}")
 
-NEON_CONN_PARAMS = _parse_neon_url(DATABASE_URL)
+# Only parse if psycopg2 is available (Windows local dev)
+NEON_CONN_PARAMS = _parse_neon_url(DATABASE_URL) if psycopg2 else {}
 
 
 # ============================================
@@ -74,6 +82,8 @@ class NeonSyncDB:
     @staticmethod
     @contextmanager
     def get_connection():
+        if psycopg2 is None:
+            raise RuntimeError("psycopg2 not available - use async methods instead")
         conn = psycopg2.connect(**NEON_CONN_PARAMS)
         try:
             yield conn

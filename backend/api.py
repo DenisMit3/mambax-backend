@@ -13,7 +13,7 @@ from typing import Optional
 from urllib.parse import parse_qsl, unquote
 from uuid import UUID
 
-from fastapi import FastAPI, Depends, HTTPException, status, Header, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Header, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
