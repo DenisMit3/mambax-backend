@@ -72,73 +72,86 @@ export default function AIOnboardingFlow() {
     const initialMessageSent = useRef(false);
 
     useEffect(() => {
-        // Validation: Ensure user is logged in before starting
-        const token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') || localStorage.getItem('token')) : null;
-        if (!token) {
-            // Попытаться восстановить сессию через Telegram
-            if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
+        // FIX: Prevent multiple initializations
+        if (initialMessageSent.current) return;
+        
+        const initOnboarding = async () => {
+            console.log("[Onboarding] Starting initialization...");
+            
+            // Step 1: Check for existing token
+            let token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') || localStorage.getItem('token')) : null;
+            console.log("[Onboarding] Existing token:", !!token);
+            
+            // Step 2: If no token, try Telegram auth
+            if (!token && typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
                 const initData = window.Telegram.WebApp.initData;
                 if (initData && initData.trim()) {
-                    console.log("[Onboarding] Token lost, attempting re-auth via Telegram");
-                    authService.telegramLogin(initData)
-                        .then(() => {
-                            console.log("[Onboarding] Re-auth successful, continuing onboarding");
-                            // Продолжить onboarding - запустить проверку профиля
-                            checkProfileStatus();
-                        })
-                        .catch(err => {
-                            console.error("[Onboarding] Re-auth failed:", err);
-                            window.location.href = '/auth/phone';
-                        });
-                    return;
+                    console.log("[Onboarding] No token, attempting Telegram auth...");
+                    try {
+                        const result = await authService.telegramLogin(initData);
+                        console.log("[Onboarding] Telegram auth success, has_profile:", result.has_profile);
+                        token = localStorage.getItem('accessToken');
+                    } catch (err) {
+                        console.error("[Onboarding] Telegram auth failed:", err);
+                        window.location.href = '/auth/phone';
+                        return;
+                    }
                 }
             }
-            console.warn("[Onboarding] No auth token and no Telegram data available");
-            window.location.href = '/auth/phone';
-            return;
-        }
-
-        // FIX: Check if profile is already complete - prevent re-onboarding
-        const checkProfileStatus = async () => {
+            
+            // Step 3: Still no token - redirect to login
+            if (!token) {
+                console.warn("[Onboarding] No auth available, redirecting to login");
+                window.location.href = '/auth/phone';
+                return;
+            }
+            
+            // Step 4: Check profile status
             try {
                 const me = await authService.getMe();
-                if (me && me.is_complete === true) {
-                    console.log("[Onboarding] Profile already complete, redirecting to home");
+                console.log("[Onboarding] Profile check - is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
+                
+                // Only redirect if profile is TRULY complete (has photos AND real gender)
+                const hasPhotos = me.photos && me.photos.length > 0;
+                const hasRealGender = me.gender && me.gender !== 'other';
+                
+                if (me.is_complete === true && hasPhotos && hasRealGender) {
+                    console.log("[Onboarding] Profile complete, redirecting to home");
                     window.location.href = '/';
                     return;
                 }
-                // Profile not complete - start onboarding
-                if (!initialMessageSent.current) {
-                    initialMessageSent.current = true;
-                    addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
-                }
-            } catch (e: any) {
-                console.error("[Onboarding] Failed to check profile status:", e);
                 
-                // Если ошибка 401 - попробовать восстановить через Telegram
+                // Profile incomplete - start onboarding
+                console.log("[Onboarding] Profile incomplete, starting onboarding flow");
+                initialMessageSent.current = true;
+                addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
+                
+            } catch (e: any) {
+                console.error("[Onboarding] Profile check failed:", e);
+                
+                // On 401, try re-auth via Telegram
                 if (e?.status === 401 || e?.message?.includes('Unauthorized')) {
                     if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
                         const initData = window.Telegram.WebApp.initData;
                         if (initData && initData.trim()) {
-                            console.log("[Onboarding] Session expired, attempting re-auth via Telegram");
+                            console.log("[Onboarding] Session expired, re-authenticating...");
                             try {
                                 await authService.telegramLogin(initData);
-                                console.log("[Onboarding] Re-auth successful, retrying profile check");
-                                // Retry profile check after re-auth
+                                // Retry - but don't loop infinitely
                                 const me = await authService.getMe();
-                                if (me && me.is_complete === true) {
+                                const hasPhotos = me.photos && me.photos.length > 0;
+                                const hasRealGender = me.gender && me.gender !== 'other';
+                                
+                                if (me.is_complete === true && hasPhotos && hasRealGender) {
                                     window.location.href = '/';
                                     return;
                                 }
-                                if (!initialMessageSent.current) {
-                                    initialMessageSent.current = true;
-                                    addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
-                                }
+                                
+                                initialMessageSent.current = true;
+                                addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
                                 return;
                             } catch (reAuthErr) {
                                 console.error("[Onboarding] Re-auth failed:", reAuthErr);
-                                window.location.href = '/auth/phone';
-                                return;
                             }
                         }
                     }
@@ -146,15 +159,14 @@ export default function AIOnboardingFlow() {
                     return;
                 }
                 
-                // On other errors, still allow onboarding to proceed
-                if (!initialMessageSent.current) {
-                    initialMessageSent.current = true;
-                    addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
-                }
+                // On other errors, still allow onboarding
+                console.log("[Onboarding] Starting onboarding despite error");
+                initialMessageSent.current = true;
+                addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
             }
         };
         
-        checkProfileStatus();
+        initOnboarding();
     }, []);
 
     // FIX (MEM): Cleanup Object URLs on unmount to prevent memory leaks

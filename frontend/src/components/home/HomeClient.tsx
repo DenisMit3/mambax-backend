@@ -57,24 +57,25 @@ export function HomeClient() {
 
     // Check authentication function - extracted for reuse
     const checkAuth = useCallback(async () => {
+        console.log("[Home] checkAuth started");
+        
+        // Helper to check if profile is complete
+        const isProfileComplete = (profile: any): boolean => {
+            const hasPhotos = profile.photos && profile.photos.length > 0;
+            const hasRealGender = profile.gender && profile.gender !== 'other';
+            return profile.is_complete === true && hasPhotos && hasRealGender;
+        };
+        
         // Priority 1: Check for existing valid token FIRST
-        // This prevents unnecessary re-authentication on every page load
         const hasToken = httpClient.isAuthenticated();
         console.log("[Home] Token check:", hasToken);
         
         if (hasToken) {
-            // FIX: Validate token by checking profile BEFORE setting isAuth
-            // This ensures we redirect to onboarding if profile is incomplete
             try {
                 const me = await authService.getMe();
                 console.log("[Home] Token valid, is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
                 
-                // Critical: Check BOTH is_complete flag AND actual profile data
-                // Profile needs: photos AND real gender (not 'other')
-                const hasPhotos = me.photos && me.photos.length > 0;
-                const hasRealGender = me.gender && me.gender !== 'other';
-                
-                if (me.is_complete === false || !hasPhotos || !hasRealGender) {
+                if (!isProfileComplete(me)) {
                     console.log("[Home] Profile incomplete, redirecting to onboarding...");
                     router.replace('/onboarding');
                     return;
@@ -85,7 +86,6 @@ export function HomeClient() {
                 return;
             } catch (e: any) {
                 console.log("[Home] Token validation failed:", e);
-                // Token invalid - clear and continue to Telegram auth
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('token');
             }
@@ -93,7 +93,6 @@ export function HomeClient() {
 
         // Priority 2: No token - try Telegram Init Data (Native Flow)
         if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
-            // Проверить, что initData не пустой
             const initData = window.Telegram.WebApp.initData;
             if (!initData || !initData.trim()) {
                 console.error("[Home] Empty initData from Telegram");
@@ -108,29 +107,12 @@ export function HomeClient() {
                 const loginResult = await authService.telegramLogin(initData);
                 console.log("[Home] Telegram login success, has_profile:", loginResult.has_profile);
                 
-                // FIX: Check if profile is complete BEFORE setting isAuth
-                // New users (has_profile=false) should go to onboarding
-                if (!loginResult.has_profile) {
-                    console.log("[Home] New user, redirecting to onboarding...");
-                    router.replace('/onboarding');
-                    return;
-                }
+                // FIX: Always verify actual profile state, not just has_profile flag
+                const me = await authService.getMe();
+                console.log("[Home] Profile check - is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
                 
-                // Existing user - verify profile is actually complete
-                try {
-                    const me = await authService.getMe();
-                    console.log("[Home] Profile check - photos:", me.photos?.length, "gender:", me.gender);
-                    
-                    const hasPhotos = me.photos && me.photos.length > 0;
-                    const hasRealGender = me.gender && me.gender !== 'other';
-                    
-                    if (!hasPhotos || !hasRealGender) {
-                        console.log("[Home] Profile incomplete (no photos or wrong gender), redirecting to onboarding...");
-                        router.replace('/onboarding');
-                        return;
-                    }
-                } catch (profileErr) {
-                    console.error("[Home] Failed to verify profile:", profileErr);
+                if (!isProfileComplete(me)) {
+                    console.log("[Home] Profile incomplete, redirecting to onboarding...");
                     router.replace('/onboarding');
                     return;
                 }
@@ -144,7 +126,6 @@ export function HomeClient() {
                 console.error("[Home] Telegram Login Failed:", e);
                 setIsRetrying(false);
                 
-                // Попытка повторной аутентификации (максимум MAX_RETRY_ATTEMPTS раз)
                 if (retryCount < MAX_RETRY_ATTEMPTS) {
                     const nextRetry = retryCount + 1;
                     setRetryCount(nextRetry);
@@ -152,11 +133,10 @@ export function HomeClient() {
                     
                     retryTimeoutRef.current = setTimeout(() => {
                         checkAuth();
-                    }, 1000 * nextRetry); // Exponential backoff: 1s, 2s
+                    }, 1000 * nextRetry);
                     return;
                 }
                 
-                // После MAX_RETRY_ATTEMPTS неудачных попыток показать ошибку
                 const errorMessage = e.message || e.data?.detail || '';
                 setAuthError(
                     errorMessage.toLowerCase().includes("auth_date") || errorMessage.toLowerCase().includes("expired")
@@ -254,7 +234,8 @@ export function HomeClient() {
             const hasPhotos = me.photos && me.photos.length > 0;
             const hasRealGender = me.gender && me.gender !== 'other';
             
-            if (me.is_complete === false || !hasPhotos || !hasRealGender) {
+            // Only redirect if profile is truly incomplete
+            if (me.is_complete !== true || !hasPhotos || !hasRealGender) {
                 console.log("[Home] Profile incomplete, redirecting to onboarding...");
                 router.replace('/onboarding');
             }
