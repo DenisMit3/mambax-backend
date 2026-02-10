@@ -1,4 +1,4 @@
-# MambaX Backend - Vercel Serverless
+# MambaX Backend - Vercel Serverless (optimized for 250MB limit)
 # =============================================
 
 # Core
@@ -36,12 +36,10 @@ sentry-sdk[fastapi]>=1.39.0
 
 # Utils
 python-dateutil>=2.8.2
+user-agents>=2.2.0
 
 # Telegram Bot
 aiogram>=3.3.0
-
-# AI (Groq/Gemini)
-google-generativeai>=0.8.0
 
 # Push Notifications
 pywebpush>=1.14.0
@@ -49,5 +47,5 @@ pywebpush>=1.14.0
 # Payments
 stripe>=7.0.0
 
-# User Agent parsing
-user-agents>=2.2.0
+# AI - Groq only (Gemini too heavy for Vercel 250MB limit)
+groq>=0.4.0
