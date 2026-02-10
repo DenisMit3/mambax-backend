@@ -3159,5 +3159,857 @@ async def submit_feedback(
     return {"status": "ok", "message": "Feedback submitted. Thank you!"}
 
 
+# ============================================
+# PHOTOS ENDPOINTS
+# ============================================
+
+class PhotoReorder(BaseModel):
+    photo_urls: list
+
+
+@app.post("/api/photos/upload-url")
+async def get_photo_upload_url(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get presigned URL for photo upload (placeholder)"""
+    # In production, integrate with S3/Cloudinary/etc.
+    return {
+        "upload_url": None,
+        "message": "Photo upload requires cloud storage integration (S3/Cloudinary)",
+        "max_size_mb": 10,
+        "allowed_types": ["image/jpeg", "image/png", "image/webp"]
+    }
+
+
+@app.post("/api/photos/reorder")
+async def reorder_photos(
+    data: PhotoReorder,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Reorder user photos"""
+    await db.execute(
+        text("UPDATE users SET photos = :photos WHERE id = :user_id"),
+        {"photos": data.photo_urls, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "photos": data.photo_urls}
+
+
+@app.delete("/api/photos/{photo_index}")
+async def delete_photo(
+    photo_index: int,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Delete photo by index"""
+    result = await db.execute(
+        text("SELECT photos FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="No photos found")
+    
+    photos = list(row[0])
+    
+    if photo_index < 0 or photo_index >= len(photos):
+        raise HTTPException(status_code=400, detail="Invalid photo index")
+    
+    deleted = photos.pop(photo_index)
+    
+    await db.execute(
+        text("UPDATE users SET photos = :photos WHERE id = :user_id"),
+        {"photos": photos, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "deleted": deleted, "remaining": photos}
+
+
+# ============================================
+# INTERESTS ENDPOINTS
+# ============================================
+
+@app.get("/api/interests/categories")
+async def get_interest_categories():
+    """Get all interest categories"""
+    return {
+        "categories": [
+            {
+                "id": "lifestyle",
+                "name": "Образ жизни",
+                "interests": ["Спорт", "Йога", "Фитнес", "Путешествия", "Кулинария", "Здоровое питание"]
+            },
+            {
+                "id": "entertainment",
+                "name": "Развлечения",
+                "interests": ["Кино", "Музыка", "Игры", "Сериалы", "Концерты", "Театр"]
+            },
+            {
+                "id": "creative",
+                "name": "Творчество",
+                "interests": ["Фотография", "Рисование", "Музыка", "Танцы", "Писательство", "Дизайн"]
+            },
+            {
+                "id": "social",
+                "name": "Социальное",
+                "interests": ["Волонтерство", "Нетворкинг", "Вечеринки", "Клубы по интересам"]
+            },
+            {
+                "id": "intellectual",
+                "name": "Интеллектуальное",
+                "interests": ["Книги", "Наука", "Технологии", "Языки", "История", "Философия"]
+            },
+            {
+                "id": "outdoor",
+                "name": "На природе",
+                "interests": ["Походы", "Кемпинг", "Рыбалка", "Велосипед", "Бег", "Плавание"]
+            }
+        ]
+    }
+
+
+@app.put("/api/interests")
+async def update_interests(
+    interests: list = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update user interests"""
+    await db.execute(
+        text("UPDATE users SET interests = :interests WHERE id = :user_id"),
+        {"interests": interests, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "interests": interests}
+
+
+# ============================================
+# PROMPTS (Profile Questions)
+# ============================================
+
+@app.get("/api/prompts")
+async def get_available_prompts():
+    """Get available profile prompts/questions"""
+    return {
+        "prompts": [
+            {"id": "perfect_day", "text": "Мой идеальный день - это..."},
+            {"id": "looking_for", "text": "Я ищу человека, который..."},
+            {"id": "fun_fact", "text": "Забавный факт обо мне..."},
+            {"id": "never_do", "text": "Я никогда не смогу..."},
+            {"id": "best_travel", "text": "Лучшее путешествие в моей жизни..."},
+            {"id": "dream", "text": "Моя мечта - это..."},
+            {"id": "superpower", "text": "Если бы у меня была суперсила..."},
+            {"id": "weekend", "text": "Идеальные выходные для меня..."},
+            {"id": "food", "text": "Моя любимая еда..."},
+            {"id": "music", "text": "Музыка, которую я слушаю..."}
+        ]
+    }
+
+
+class PromptAnswer(BaseModel):
+    prompt_id: str
+    answer: str
+
+
+@app.post("/api/prompts/answer")
+async def save_prompt_answer(
+    data: PromptAnswer,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Save answer to a profile prompt"""
+    # Get current prompts
+    result = await db.execute(
+        text("SELECT prompts FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    prompts = row[0] if row and row[0] else {}
+    prompts[data.prompt_id] = data.answer
+    
+    await db.execute(
+        text("UPDATE users SET prompts = :prompts WHERE id = :user_id"),
+        {"prompts": prompts, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "prompts": prompts}
+
+
+@app.get("/api/prompts/my")
+async def get_my_prompts(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user's prompt answers"""
+    result = await db.execute(
+        text("SELECT prompts FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    return {"prompts": row[0] if row and row[0] else {}}
+
+
+# ============================================
+# COMPATIBILITY
+# ============================================
+
+@app.get("/api/compatibility/{user_id}")
+async def get_compatibility(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Calculate compatibility score with another user"""
+    # Get both users
+    result = await db.execute(
+        text("SELECT id::text, interests, prompts FROM users WHERE id IN (:user1, :user2)"),
+        {"user1": current_user_id, "user2": user_id}
+    )
+    rows = result.fetchall()
+    
+    if len(rows) < 2:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user1 = None
+    user2 = None
+    for r in rows:
+        if r[0] == current_user_id:
+            user1 = {"interests": r[1] or [], "prompts": r[2] or {}}
+        else:
+            user2 = {"interests": r[1] or [], "prompts": r[2] or {}}
+    
+    # Calculate interest overlap
+    common_interests = set(user1["interests"]) & set(user2["interests"])
+    total_interests = set(user1["interests"]) | set(user2["interests"])
+    
+    interest_score = len(common_interests) / max(len(total_interests), 1) * 100
+    
+    # Simple compatibility score
+    compatibility = min(int(50 + interest_score / 2), 99)
+    
+    return {
+        "compatibility_score": compatibility,
+        "common_interests": list(common_interests),
+        "breakdown": {
+            "interests": int(interest_score),
+            "activity": 50,  # Placeholder
+            "communication": 50  # Placeholder
+        }
+    }
+
+
+# ============================================
+# UNMATCH
+# ============================================
+
+@app.delete("/api/matches/{match_id}")
+async def unmatch(
+    match_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Unmatch with a user"""
+    # Verify user is part of match
+    result = await db.execute(
+        text("SELECT user1_id, user2_id FROM matches WHERE id = :match_id"),
+        {"match_id": match_id}
+    )
+    match = result.fetchone()
+    
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    
+    if current_user_id not in (str(match[0]), str(match[1])):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Delete match
+    await db.execute(
+        text("DELETE FROM matches WHERE id = :match_id"),
+        {"match_id": match_id}
+    )
+    
+    # Delete associated messages
+    await db.execute(
+        text("DELETE FROM messages WHERE match_id = :match_id"),
+        {"match_id": match_id}
+    )
+    
+    await db.commit()
+    
+    return {"status": "ok", "message": "Unmatched successfully"}
+
+
+# ============================================
+# PROFILE VIEWS
+# ============================================
+
+@app.post("/api/views/{user_id}")
+async def record_profile_view(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Record that current user viewed a profile"""
+    if user_id == current_user_id:
+        return {"status": "ok", "message": "Self view ignored"}
+    
+    await db.execute(
+        text("""
+            INSERT INTO profile_views (viewer_id, viewed_id, viewed_at)
+            VALUES (:viewer_id, :viewed_id, NOW())
+            ON CONFLICT (viewer_id, viewed_id) DO UPDATE SET viewed_at = NOW()
+        """),
+        {"viewer_id": current_user_id, "viewed_id": user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok"}
+
+
+@app.get("/api/views/who-viewed-me")
+async def get_who_viewed_me(
+    limit: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get users who viewed my profile (VIP feature)"""
+    # Check if user is VIP
+    vip_check = await db.execute(
+        text("SELECT is_vip FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    is_vip = vip_check.scalar()
+    
+    if not is_vip:
+        return {
+            "viewers": [],
+            "total": 0,
+            "is_vip_feature": True,
+            "message": "Upgrade to VIP to see who viewed your profile"
+        }
+    
+    result = await db.execute(text("""
+        SELECT 
+            u.id::text, u.name, u.age, u.photos, pv.viewed_at
+        FROM profile_views pv
+        JOIN users u ON pv.viewer_id = u.id
+        WHERE pv.viewed_id = :user_id
+        ORDER BY pv.viewed_at DESC
+        LIMIT :limit
+    """), {"user_id": current_user_id, "limit": limit})
+    
+    rows = result.fetchall()
+    
+    viewers = []
+    for r in rows:
+        viewers.append({
+            "id": r[0],
+            "name": r[1],
+            "age": r[2],
+            "photo": r[3][0] if r[3] else None,
+            "viewed_at": r[4].isoformat() if r[4] else None
+        })
+    
+    return {"viewers": viewers, "total": len(viewers)}
+
+
+# ============================================
+# REWIND (Undo last swipe)
+# ============================================
+
+@app.post("/api/rewind")
+async def rewind_last_swipe(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Undo last swipe (VIP feature)"""
+    # Check if user is VIP
+    vip_check = await db.execute(
+        text("SELECT is_vip FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    is_vip = vip_check.scalar()
+    
+    if not is_vip:
+        return {
+            "success": False,
+            "is_vip_feature": True,
+            "message": "Upgrade to VIP to use rewind"
+        }
+    
+    # Get last swipe
+    result = await db.execute(text("""
+        SELECT id, to_user_id::text, action
+        FROM swipes
+        WHERE from_user_id = :user_id
+        ORDER BY timestamp DESC
+        LIMIT 1
+    """), {"user_id": current_user_id})
+    
+    last_swipe = result.fetchone()
+    
+    if not last_swipe:
+        return {"success": False, "message": "No swipes to rewind"}
+    
+    # Delete the swipe
+    await db.execute(
+        text("DELETE FROM swipes WHERE id = :swipe_id"),
+        {"swipe_id": last_swipe[0]}
+    )
+    
+    # If it was a match, delete the match too
+    if last_swipe[2] in ('like', 'superlike'):
+        await db.execute(text("""
+            DELETE FROM matches 
+            WHERE (user1_id = :user1 AND user2_id = :user2)
+            OR (user1_id = :user2 AND user2_id = :user1)
+        """), {"user1": current_user_id, "user2": last_swipe[1]})
+    
+    await db.commit()
+    
+    return {
+        "success": True,
+        "rewound_user_id": last_swipe[1],
+        "action": last_swipe[2]
+    }
+
+
+# ============================================
+# SPOTLIGHT (Featured profiles)
+# ============================================
+
+@app.get("/api/spotlight")
+async def get_spotlight_profiles(
+    limit: int = Query(10, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get spotlight/featured profiles"""
+    result = await db.execute(text("""
+        SELECT 
+            u.id::text, u.name, u.age, u.photos, u.bio, u.is_verified
+        FROM users u
+        WHERE u.is_active = true 
+        AND u.id != :current_user_id
+        AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0
+        AND (u.is_vip = true OR u.is_verified = true)
+        AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
+        ORDER BY 
+            CASE WHEN u.is_vip THEN 0 ELSE 1 END,
+            RANDOM()
+        LIMIT :limit
+    """), {"current_user_id": current_user_id, "limit": limit})
+    
+    rows = result.fetchall()
+    
+    profiles = []
+    for r in rows:
+        profiles.append({
+            "id": r[0],
+            "name": r[1],
+            "age": r[2],
+            "photos": r[3] or [],
+            "bio": r[4],
+            "is_verified": r[5]
+        })
+    
+    return {"profiles": profiles}
+
+
+# ============================================
+# ONLINE STATUS
+# ============================================
+
+@app.post("/api/online")
+async def update_online_status(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update user's last online timestamp"""
+    await db.execute(
+        text("UPDATE users SET last_active = NOW() WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "last_active": datetime.utcnow().isoformat()}
+
+
+@app.get("/api/online/{user_id}")
+async def get_online_status(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user's online status"""
+    result = await db.execute(
+        text("SELECT last_active FROM users WHERE id = :user_id"),
+        {"user_id": user_id}
+    )
+    row = result.fetchone()
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    last_active = row[0]
+    
+    if not last_active:
+        return {"is_online": False, "last_active": None, "status": "offline"}
+    
+    now = datetime.utcnow()
+    diff = now - last_active
+    
+    if diff.total_seconds() < 300:  # 5 minutes
+        status = "online"
+        is_online = True
+    elif diff.total_seconds() < 3600:  # 1 hour
+        status = "recently"
+        is_online = False
+    else:
+        status = "offline"
+        is_online = False
+    
+    return {
+        "is_online": is_online,
+        "last_active": last_active.isoformat(),
+        "status": status
+    }
+
+
+# ============================================
+# APP CONFIG
+# ============================================
+
+@app.get("/api/config")
+async def get_app_config():
+    """Get app configuration for client"""
+    return {
+        "version": "1.0.0",
+        "min_version": "1.0.0",
+        "features": {
+            "chat": True,
+            "video_chat": False,  # Not supported in serverless
+            "voice_messages": False,  # Requires storage
+            "stories": False,  # Future feature
+            "events": False,  # Future feature
+            "gifts": True,
+            "boost": True,
+            "superlike": True,
+            "rewind": True,
+            "see_likes": True,
+            "incognito": True
+        },
+        "limits": {
+            "free_swipes_per_day": 50,
+            "free_superlikes_per_day": 1,
+            "max_photos": 9,
+            "max_bio_length": 500,
+            "max_message_length": 1000
+        },
+        "support": {
+            "email": "support@mambax.app",
+            "telegram": "@mambax_support"
+        }
+    }
+
+
+# ============================================
+# TERMS & PRIVACY
+# ============================================
+
+@app.get("/api/legal/terms")
+async def get_terms():
+    """Get terms of service URL"""
+    return {
+        "url": "https://mambax.app/terms",
+        "version": "1.0",
+        "updated_at": "2024-01-01"
+    }
+
+
+@app.get("/api/legal/privacy")
+async def get_privacy():
+    """Get privacy policy URL"""
+    return {
+        "url": "https://mambax.app/privacy",
+        "version": "1.0",
+        "updated_at": "2024-01-01"
+    }
+
+
+@app.post("/api/legal/accept")
+async def accept_terms(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Accept terms and privacy policy"""
+    await db.execute(
+        text("UPDATE users SET terms_accepted_at = NOW() WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "accepted_at": datetime.utcnow().isoformat()}
+
+
+# ============================================
+# DELETE ACCOUNT
+# ============================================
+
+class DeleteAccountRequest(BaseModel):
+    reason: Optional[str] = None
+    feedback: Optional[str] = None
+
+
+@app.post("/api/account/delete")
+async def delete_account(
+    data: DeleteAccountRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Delete user account"""
+    # Save deletion reason
+    if data.reason or data.feedback:
+        await db.execute(
+            text("""
+                INSERT INTO account_deletions (user_id, reason, feedback, deleted_at)
+                VALUES (:user_id, :reason, :feedback, NOW())
+            """),
+            {"user_id": current_user_id, "reason": data.reason, "feedback": data.feedback}
+        )
+    
+    # Soft delete - mark as inactive
+    await db.execute(
+        text("UPDATE users SET is_active = false, deleted_at = NOW() WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    
+    await db.commit()
+    
+    return {"status": "ok", "message": "Account scheduled for deletion"}
+
+
+# ============================================
+# EXPORT DATA (GDPR)
+# ============================================
+
+@app.get("/api/account/export")
+async def export_user_data(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Export all user data (GDPR compliance)"""
+    # Get user data
+    user_result = await db.execute(
+        text("SELECT * FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    user = user_result.fetchone()
+    
+    # Get matches
+    matches_result = await db.execute(text("""
+        SELECT id::text, user1_id::text, user2_id::text, created_at
+        FROM matches
+        WHERE user1_id = :user_id OR user2_id = :user_id
+    """), {"user_id": current_user_id})
+    matches = matches_result.fetchall()
+    
+    # Get messages
+    messages_result = await db.execute(text("""
+        SELECT id::text, match_id::text, content, created_at
+        FROM messages
+        WHERE sender_id = :user_id
+    """), {"user_id": current_user_id})
+    messages = messages_result.fetchall()
+    
+    # Get swipes
+    swipes_result = await db.execute(text("""
+        SELECT to_user_id::text, action, timestamp
+        FROM swipes
+        WHERE from_user_id = :user_id
+    """), {"user_id": current_user_id})
+    swipes = swipes_result.fetchall()
+    
+    return {
+        "user": {
+            "id": current_user_id,
+            "name": user[1] if user else None,
+            "email": user[2] if user else None,
+            # Add more fields as needed
+        },
+        "matches_count": len(matches),
+        "messages_count": len(messages),
+        "swipes_count": len(swipes),
+        "export_date": datetime.utcnow().isoformat(),
+        "note": "Full data export available upon request to support@mambax.app"
+    }
+
+
+# ============================================
+# INCOGNITO MODE
+# ============================================
+
+@app.post("/api/incognito/enable")
+async def enable_incognito(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Enable incognito mode (VIP feature)"""
+    vip_check = await db.execute(
+        text("SELECT is_vip FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    is_vip = vip_check.scalar()
+    
+    if not is_vip:
+        return {
+            "success": False,
+            "is_vip_feature": True,
+            "message": "Upgrade to VIP to use incognito mode"
+        }
+    
+    await db.execute(
+        text("UPDATE users SET is_incognito = true WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"success": True, "is_incognito": True}
+
+
+@app.post("/api/incognito/disable")
+async def disable_incognito(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Disable incognito mode"""
+    await db.execute(
+        text("UPDATE users SET is_incognito = false WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"success": True, "is_incognito": False}
+
+
+@app.get("/api/incognito/status")
+async def get_incognito_status(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get incognito mode status"""
+    result = await db.execute(
+        text("SELECT is_incognito, is_vip FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    return {
+        "is_incognito": row[0] if row else False,
+        "is_vip": row[1] if row else False,
+        "can_use": row[1] if row else False
+    }
+
+
+# ============================================
+# REFERRAL SYSTEM
+# ============================================
+
+@app.get("/api/referral/code")
+async def get_referral_code(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user's referral code"""
+    result = await db.execute(
+        text("SELECT referral_code FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    code = row[0] if row and row[0] else f"MAMBA{current_user_id[:6].upper()}"
+    
+    return {
+        "code": code,
+        "link": f"https://t.me/mambax_bot?start={code}",
+        "reward": "50 Stars for each friend who joins"
+    }
+
+
+@app.get("/api/referral/stats")
+async def get_referral_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get referral statistics"""
+    result = await db.execute(text("""
+        SELECT COUNT(*) FROM users WHERE referred_by = :user_id
+    """), {"user_id": current_user_id})
+    
+    count = result.scalar() or 0
+    
+    return {
+        "total_referrals": count,
+        "earned_stars": count * 50,
+        "pending_rewards": 0
+    }
+
+
+@app.post("/api/referral/apply")
+async def apply_referral_code(
+    code: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Apply a referral code"""
+    # Find referrer
+    result = await db.execute(
+        text("SELECT id::text FROM users WHERE referral_code = :code"),
+        {"code": code}
+    )
+    referrer = result.fetchone()
+    
+    if not referrer:
+        raise HTTPException(status_code=404, detail="Invalid referral code")
+    
+    if referrer[0] == current_user_id:
+        raise HTTPException(status_code=400, detail="Cannot use your own code")
+    
+    # Check if already referred
+    check = await db.execute(
+        text("SELECT referred_by FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    existing = check.fetchone()
+    
+    if existing and existing[0]:
+        raise HTTPException(status_code=400, detail="Already used a referral code")
+    
+    # Apply referral
+    await db.execute(
+        text("UPDATE users SET referred_by = :referrer_id WHERE id = :user_id"),
+        {"referrer_id": referrer[0], "user_id": current_user_id}
+    )
+    
+    # Give bonus to both users
+    await db.execute(
+        text("UPDATE users SET stars_balance = stars_balance + 50 WHERE id IN (:user1, :user2)"),
+        {"user1": current_user_id, "user2": referrer[0]}
+    )
+    
+    await db.commit()
+    
+    return {"success": True, "bonus": 50, "message": "Referral code applied! You got 50 Stars!"}
+
+
 # Vercel handler
 handler = app
