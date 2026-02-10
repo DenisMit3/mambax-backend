@@ -4011,5 +4011,703 @@ async def apply_referral_code(
     return {"success": True, "bonus": 50, "message": "Referral code applied! You got 50 Stars!"}
 
 
+# ============================================
+# STORIES (Placeholder - future feature)
+# ============================================
+
+@app.get("/api/stories")
+async def get_stories(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get stories from matches (placeholder)"""
+    return {
+        "stories": [],
+        "message": "Stories feature coming soon"
+    }
+
+
+@app.post("/api/stories")
+async def create_story(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create a story (placeholder)"""
+    return {
+        "success": False,
+        "message": "Stories feature coming soon"
+    }
+
+
+# ============================================
+# EVENTS (Placeholder - future feature)
+# ============================================
+
+@app.get("/api/events")
+async def get_events(
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get nearby events (placeholder)"""
+    return {
+        "events": [],
+        "message": "Events feature coming soon"
+    }
+
+
+@app.get("/api/events/{event_id}")
+async def get_event(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get event details (placeholder)"""
+    return {
+        "event": None,
+        "message": "Events feature coming soon"
+    }
+
+
+# ============================================
+# PREMIUM FEATURES STATUS
+# ============================================
+
+@app.get("/api/premium/features")
+async def get_premium_features(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get all premium features and their status for current user"""
+    result = await db.execute(
+        text("SELECT is_vip, stars_balance FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    is_vip = row[0] if row else False
+    balance = row[1] if row else 0
+    
+    return {
+        "is_vip": is_vip,
+        "stars_balance": balance,
+        "features": {
+            "unlimited_swipes": {"available": is_vip, "price": 99},
+            "see_who_likes": {"available": is_vip, "price": 149},
+            "rewind": {"available": is_vip, "price": 49},
+            "boost": {"available": True, "price": 79},
+            "superlike": {"available": True, "price": 29},
+            "incognito": {"available": is_vip, "price": 199},
+            "read_receipts": {"available": is_vip, "price": 0},
+            "priority_likes": {"available": is_vip, "price": 0},
+            "advanced_filters": {"available": is_vip, "price": 0}
+        }
+    }
+
+
+# ============================================
+# TELEGRAM STARS PAYMENT
+# ============================================
+
+class StarsPaymentRequest(BaseModel):
+    amount: int
+    item_type: str  # vip, boost, superlike, swipes
+    item_id: Optional[str] = None
+
+
+@app.post("/api/payments/stars/create")
+async def create_stars_payment(
+    data: StarsPaymentRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create Telegram Stars payment invoice"""
+    # This would integrate with Telegram Bot API to create invoice
+    prices = {
+        "vip_month": 299,
+        "boost": 79,
+        "superlike_5": 99,
+        "swipes_50": 49
+    }
+    
+    return {
+        "invoice_url": None,
+        "amount": data.amount,
+        "item_type": data.item_type,
+        "message": "Payment integration requires Telegram Bot API setup",
+        "prices": prices
+    }
+
+
+@app.post("/api/payments/stars/verify")
+async def verify_stars_payment(
+    payment_id: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Verify Telegram Stars payment"""
+    # This would verify payment with Telegram
+    return {
+        "verified": False,
+        "message": "Payment verification requires Telegram Bot API"
+    }
+
+
+@app.get("/api/payments/history")
+async def get_payment_history(
+    limit: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user's payment history"""
+    result = await db.execute(text("""
+        SELECT id::text, amount, currency, item_type, status, created_at
+        FROM payments
+        WHERE user_id = :user_id
+        ORDER BY created_at DESC
+        LIMIT :limit
+    """), {"user_id": current_user_id, "limit": limit})
+    
+    rows = result.fetchall()
+    
+    payments = []
+    for r in rows:
+        payments.append({
+            "id": r[0],
+            "amount": float(r[1]) if r[1] else 0,
+            "currency": r[2],
+            "item_type": r[3],
+            "status": r[4],
+            "created_at": r[5].isoformat() if r[5] else None
+        })
+    
+    return {"payments": payments}
+
+
+# ============================================
+# DAILY REWARDS
+# ============================================
+
+@app.get("/api/rewards/daily")
+async def get_daily_reward_status(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get daily reward status"""
+    result = await db.execute(
+        text("SELECT last_daily_reward, daily_streak FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    last_reward = row[0] if row else None
+    streak = row[1] if row and row[1] else 0
+    
+    today = datetime.utcnow().date()
+    can_claim = True
+    
+    if last_reward:
+        last_date = last_reward.date() if hasattr(last_reward, 'date') else last_reward
+        can_claim = last_date < today
+    
+    # Rewards based on streak
+    rewards = [5, 10, 15, 20, 25, 30, 50]  # Stars per day
+    today_reward = rewards[min(streak, len(rewards) - 1)]
+    
+    return {
+        "can_claim": can_claim,
+        "streak": streak,
+        "today_reward": today_reward,
+        "next_reward": rewards[min(streak + 1, len(rewards) - 1)] if can_claim else rewards[min(streak, len(rewards) - 1)],
+        "rewards_schedule": rewards
+    }
+
+
+@app.post("/api/rewards/daily/claim")
+async def claim_daily_reward(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Claim daily reward"""
+    result = await db.execute(
+        text("SELECT last_daily_reward, daily_streak, stars_balance FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    last_reward = row[0] if row else None
+    streak = row[1] if row and row[1] else 0
+    balance = row[2] if row and row[2] else 0
+    
+    today = datetime.utcnow().date()
+    yesterday = today - timedelta(days=1)
+    
+    if last_reward:
+        last_date = last_reward.date() if hasattr(last_reward, 'date') else last_reward
+        if last_date >= today:
+            return {"success": False, "message": "Already claimed today"}
+        
+        # Check if streak continues
+        if last_date == yesterday:
+            streak += 1
+        else:
+            streak = 0
+    
+    # Calculate reward
+    rewards = [5, 10, 15, 20, 25, 30, 50]
+    reward = rewards[min(streak, len(rewards) - 1)]
+    
+    # Update user
+    await db.execute(
+        text("""
+            UPDATE users 
+            SET last_daily_reward = NOW(), 
+                daily_streak = :streak,
+                stars_balance = stars_balance + :reward
+            WHERE id = :user_id
+        """),
+        {"streak": streak, "reward": reward, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {
+        "success": True,
+        "reward": reward,
+        "new_streak": streak,
+        "new_balance": balance + reward
+    }
+
+
+# ============================================
+# PUSH NOTIFICATIONS TOKENS
+# ============================================
+
+class PushTokenRequest(BaseModel):
+    token: str
+    platform: str  # ios, android, web
+
+
+@app.post("/api/push/register")
+async def register_push_token(
+    data: PushTokenRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Register push notification token"""
+    await db.execute(
+        text("""
+            INSERT INTO push_tokens (user_id, token, platform, created_at)
+            VALUES (:user_id, :token, :platform, NOW())
+            ON CONFLICT (user_id, token) DO UPDATE SET platform = :platform
+        """),
+        {"user_id": current_user_id, "token": data.token, "platform": data.platform}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "message": "Push token registered"}
+
+
+@app.delete("/api/push/unregister")
+async def unregister_push_token(
+    token: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Unregister push notification token"""
+    await db.execute(
+        text("DELETE FROM push_tokens WHERE user_id = :user_id AND token = :token"),
+        {"user_id": current_user_id, "token": token}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "message": "Push token unregistered"}
+
+
+# ============================================
+# LANGUAGE & LOCALIZATION
+# ============================================
+
+@app.get("/api/languages")
+async def get_available_languages():
+    """Get available languages"""
+    return {
+        "languages": [
+            {"code": "ru", "name": "Русский", "native": "Русский"},
+            {"code": "en", "name": "English", "native": "English"},
+            {"code": "uk", "name": "Ukrainian", "native": "Українська"},
+            {"code": "kk", "name": "Kazakh", "native": "Қазақша"},
+            {"code": "uz", "name": "Uzbek", "native": "O'zbek"}
+        ],
+        "default": "ru"
+    }
+
+
+@app.put("/api/settings/language")
+async def update_language(
+    language: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update user's preferred language"""
+    await db.execute(
+        text("UPDATE users SET language = :language WHERE id = :user_id"),
+        {"language": language, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "language": language}
+
+
+# ============================================
+# MEDIA UPLOAD URLS
+# ============================================
+
+@app.post("/api/media/upload-url")
+async def get_media_upload_url(
+    media_type: str = Body(...),  # photo, video, voice
+    content_type: str = Body(...),  # image/jpeg, video/mp4, etc.
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get presigned URL for media upload"""
+    # Placeholder - integrate with S3/Cloudinary
+    allowed_types = {
+        "photo": ["image/jpeg", "image/png", "image/webp"],
+        "video": ["video/mp4", "video/webm"],
+        "voice": ["audio/webm", "audio/ogg", "audio/mp3"]
+    }
+    
+    if media_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid media type")
+    
+    if content_type not in allowed_types[media_type]:
+        raise HTTPException(status_code=400, detail="Invalid content type")
+    
+    return {
+        "upload_url": None,
+        "media_type": media_type,
+        "content_type": content_type,
+        "max_size_mb": 10 if media_type == "photo" else 50,
+        "message": "Media upload requires cloud storage integration"
+    }
+
+
+# ============================================
+# SMART MATCHING PREFERENCES
+# ============================================
+
+class MatchingPreferences(BaseModel):
+    age_min: int = 18
+    age_max: int = 100
+    distance_km: int = 50
+    gender_preference: Optional[str] = None
+    looking_for: Optional[list] = None
+    show_verified_only: bool = False
+    show_with_bio_only: bool = False
+
+
+@app.get("/api/preferences/matching")
+async def get_matching_preferences(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user's matching preferences"""
+    result = await db.execute(
+        text("SELECT matching_preferences FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    prefs = row[0] if row and row[0] else {}
+    
+    return {
+        "preferences": {
+            "age_min": prefs.get("age_min", 18),
+            "age_max": prefs.get("age_max", 100),
+            "distance_km": prefs.get("distance_km", 50),
+            "gender_preference": prefs.get("gender_preference"),
+            "looking_for": prefs.get("looking_for", []),
+            "show_verified_only": prefs.get("show_verified_only", False),
+            "show_with_bio_only": prefs.get("show_with_bio_only", False)
+        }
+    }
+
+
+@app.put("/api/preferences/matching")
+async def update_matching_preferences(
+    data: MatchingPreferences,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update user's matching preferences"""
+    prefs = data.dict()
+    
+    await db.execute(
+        text("UPDATE users SET matching_preferences = :prefs WHERE id = :user_id"),
+        {"prefs": prefs, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "preferences": prefs}
+
+
+# ============================================
+# CONVERSATION QUALITY
+# ============================================
+
+@app.get("/api/matches/{match_id}/quality")
+async def get_conversation_quality(
+    match_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get conversation quality metrics"""
+    # Verify access
+    match_check = await db.execute(
+        text("SELECT user1_id, user2_id FROM matches WHERE id = :match_id"),
+        {"match_id": match_id}
+    )
+    match = match_check.fetchone()
+    
+    if not match or current_user_id not in (str(match[0]), str(match[1])):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get message stats
+    result = await db.execute(text("""
+        SELECT 
+            COUNT(*) as total,
+            COUNT(CASE WHEN sender_id = :user_id THEN 1 END) as sent,
+            AVG(LENGTH(content)) as avg_length
+        FROM messages
+        WHERE match_id = :match_id
+    """), {"match_id": match_id, "user_id": current_user_id})
+    
+    stats = result.fetchone()
+    
+    total = stats[0] or 0
+    sent = stats[1] or 0
+    received = total - sent
+    avg_length = int(stats[2]) if stats[2] else 0
+    
+    # Calculate balance (50% = perfect balance)
+    balance = (min(sent, received) / max(total, 1)) * 100 if total > 0 else 50
+    
+    return {
+        "total_messages": total,
+        "sent": sent,
+        "received": received,
+        "balance_score": int(balance),
+        "avg_message_length": avg_length,
+        "quality": "good" if balance > 30 and total > 10 else "needs_attention"
+    }
+
+
+# ============================================
+# REPORT REASONS
+# ============================================
+
+@app.get("/api/report/reasons")
+async def get_report_reasons():
+    """Get available report reasons"""
+    return {
+        "reasons": [
+            {"id": "fake_profile", "label": "Фейковый профиль"},
+            {"id": "inappropriate_photos", "label": "Неприемлемые фото"},
+            {"id": "harassment", "label": "Домогательства"},
+            {"id": "spam", "label": "Спам"},
+            {"id": "scam", "label": "Мошенничество"},
+            {"id": "underage", "label": "Несовершеннолетний"},
+            {"id": "hate_speech", "label": "Разжигание ненависти"},
+            {"id": "other", "label": "Другое"}
+        ]
+    }
+
+
+# ============================================
+# SUPER LIKE INFO
+# ============================================
+
+@app.get("/api/superlike/info")
+async def get_superlike_info(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get super like information and remaining count"""
+    result = await db.execute(text("""
+        SELECT 
+            superlikes_remaining,
+            last_superlike_reset,
+            is_vip
+        FROM users WHERE id = :user_id
+    """), {"user_id": current_user_id})
+    
+    row = result.fetchone()
+    
+    remaining = row[0] if row and row[0] is not None else 1
+    last_reset = row[1] if row else None
+    is_vip = row[2] if row else False
+    
+    # Check if should reset (daily)
+    today = datetime.utcnow().date()
+    should_reset = True
+    
+    if last_reset:
+        last_date = last_reset.date() if hasattr(last_reset, 'date') else last_reset
+        should_reset = last_date < today
+    
+    if should_reset:
+        remaining = 5 if is_vip else 1
+    
+    return {
+        "remaining": remaining,
+        "daily_limit": 5 if is_vip else 1,
+        "is_vip": is_vip,
+        "resets_at": (datetime.utcnow().replace(hour=0, minute=0, second=0) + timedelta(days=1)).isoformat()
+    }
+
+
+# ============================================
+# MATCH SUGGESTIONS
+# ============================================
+
+@app.get("/api/suggestions")
+async def get_match_suggestions(
+    limit: int = Query(5, ge=1, le=10),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get AI-powered match suggestions"""
+    # Get user info for matching
+    user_result = await db.execute(
+        text("SELECT interests, matching_preferences FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    user = user_result.fetchone()
+    
+    user_interests = user[0] if user and user[0] else []
+    
+    # Find users with similar interests
+    result = await db.execute(text("""
+        SELECT 
+            u.id::text, u.name, u.age, u.photos, u.bio, u.interests, u.is_verified,
+            (SELECT COUNT(*) FROM unnest(u.interests) i WHERE i = ANY(:interests)) as common_count
+        FROM users u
+        WHERE u.is_active = true 
+        AND u.id != :current_user_id
+        AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0
+        AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
+        ORDER BY common_count DESC, u.is_verified DESC, RANDOM()
+        LIMIT :limit
+    """), {
+        "current_user_id": current_user_id,
+        "interests": user_interests,
+        "limit": limit
+    })
+    
+    rows = result.fetchall()
+    
+    suggestions = []
+    for r in rows:
+        common = list(set(r[5] or []) & set(user_interests)) if r[5] else []
+        suggestions.append({
+            "id": r[0],
+            "name": r[1],
+            "age": r[2],
+            "photos": r[3] or [],
+            "bio": r[4],
+            "is_verified": r[6],
+            "common_interests": common,
+            "match_score": min(50 + len(common) * 10, 99)
+        })
+    
+    return {"suggestions": suggestions}
+
+
+# ============================================
+# ACTIVITY LOG
+# ============================================
+
+@app.get("/api/activity/log")
+async def get_activity_log(
+    limit: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user's activity log"""
+    activities = []
+    
+    # Recent matches
+    matches_result = await db.execute(text("""
+        SELECT 
+            m.id::text, m.created_at,
+            CASE WHEN m.user1_id = :user_id THEN u2.name ELSE u1.name END as partner_name
+        FROM matches m
+        JOIN users u1 ON m.user1_id = u1.id
+        JOIN users u2 ON m.user2_id = u2.id
+        WHERE m.user1_id = :user_id OR m.user2_id = :user_id
+        ORDER BY m.created_at DESC
+        LIMIT 10
+    """), {"user_id": current_user_id})
+    
+    for r in matches_result.fetchall():
+        activities.append({
+            "type": "match",
+            "message": f"Новый матч с {r[2]}",
+            "timestamp": r[1].isoformat() if r[1] else None
+        })
+    
+    # Recent likes received
+    likes_result = await db.execute(text("""
+        SELECT s.timestamp, u.name
+        FROM swipes s
+        JOIN users u ON s.from_user_id = u.id
+        WHERE s.to_user_id = :user_id AND s.action IN ('like', 'superlike')
+        ORDER BY s.timestamp DESC
+        LIMIT 10
+    """), {"user_id": current_user_id})
+    
+    for r in likes_result.fetchall():
+        activities.append({
+            "type": "like",
+            "message": f"Кто-то лайкнул вас",
+            "timestamp": r[0].isoformat() if r[0] else None
+        })
+    
+    # Sort by timestamp
+    activities.sort(key=lambda x: x["timestamp"] or "", reverse=True)
+    
+    return {"activities": activities[:limit]}
+
+
+# ============================================
+# HEALTH CHECK EXTENDED
+# ============================================
+
+@app.get("/api/health/detailed")
+async def detailed_health_check(
+    db: AsyncSession = Depends(get_db)
+):
+    """Detailed health check with component status"""
+    status = {
+        "api": "healthy",
+        "database": "unknown",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    
+    # Check database
+    try:
+        result = await db.execute(text("SELECT 1"))
+        result.fetchone()
+        status["database"] = "healthy"
+    except Exception as e:
+        status["database"] = f"unhealthy: {str(e)}"
+    
+    overall = "healthy" if all(v == "healthy" for k, v in status.items() if k not in ["timestamp"]) else "degraded"
+    status["overall"] = overall
+    
+    return status
+
+
 # Vercel handler
 handler = app
