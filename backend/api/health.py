@@ -116,3 +116,29 @@ async def readiness_probe():
     else:
         from fastapi import HTTPException
         raise HTTPException(status_code=503, detail="Database not ready")
+
+
+@router.get("/health/env-debug")
+async def env_debug():
+    """Debug endpoint to check environment variables (masked)"""
+    import os
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "NOT_SET")
+    frontend = os.environ.get("FRONTEND_URL", "NOT_SET")
+    
+    # Mask token for security
+    if token and token != "NOT_SET":
+        token_info = {
+            "length": len(token),
+            "has_spaces": " " in token,
+            "has_newlines": "\n" in token or "\r" in token,
+            "first_chars": token[:10] if len(token) > 10 else token,
+            "last_chars": token[-5:] if len(token) > 5 else token,
+            "repr": repr(token[:20]) if len(token) > 20 else repr(token)
+        }
+    else:
+        token_info = "NOT_SET"
+    
+    return {
+        "telegram_token": token_info,
+        "frontend_url": frontend
+    }
