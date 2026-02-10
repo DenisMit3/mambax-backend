@@ -1537,5 +1537,799 @@ async def answer_question(
     return {"success": True, "message": "Answer saved"}
 
 
+# ============================================
+# VERIFICATION ENDPOINTS
+# ============================================
+
+@app.get("/api/verification/status")
+async def get_verification_status(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user's verification status"""
+    result = await db.execute(
+        text("SELECT is_verified, verification_selfie FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    # Check for pending request
+    pending = await db.execute(
+        text("""
+            SELECT id::text, status, created_at 
+            FROM verification_requests 
+            WHERE user_id = :user_id 
+            ORDER BY created_at DESC LIMIT 1
+        """),
+        {"user_id": current_user_id}
+    )
+    pending_row = pending.fetchone()
+    
+    return {
+        "is_verified": row[0] if row else False,
+        "has_selfie": bool(row[1]) if row else False,
+        "pending_request": {
+            "id": pending_row[0],
+            "status": pending_row[1],
+            "submitted_at": pending_row[2].isoformat() if pending_row[2] else None
+        } if pending_row else None
+    }
+
+
+@app.post("/api/verification/request")
+async def request_verification(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Request profile verification"""
+    # Check if already verified
+    user_result = await db.execute(
+        text("SELECT is_verified, verification_selfie FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    user = user_result.fetchone()
+    
+    if user and user[0]:
+        return {"success": False, "message": "Already verified"}
+    
+    if not user or not user[1]:
+        raise HTTPException(status_code=400, detail="Please upload verification selfie first")
+    
+    # Check for existing pending request
+    existing = await db.execute(
+        text("SELECT id FROM verification_requests WHERE user_id = :user_id AND status = 'pending'"),
+        {"user_id": current_user_id}
+    )
+    
+    if existing.fetchone():
+        return {"success": False, "message": "Verification request already pending"}
+    
+    # Create request
+    result = await db.execute(
+        text("""
+            INSERT INTO verification_requests (user_id, status, priority, created_at)
+            VALUES (:user_id, 'pending', 1, NOW())
+            RETURNING id::text
+        """),
+        {"user_id": current_user_id}
+    )
+    await db.commit()
+    
+    request_id = result.fetchone()[0]
+    
+    return {"success": True, "request_id": request_id, "message": "Verification request submitted"}
+
+
+# ============================================
+# BOOST ENDPOINTS
+# ============================================
+
+@app.get("/api/boost/status")
+async def get_boost_status(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get current boost status"""
+    result = await db.execute(
+        text("SELECT boost_until, is_vip FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    boost_until = row[0] if row else None
+    is_boosted = boost_until and boost_until > datetime.utcnow() if boost_until else False
+    
+    remaining_minutes = 0
+    if is_boosted and boost_until:
+        remaining_minutes = int((boost_until - datetime.utcnow()).total_seconds() / 60)
+    
+    return {
+        "is_boosted": is_boosted,
+        "boost_until": boost_until.isoformat() if boost_until else None,
+        "remaining_minutes": remaining_minutes,
+        "is_vip": row[1] if row else False,
+        "boost_price_per_hour": 25
+    }
+
+
+class ActivateBoostRequest(BaseModel):
+    duration_hours: int = 1
+
+
+@app.post("/api/boost/activate")
+async def activate_boost(
+    data: ActivateBoostRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Activate profile boost"""
+    BOOST_PRICE_PER_HOUR = 25
+    total_cost = BOOST_PRICE_PER_HOUR * data.duration_hours
+    
+    # Check balance
+    result = await db.execute(
+        text("SELECT stars_balance, boost_until FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    balance = float(row[0]) if row and row[0] else 0
+    current_boost = row[1] if row else None
+    
+    if balance < total_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient balance. Required: {total_cost}, Available: {balance}"
+        )
+    
+    # Calculate new boost end time
+    now = datetime.utcnow()
+    if current_boost and current_boost > now:
+        # Extend existing boost
+        new_boost_until = current_boost + timedelta(hours=data.duration_hours)
+    else:
+        new_boost_until = now + timedelta(hours=data.duration_hours)
+    
+    # Deduct and activate
+    await db.execute(
+        text("""
+            UPDATE users 
+            SET stars_balance = stars_balance - :cost, boost_until = :boost_until
+            WHERE id = :user_id
+        """),
+        {"cost": total_cost, "boost_until": new_boost_until, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {
+        "success": True,
+        "boost_until": new_boost_until.isoformat(),
+        "duration_hours": data.duration_hours,
+        "cost": total_cost,
+        "new_balance": balance - total_cost
+    }
+
+
+# ============================================
+# SWIPE LIMITS ENDPOINTS
+# ============================================
+
+# Constants
+DAILY_SWIPE_LIMIT_FREE = 50
+DAILY_SWIPE_LIMIT_VIP = 999999
+DAILY_SUPERLIKE_LIMIT_FREE = 1
+DAILY_SUPERLIKE_LIMIT_VIP = 5
+SWIPES_PER_PACK = 10
+STARS_PER_SWIPE_PACK = 10
+STARS_PER_SUPERLIKE = 5
+
+
+@app.get("/api/swipes/status")
+async def get_swipe_status(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get current swipe limits and usage"""
+    # Get user info
+    user_result = await db.execute(
+        text("SELECT is_vip, bonus_swipes, bonus_superlikes, stars_balance FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    user = user_result.fetchone()
+    
+    is_vip = user[0] if user else False
+    bonus_swipes = user[1] if user and user[1] else 0
+    bonus_superlikes = user[2] if user and user[2] else 0
+    balance = float(user[3]) if user and user[3] else 0
+    
+    # Count today's swipes
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    swipes_result = await db.execute(
+        text("""
+            SELECT COUNT(*) FROM swipes 
+            WHERE from_user_id = :user_id AND timestamp >= :today
+        """),
+        {"user_id": current_user_id, "today": today_start}
+    )
+    swipes_today = swipes_result.scalar() or 0
+    
+    superlikes_result = await db.execute(
+        text("""
+            SELECT COUNT(*) FROM swipes 
+            WHERE from_user_id = :user_id AND timestamp >= :today AND action = 'superlike'
+        """),
+        {"user_id": current_user_id, "today": today_start}
+    )
+    superlikes_today = superlikes_result.scalar() or 0
+    
+    # Calculate limits
+    daily_limit = DAILY_SWIPE_LIMIT_VIP if is_vip else DAILY_SWIPE_LIMIT_FREE
+    superlike_limit = DAILY_SUPERLIKE_LIMIT_VIP if is_vip else DAILY_SUPERLIKE_LIMIT_FREE
+    
+    swipes_remaining = max(0, daily_limit - swipes_today) + bonus_swipes
+    superlikes_remaining = max(0, superlike_limit - superlikes_today) + bonus_superlikes
+    
+    # Reset time
+    tomorrow = (datetime.utcnow() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    return {
+        "swipes": {
+            "used_today": swipes_today,
+            "daily_limit": daily_limit,
+            "bonus": bonus_swipes,
+            "remaining": swipes_remaining,
+            "can_swipe": swipes_remaining > 0
+        },
+        "superlikes": {
+            "used_today": superlikes_today,
+            "daily_limit": superlike_limit,
+            "bonus": bonus_superlikes,
+            "remaining": superlikes_remaining,
+            "can_superlike": superlikes_remaining > 0
+        },
+        "reset_at": tomorrow.isoformat(),
+        "is_vip": is_vip,
+        "stars_balance": balance,
+        "prices": {
+            "swipe_pack": {"price": STARS_PER_SWIPE_PACK, "count": SWIPES_PER_PACK},
+            "superlike": {"price": STARS_PER_SUPERLIKE, "count": 1}
+        }
+    }
+
+
+@app.post("/api/swipes/buy-pack")
+async def buy_swipe_pack(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Buy a pack of swipes"""
+    # Check balance
+    result = await db.execute(
+        text("SELECT stars_balance FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    balance = float(row[0]) if row and row[0] else 0
+    
+    if balance < STARS_PER_SWIPE_PACK:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient balance. Required: {STARS_PER_SWIPE_PACK}, Available: {balance}"
+        )
+    
+    # Deduct and add swipes
+    await db.execute(
+        text("""
+            UPDATE users 
+            SET stars_balance = stars_balance - :cost,
+                bonus_swipes = COALESCE(bonus_swipes, 0) + :swipes
+            WHERE id = :user_id
+        """),
+        {"cost": STARS_PER_SWIPE_PACK, "swipes": SWIPES_PER_PACK, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {
+        "success": True,
+        "purchased": SWIPES_PER_PACK,
+        "cost": STARS_PER_SWIPE_PACK,
+        "new_balance": balance - STARS_PER_SWIPE_PACK
+    }
+
+
+@app.post("/api/swipes/buy-superlike")
+async def buy_superlike(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Buy a superlike"""
+    # Check balance
+    result = await db.execute(
+        text("SELECT stars_balance FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    balance = float(row[0]) if row and row[0] else 0
+    
+    if balance < STARS_PER_SUPERLIKE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient balance. Required: {STARS_PER_SUPERLIKE}, Available: {balance}"
+        )
+    
+    # Deduct and add superlike
+    await db.execute(
+        text("""
+            UPDATE users 
+            SET stars_balance = stars_balance - :cost,
+                bonus_superlikes = COALESCE(bonus_superlikes, 0) + 1
+            WHERE id = :user_id
+        """),
+        {"cost": STARS_PER_SUPERLIKE, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {
+        "success": True,
+        "purchased": 1,
+        "cost": STARS_PER_SUPERLIKE,
+        "new_balance": balance - STARS_PER_SUPERLIKE
+    }
+
+
+# ============================================
+# NOTIFICATION SETTINGS ENDPOINTS
+# ============================================
+
+class NotificationSettingsUpdate(BaseModel):
+    new_match: Optional[bool] = None
+    new_message: Optional[bool] = None
+    new_like: Optional[bool] = None
+    super_like: Optional[bool] = None
+    profile_view: Optional[bool] = None
+    match_reminder: Optional[bool] = None
+    promotion: Optional[bool] = None
+
+
+@app.get("/api/settings/notifications")
+async def get_notification_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get notification settings"""
+    result = await db.execute(
+        text("SELECT notification_settings FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    defaults = {
+        "new_match": True,
+        "new_message": True,
+        "new_like": True,
+        "super_like": True,
+        "profile_view": False,
+        "match_reminder": True,
+        "promotion": False
+    }
+    
+    settings = row[0] if row and row[0] else {}
+    return {**defaults, **settings}
+
+
+@app.put("/api/settings/notifications")
+async def update_notification_settings(
+    data: NotificationSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update notification settings"""
+    result = await db.execute(
+        text("SELECT notification_settings FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    settings = row[0] if row and row[0] else {}
+    
+    update_data = data.model_dump(exclude_unset=True)
+    settings.update(update_data)
+    
+    await db.execute(
+        text("UPDATE users SET notification_settings = :settings WHERE id = :user_id"),
+        {"settings": json.dumps(settings), "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return settings
+
+
+# ============================================
+# ADMIN ENDPOINTS
+# ============================================
+
+async def get_admin_user(
+    authorization: str = Header(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Verify admin access"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization required")
+    
+    try:
+        parts = authorization.split()
+        if len(parts) != 2 or parts[0].lower() != "bearer":
+            raise HTTPException(status_code=401, detail="Invalid auth format")
+        
+        user_id = verify_token(parts[1])
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Check if admin
+        result = await db.execute(
+            text("SELECT role FROM users WHERE id = :user_id"),
+            {"user_id": user_id}
+        )
+        row = result.fetchone()
+        
+        if not row or row[0] not in ("admin", "moderator"):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        return user_id
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid authorization")
+
+
+@app.get("/api/admin/stats")
+async def get_admin_stats(
+    db: AsyncSession = Depends(get_db),
+    admin_id: str = Depends(get_admin_user)
+):
+    """Get admin dashboard statistics"""
+    # Users
+    users_result = await db.execute(text("SELECT COUNT(*) FROM users WHERE is_active = true"))
+    total_users = users_result.scalar() or 0
+    
+    # New users today
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    new_today = await db.execute(
+        text("SELECT COUNT(*) FROM users WHERE created_at >= :today"),
+        {"today": today_start}
+    )
+    new_users_today = new_today.scalar() or 0
+    
+    # Matches
+    matches_result = await db.execute(text("SELECT COUNT(*) FROM matches WHERE is_active = true"))
+    total_matches = matches_result.scalar() or 0
+    
+    # Messages today
+    messages_today = await db.execute(
+        text("SELECT COUNT(*) FROM messages WHERE created_at >= :today"),
+        {"today": today_start}
+    )
+    messages_count = messages_today.scalar() or 0
+    
+    # VIP users
+    vip_result = await db.execute(text("SELECT COUNT(*) FROM users WHERE is_vip = true"))
+    vip_users = vip_result.scalar() or 0
+    
+    # Pending reports
+    reports_result = await db.execute(text("SELECT COUNT(*) FROM reports WHERE status = 'pending'"))
+    pending_reports = reports_result.scalar() or 0
+    
+    # Pending verifications
+    verif_result = await db.execute(text("SELECT COUNT(*) FROM verification_requests WHERE status = 'pending'"))
+    pending_verifications = verif_result.scalar() or 0
+    
+    return {
+        "users": {
+            "total": total_users,
+            "new_today": new_users_today,
+            "vip": vip_users
+        },
+        "matches": {
+            "total": total_matches
+        },
+        "messages": {
+            "today": messages_count
+        },
+        "moderation": {
+            "pending_reports": pending_reports,
+            "pending_verifications": pending_verifications
+        }
+    }
+
+
+@app.get("/api/admin/users")
+async def get_admin_users(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    admin_id: str = Depends(get_admin_user)
+):
+    """Get users list for admin"""
+    offset = (page - 1) * limit
+    
+    # Build query
+    query = """
+        SELECT 
+            id::text, name, email, phone, telegram_id, 
+            is_active, is_vip, is_verified, role, status,
+            created_at, stars_balance
+        FROM users
+        WHERE 1=1
+    """
+    params = {"limit": limit, "offset": offset}
+    
+    if search:
+        query += " AND (name ILIKE :search OR email ILIKE :search OR phone ILIKE :search)"
+        params["search"] = f"%{search}%"
+    
+    if status:
+        query += " AND status = :status"
+        params["status"] = status
+    
+    query += " ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+    
+    result = await db.execute(text(query), params)
+    rows = result.fetchall()
+    
+    users = []
+    for r in rows:
+        users.append({
+            "id": r[0],
+            "name": r[1],
+            "email": r[2],
+            "phone": r[3],
+            "telegram_id": r[4],
+            "is_active": r[5],
+            "is_vip": r[6],
+            "is_verified": r[7],
+            "role": r[8],
+            "status": r[9],
+            "created_at": r[10].isoformat() if r[10] else None,
+            "stars_balance": float(r[11]) if r[11] else 0
+        })
+    
+    # Get total count
+    count_query = "SELECT COUNT(*) FROM users WHERE 1=1"
+    if search:
+        count_query += " AND (name ILIKE :search OR email ILIKE :search OR phone ILIKE :search)"
+    if status:
+        count_query += " AND status = :status"
+    
+    count_result = await db.execute(text(count_query), params)
+    total = count_result.scalar() or 0
+    
+    return {
+        "users": users,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": (total + limit - 1) // limit
+    }
+
+
+@app.get("/api/admin/reports")
+async def get_admin_reports(
+    status: str = "pending",
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    admin_id: str = Depends(get_admin_user)
+):
+    """Get reports for moderation"""
+    result = await db.execute(text("""
+        SELECT 
+            r.id::text, r.reporter_id::text, r.reported_user_id::text,
+            r.reason, r.description, r.status, r.created_at,
+            u1.name as reporter_name,
+            u2.name as reported_name, u2.photos as reported_photos
+        FROM reports r
+        JOIN users u1 ON r.reporter_id = u1.id
+        JOIN users u2 ON r.reported_user_id = u2.id
+        WHERE r.status = :status
+        ORDER BY r.created_at DESC
+        LIMIT :limit
+    """), {"status": status, "limit": limit})
+    
+    rows = result.fetchall()
+    
+    reports = []
+    for r in rows:
+        reports.append({
+            "id": r[0],
+            "reporter_id": r[1],
+            "reported_user_id": r[2],
+            "reason": r[3],
+            "description": r[4],
+            "status": r[5],
+            "created_at": r[6].isoformat() if r[6] else None,
+            "reporter_name": r[7],
+            "reported_name": r[8],
+            "reported_photo": r[9][0] if r[9] else None
+        })
+    
+    return {"reports": reports, "total": len(reports)}
+
+
+class ResolveReportRequest(BaseModel):
+    action: str  # dismiss, warn, ban
+    notes: Optional[str] = None
+
+
+@app.post("/api/admin/reports/{report_id}/resolve")
+async def resolve_report(
+    report_id: str,
+    data: ResolveReportRequest,
+    db: AsyncSession = Depends(get_db),
+    admin_id: str = Depends(get_admin_user)
+):
+    """Resolve a report"""
+    # Get report
+    result = await db.execute(
+        text("SELECT reported_user_id FROM reports WHERE id = :report_id"),
+        {"report_id": report_id}
+    )
+    report = result.fetchone()
+    
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    # Update report status
+    await db.execute(
+        text("UPDATE reports SET status = 'resolved', resolved_at = NOW() WHERE id = :report_id"),
+        {"report_id": report_id}
+    )
+    
+    # Take action
+    if data.action == "ban":
+        await db.execute(
+            text("UPDATE users SET status = 'banned', is_active = false WHERE id = :user_id"),
+            {"user_id": str(report[0])}
+        )
+    elif data.action == "warn":
+        # Could send notification or increment warning count
+        pass
+    
+    await db.commit()
+    
+    return {"success": True, "action": data.action}
+
+
+@app.get("/api/admin/verifications")
+async def get_admin_verifications(
+    status: str = "pending",
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    admin_id: str = Depends(get_admin_user)
+):
+    """Get verification requests"""
+    result = await db.execute(text("""
+        SELECT 
+            vr.id::text, vr.user_id::text, vr.status, vr.created_at,
+            u.name, u.photos, u.verification_selfie
+        FROM verification_requests vr
+        JOIN users u ON vr.user_id = u.id
+        WHERE vr.status = :status
+        ORDER BY vr.created_at ASC
+        LIMIT :limit
+    """), {"status": status, "limit": limit})
+    
+    rows = result.fetchall()
+    
+    requests = []
+    for r in rows:
+        requests.append({
+            "id": r[0],
+            "user_id": r[1],
+            "status": r[2],
+            "created_at": r[3].isoformat() if r[3] else None,
+            "user_name": r[4],
+            "user_photos": r[5] or [],
+            "verification_selfie": r[6]
+        })
+    
+    return {"requests": requests, "total": len(requests)}
+
+
+class ResolveVerificationRequest(BaseModel):
+    approved: bool
+    notes: Optional[str] = None
+
+
+@app.post("/api/admin/verifications/{request_id}/resolve")
+async def resolve_verification(
+    request_id: str,
+    data: ResolveVerificationRequest,
+    db: AsyncSession = Depends(get_db),
+    admin_id: str = Depends(get_admin_user)
+):
+    """Approve or reject verification request"""
+    # Get request
+    result = await db.execute(
+        text("SELECT user_id FROM verification_requests WHERE id = :request_id"),
+        {"request_id": request_id}
+    )
+    request = result.fetchone()
+    
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    new_status = "approved" if data.approved else "rejected"
+    
+    # Update request
+    await db.execute(
+        text("UPDATE verification_requests SET status = :status, reviewed_at = NOW() WHERE id = :request_id"),
+        {"status": new_status, "request_id": request_id}
+    )
+    
+    # Update user if approved
+    if data.approved:
+        await db.execute(
+            text("UPDATE users SET is_verified = true WHERE id = :user_id"),
+            {"user_id": str(request[0])}
+        )
+    
+    await db.commit()
+    
+    return {"success": True, "status": new_status}
+
+
+# ============================================
+# DEV ENDPOINTS (only in development)
+# ============================================
+
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
+
+
+@app.post("/api/dev/add-stars")
+async def dev_add_stars(
+    amount: int = Query(100, ge=1, le=10000),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """DEV ONLY: Add stars to balance"""
+    if ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    await db.execute(
+        text("UPDATE users SET stars_balance = COALESCE(stars_balance, 0) + :amount WHERE id = :user_id"),
+        {"amount": amount, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    # Get new balance
+    result = await db.execute(
+        text("SELECT stars_balance FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    new_balance = result.scalar() or 0
+    
+    return {"success": True, "added": amount, "new_balance": float(new_balance)}
+
+
+@app.post("/api/dev/set-vip")
+async def dev_set_vip(
+    is_vip: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """DEV ONLY: Set VIP status"""
+    if ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    await db.execute(
+        text("UPDATE users SET is_vip = :is_vip WHERE id = :user_id"),
+        {"is_vip": is_vip, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"success": True, "is_vip": is_vip}
+
+
 # Vercel handler
 handler = app
