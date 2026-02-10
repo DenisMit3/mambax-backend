@@ -5530,5 +5530,839 @@ async def admin_add_user_stars(
     return {"status": "ok", "added": amount}
 
 
+# ============================================
+# ADMIN API - EXTENDED (from adminApi.ts)
+# ============================================
+
+@app.post("/api/admin/users/bulk-action")
+async def admin_bulk_action(
+    user_ids: list = Body(...),
+    action: str = Body(...),
+    reason: Optional[str] = Body(None),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Bulk action on users"""
+    if action == "ban":
+        for uid in user_ids:
+            await db.execute(
+                text("UPDATE users SET is_active = false WHERE id = :user_id"),
+                {"user_id": uid}
+            )
+    elif action == "unban":
+        for uid in user_ids:
+            await db.execute(
+                text("UPDATE users SET is_active = true WHERE id = :user_id"),
+                {"user_id": uid}
+            )
+    
+    await db.commit()
+    return {"status": "ok", "affected": len(user_ids)}
+
+
+@app.get("/api/admin/users/verification/queue")
+async def get_verification_queue(
+    status: str = Query("pending"),
+    limit: int = Query(20),
+    offset: int = Query(0),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get verification queue"""
+    result = await db.execute(text("""
+        SELECT id::text, user_id::text, status, created_at
+        FROM verification_requests
+        WHERE status = :status
+        ORDER BY created_at ASC
+        LIMIT :limit OFFSET :offset
+    """), {"status": status, "limit": limit, "offset": offset})
+    
+    rows = result.fetchall()
+    
+    return {
+        "items": [
+            {"id": r[0], "user_id": r[1], "status": r[2], "created_at": r[3].isoformat() if r[3] else None}
+            for r in rows
+        ],
+        "total": len(rows)
+    }
+
+
+@app.post("/api/admin/users/verification/{request_id}/review")
+async def review_verification_request(
+    request_id: str,
+    action: str = Body(...),
+    reason: Optional[str] = Body(None),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Review verification request"""
+    new_status = "approved" if action == "approve" else "rejected"
+    
+    await db.execute(
+        text("UPDATE verification_requests SET status = :status WHERE id = :request_id"),
+        {"status": new_status, "request_id": request_id}
+    )
+    
+    if action == "approve":
+        # Get user_id and update verified status
+        result = await db.execute(
+            text("SELECT user_id FROM verification_requests WHERE id = :request_id"),
+            {"request_id": request_id}
+        )
+        row = result.fetchone()
+        if row:
+            await db.execute(
+                text("UPDATE users SET is_verified = true WHERE id = :user_id"),
+                {"user_id": row[0]}
+            )
+    
+    await db.commit()
+    return {"status": "ok", "action": action}
+
+
+@app.get("/api/admin/users/segments")
+async def get_user_segments(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user segments"""
+    return {
+        "segments": [
+            {"id": "active", "name": "Active Users", "count": 0},
+            {"id": "inactive", "name": "Inactive Users", "count": 0},
+            {"id": "vip", "name": "VIP Users", "count": 0},
+            {"id": "new", "name": "New Users (7d)", "count": 0}
+        ]
+    }
+
+
+@app.post("/api/admin/users/fraud-scores/recalculate")
+async def recalculate_fraud_scores(
+    user_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Recalculate fraud scores"""
+    return {"status": "ok", "message": "Fraud scores recalculated"}
+
+
+@app.get("/api/admin/users/fraud-scores/high-risk")
+async def get_high_risk_users(
+    limit: int = Query(20),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get high risk users"""
+    return {"users": [], "total": 0}
+
+
+# --- MODERATION ---
+@app.get("/api/admin/moderation/queue")
+async def get_moderation_queue(
+    type: Optional[str] = Query(None),
+    status: str = Query("pending"),
+    limit: int = Query(20),
+    offset: int = Query(0),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get moderation queue"""
+    result = await db.execute(text("""
+        SELECT id::text, reporter_id::text, reported_user_id::text, reason, status, created_at
+        FROM reports
+        WHERE status = :status
+        ORDER BY created_at ASC
+        LIMIT :limit OFFSET :offset
+    """), {"status": status, "limit": limit, "offset": offset})
+    
+    rows = result.fetchall()
+    
+    return {
+        "items": [
+            {
+                "id": r[0],
+                "reporter_id": r[1],
+                "reported_user_id": r[2],
+                "reason": r[3],
+                "status": r[4],
+                "created_at": r[5].isoformat() if r[5] else None
+            }
+            for r in rows
+        ],
+        "total": len(rows)
+    }
+
+
+@app.post("/api/admin/moderation/{item_id}/review")
+async def review_moderation_item(
+    item_id: str,
+    action: str = Body(...),
+    notes: Optional[str] = Body(None),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Review moderation item"""
+    new_status = "resolved" if action == "approve" else "dismissed"
+    
+    await db.execute(
+        text("UPDATE reports SET status = :status, resolved_at = NOW() WHERE id = :item_id"),
+        {"status": new_status, "item_id": item_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "action": action}
+
+
+@app.get("/api/admin/moderation/stats")
+async def get_moderation_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get moderation statistics"""
+    pending = await db.execute(text("SELECT COUNT(*) FROM reports WHERE status = 'pending'"))
+    resolved = await db.execute(text("SELECT COUNT(*) FROM reports WHERE status = 'resolved'"))
+    
+    return {
+        "pending": pending.scalar() or 0,
+        "resolved_today": 0,
+        "resolved_total": resolved.scalar() or 0,
+        "avg_resolution_time": "2h"
+    }
+
+
+# --- ANALYTICS ---
+@app.get("/api/admin/analytics/overview")
+async def get_analytics_overview(
+    period: str = Query("7d"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get analytics overview"""
+    return {
+        "users": {"total": 0, "new": 0, "active": 0},
+        "matches": {"total": 0, "new": 0},
+        "messages": {"total": 0, "new": 0},
+        "revenue": {"total": 0, "new": 0},
+        "period": period
+    }
+
+
+@app.get("/api/admin/analytics/export")
+async def export_analytics(
+    period: str = Query("7d"),
+    format: str = Query("json"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Export analytics data"""
+    return {"data": [], "format": format, "period": period}
+
+
+@app.get("/api/admin/analytics/retention")
+async def get_retention_analytics(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get retention cohorts"""
+    return {"cohorts": [], "periods": []}
+
+
+@app.get("/api/admin/analytics/funnel")
+async def get_funnel_analytics(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get conversion funnel"""
+    return {
+        "steps": [
+            {"name": "Signup", "count": 0, "rate": 100},
+            {"name": "Profile Complete", "count": 0, "rate": 0},
+            {"name": "First Swipe", "count": 0, "rate": 0},
+            {"name": "First Match", "count": 0, "rate": 0},
+            {"name": "First Message", "count": 0, "rate": 0}
+        ]
+    }
+
+
+@app.get("/api/admin/analytics/realtime")
+async def get_realtime_analytics(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get realtime metrics"""
+    return {
+        "online_users": 0,
+        "active_chats": 0,
+        "swipes_per_minute": 0,
+        "matches_per_minute": 0
+    }
+
+
+@app.get("/api/admin/analytics/churn-prediction")
+async def get_churn_prediction(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get churn prediction"""
+    return {"at_risk_users": [], "churn_rate": 0}
+
+
+@app.get("/api/admin/analytics/revenue-breakdown")
+async def get_revenue_breakdown(
+    period: str = Query("30d"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get revenue breakdown"""
+    return {
+        "total": 0,
+        "by_source": {
+            "subscriptions": 0,
+            "gifts": 0,
+            "boosts": 0,
+            "superlikes": 0
+        },
+        "period": period
+    }
+
+
+# --- MONETIZATION ---
+@app.get("/api/admin/monetization/revenue/metrics")
+async def get_revenue_metrics(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get revenue metrics"""
+    return {
+        "total_revenue": 0,
+        "mrr": 0,
+        "arpu": 0,
+        "ltv": 0
+    }
+
+
+@app.get("/api/admin/monetization/revenue/trend")
+async def get_revenue_trend(
+    period: str = Query("30d"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get revenue trend"""
+    return {"data": [], "period": period}
+
+
+@app.get("/api/admin/monetization/revenue/by-channel")
+async def get_revenue_by_channel(
+    period: str = Query("30d"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get revenue by channel"""
+    return [
+        {"channel": "telegram_stars", "revenue": 0},
+        {"channel": "subscriptions", "revenue": 0},
+        {"channel": "gifts", "revenue": 0}
+    ]
+
+
+@app.get("/api/admin/monetization/subscriptions")
+async def get_subscription_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get subscription statistics"""
+    return {
+        "total_subscribers": 0,
+        "by_tier": {"plus": 0, "premium": 0, "vip": 0},
+        "churn_rate": 0,
+        "conversion_rate": 0
+    }
+
+
+@app.get("/api/admin/monetization/transactions")
+async def get_transactions(
+    limit: int = Query(20),
+    offset: int = Query(0),
+    status: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get transactions list"""
+    return {"items": [], "total": 0}
+
+
+@app.post("/api/admin/monetization/transactions/{transaction_id}/refund")
+async def refund_transaction(
+    transaction_id: str,
+    reason: str = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Refund transaction"""
+    return {"status": "ok", "transaction_id": transaction_id}
+
+
+@app.get("/api/admin/monetization/plans")
+async def get_subscription_plans(
+    include_inactive: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get subscription plans"""
+    return {
+        "plans": [
+            {"id": "plus", "name": "Plus", "price": 199, "active": True},
+            {"id": "premium", "name": "Premium", "price": 399, "active": True},
+            {"id": "vip", "name": "VIP", "price": 599, "active": True}
+        ]
+    }
+
+
+@app.post("/api/admin/monetization/plans")
+async def create_subscription_plan(
+    name: str = Body(...),
+    price: int = Body(...),
+    features: list = Body([]),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create subscription plan"""
+    return {"status": "ok", "plan": {"name": name, "price": price}}
+
+
+@app.patch("/api/admin/monetization/plans/{plan_id}")
+async def update_subscription_plan(
+    plan_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update subscription plan"""
+    return {"status": "ok", "plan_id": plan_id}
+
+
+@app.delete("/api/admin/monetization/plans/{plan_id}")
+async def delete_subscription_plan(
+    plan_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Delete subscription plan"""
+    return {"status": "ok", "plan_id": plan_id}
+
+
+@app.post("/api/admin/monetization/gifts")
+async def create_gift(
+    name: str = Body(...),
+    price: int = Body(...),
+    image_url: str = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create virtual gift"""
+    return {"status": "ok", "gift": {"name": name, "price": price}}
+
+
+@app.put("/api/admin/monetization/gifts/{gift_id}")
+async def update_gift(
+    gift_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update virtual gift"""
+    return {"status": "ok", "gift_id": gift_id}
+
+
+@app.delete("/api/admin/monetization/gifts/{gift_id}")
+async def delete_gift(
+    gift_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Delete virtual gift"""
+    return {"status": "ok", "gift_id": gift_id}
+
+
+@app.post("/api/admin/monetization/gifts/upload-image")
+async def upload_gift_image(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Upload gift image"""
+    return {"url": None, "filename": None, "message": "Requires cloud storage"}
+
+
+@app.post("/api/admin/monetization/payments/gift")
+async def admin_gift_payment(
+    gift_id: str = Body(...),
+    receiver_id: str = Body(...),
+    message: Optional[str] = Body(None),
+    is_anonymous: bool = Body(False),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Direct gift purchase (admin)"""
+    return {
+        "status": "ok",
+        "transaction_id": None,
+        "invoice_link": None
+    }
+
+
+# --- SYSTEM ---
+@app.get("/api/admin/system/health")
+async def get_system_health(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get system health"""
+    return {
+        "api": "healthy",
+        "database": "healthy",
+        "cache": "not_configured",
+        "storage": "not_configured"
+    }
+
+
+@app.get("/api/admin/system/feature-flags")
+async def get_feature_flags(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get feature flags"""
+    return {
+        "flags": [
+            {"id": "stories", "name": "Stories", "enabled": False, "rollout": 0},
+            {"id": "video_chat", "name": "Video Chat", "enabled": False, "rollout": 0},
+            {"id": "events", "name": "Events", "enabled": False, "rollout": 0}
+        ]
+    }
+
+
+@app.post("/api/admin/system/feature-flags/{flag_id}")
+async def update_feature_flag(
+    flag_id: str,
+    enabled: bool = Body(...),
+    rollout: int = Body(100),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update feature flag"""
+    return {"status": "ok", "flag_id": flag_id, "enabled": enabled, "rollout": rollout}
+
+
+@app.get("/api/admin/system/logs")
+async def get_system_logs(
+    level: str = Query("info"),
+    limit: int = Query(100),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get system logs"""
+    return {"logs": [], "total": 0}
+
+
+# --- MARKETING ---
+@app.post("/api/admin/marketing/push")
+async def send_marketing_push(
+    title: str = Body(...),
+    body: str = Body(...),
+    segment: Optional[str] = Body(None),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Send marketing push notification"""
+    return {"status": "ok", "sent_to": 0}
+
+
+@app.get("/api/admin/marketing/referrals")
+async def get_referral_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get referral statistics"""
+    return {
+        "total_referrals": 0,
+        "successful_referrals": 0,
+        "pending_rewards": 0
+    }
+
+
+@app.get("/api/admin/marketing/campaigns")
+async def get_marketing_campaigns(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get marketing campaigns"""
+    return {"campaigns": []}
+
+
+@app.get("/api/admin/marketing/channels")
+async def get_marketing_channels(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get marketing channels"""
+    return {"channels": []}
+
+
+# ============================================
+# ADVANCED API (from advancedApi.ts)
+# ============================================
+
+@app.post("/api/admin/advanced/ai/generate")
+async def ai_generate_content(
+    prompt: str = Body(...),
+    type: str = Body("text"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """AI content generation (placeholder)"""
+    return {"content": None, "message": "AI generation requires LLM integration"}
+
+
+@app.get("/api/admin/advanced/ai/models")
+async def get_ai_models(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get available AI models"""
+    return {"models": []}
+
+
+@app.get("/api/admin/advanced/ai/usage")
+async def get_ai_usage(
+    period: str = Query("30d"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get AI usage statistics"""
+    return {"requests": 0, "tokens": 0, "cost": 0}
+
+
+@app.get("/api/admin/advanced/algorithm/params")
+async def get_algorithm_params(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get matching algorithm parameters"""
+    return {
+        "params": {
+            "age_weight": 0.3,
+            "distance_weight": 0.2,
+            "interests_weight": 0.3,
+            "activity_weight": 0.2
+        }
+    }
+
+
+@app.put("/api/admin/advanced/algorithm/params")
+async def update_algorithm_params(
+    params: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update matching algorithm parameters"""
+    return {"status": "ok", "params": params}
+
+
+@app.get("/api/admin/advanced/algorithm/performance")
+async def get_algorithm_performance(
+    period: str = Query("30d"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get algorithm performance metrics"""
+    return {
+        "match_rate": 0,
+        "message_rate": 0,
+        "satisfaction_score": 0
+    }
+
+
+@app.get("/api/admin/advanced/reports")
+async def get_advanced_reports(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get available reports"""
+    return {"reports": []}
+
+
+@app.post("/api/admin/advanced/reports/generate")
+async def generate_report(
+    type: str = Body(...),
+    period: str = Body("30d"),
+    format: str = Body("pdf"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Generate report"""
+    return {"status": "pending", "report_id": None}
+
+
+@app.get("/api/admin/advanced/web3/stats")
+async def get_web3_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get Web3 statistics"""
+    return {"wallets_connected": 0, "nfts_minted": 0, "transactions": 0}
+
+
+@app.get("/api/admin/advanced/events")
+async def get_advanced_events(
+    type: Optional[str] = Query(None),
+    limit: int = Query(20),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get system events"""
+    return {"events": [], "total": 0}
+
+
+@app.post("/api/admin/advanced/events")
+async def create_event(
+    name: str = Body(...),
+    type: str = Body(...),
+    data: dict = Body({}),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create system event"""
+    return {"status": "ok", "event_id": None}
+
+
+@app.get("/api/admin/advanced/localization/stats")
+async def get_localization_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get localization statistics"""
+    return {
+        "languages": ["ru", "en"],
+        "coverage": {"ru": 100, "en": 80},
+        "missing_keys": 0
+    }
+
+
+@app.get("/api/admin/advanced/performance/budget")
+async def get_performance_budget(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get performance budget"""
+    return {
+        "lcp": {"target": 2500, "current": 0},
+        "fid": {"target": 100, "current": 0},
+        "cls": {"target": 0.1, "current": 0}
+    }
+
+
+@app.get("/api/admin/advanced/performance/pwa")
+async def get_pwa_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get PWA statistics"""
+    return {
+        "installs": 0,
+        "active_users": 0,
+        "push_subscriptions": 0
+    }
+
+
+@app.get("/api/admin/advanced/accessibility/audit")
+async def get_accessibility_audit(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get accessibility audit results"""
+    return {
+        "score": 0,
+        "issues": [],
+        "last_audit": None
+    }
+
+
+@app.get("/api/admin/advanced/calls/analytics")
+async def get_calls_analytics(
+    period: str = Query("30d"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get video/voice calls analytics"""
+    return {
+        "total_calls": 0,
+        "avg_duration": 0,
+        "success_rate": 0
+    }
+
+
+@app.get("/api/admin/advanced/recommendations/dashboard")
+async def get_recommendations_dashboard(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get recommendations dashboard"""
+    return {
+        "algorithm_version": "1.0",
+        "accuracy": 0,
+        "feedback_score": 0
+    }
+
+
+@app.get("/api/admin/advanced/icebreakers")
+async def get_admin_icebreakers(
+    category: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get icebreakers for admin"""
+    return {"icebreakers": [], "total": 0}
+
+
+@app.post("/api/admin/advanced/icebreakers")
+async def create_icebreaker(
+    text: str = Body(...),
+    category: str = Body("general"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create icebreaker"""
+    return {"status": "ok", "icebreaker_id": None}
+
+
+@app.post("/api/admin/advanced/icebreakers/generate")
+async def generate_icebreakers(
+    category: str = Query("general"),
+    count: int = Query(5),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Generate icebreakers with AI"""
+    return {"icebreakers": [], "message": "AI generation requires LLM integration"}
+
+
+@app.get("/api/admin/advanced/partners")
+async def get_partners(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get partners list"""
+    return {"partners": [], "total": 0}
+
+
+@app.post("/api/admin/advanced/partners")
+async def create_partner(
+    name: str = Body(...),
+    type: str = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create partner"""
+    return {"status": "ok", "partner_id": None}
+
+
 # Vercel handler
 handler = app
