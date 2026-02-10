@@ -20,6 +20,7 @@ interface TelegramWebApp {
         hash: string;
         start_param?: string;
     };
+    version: string;
     ready: () => void;
     expand: () => void;
     close: () => void;
@@ -82,6 +83,9 @@ declare global {
     }
 }
 
+// Flag to track if Telegram was already initialized
+let telegramHookInitialized = false;
+
 export const useTelegram = () => {
     const [webApp, setWebApp] = useState<TelegramWebApp | null>(null);
 
@@ -90,10 +94,14 @@ export const useTelegram = () => {
             const tg = window.Telegram.WebApp;
             setWebApp(tg);
 
-            tg.ready();
-            tg.expand();
+            // Only call ready/expand once across all hook instances
+            if (!telegramHookInitialized) {
+                tg.ready();
+                tg.expand();
+                telegramHookInitialized = true;
+            }
 
-            // Set theme colors
+            // Set theme colors (safe to call multiple times)
             document.documentElement.style.setProperty('--tg-theme-bg-color', tg.themeParams.bg_color || '#0A0A0B');
             document.documentElement.style.setProperty('--tg-theme-text-color', tg.themeParams.text_color || '#FFFFFF');
         }
@@ -112,11 +120,27 @@ export const useTelegram = () => {
             webApp?.HapticFeedback.notificationOccurred(type)
     };
 
+    // Helper to check if a feature is supported by version
+    const isVersionAtLeast = (minVersion: string): boolean => {
+        if (!webApp?.version) return false;
+        const current = webApp.version.split('.').map(Number);
+        const required = minVersion.split('.').map(Number);
+        for (let i = 0; i < required.length; i++) {
+            if ((current[i] || 0) > required[i]) return true;
+            if ((current[i] || 0) < required[i]) return false;
+        }
+        return true;
+    };
+
     return {
         webApp,
         hapticFeedback,
         user: webApp?.initDataUnsafe?.user,
         initData: webApp?.initData,
         isReady: !!webApp,
+        version: webApp?.version,
+        isVersionAtLeast,
+        // BackButton requires version 6.1+
+        supportsBackButton: isVersionAtLeast('6.1'),
     };
 };

@@ -13,7 +13,7 @@ import { measurePerformance } from '@/lib/performance';
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { webApp } = useTelegram();
+    const { webApp, supportsBackButton } = useTelegram();
     const isAdmin = pathname?.startsWith('/admin');
     const isVerification = pathname?.startsWith('/verification');
     const isOnboarding = pathname?.startsWith('/onboarding');
@@ -75,9 +75,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         router.prefetch('/likes');
     }, [router]);
 
-    // Telegram Back Button Management
+    // Telegram Back Button Management (requires version 6.1+)
     useEffect(() => {
-        if (!webApp) return;
+        if (!webApp || !supportsBackButton) return;
 
         // Pages that are "top-level" and shouldn't show a back button
         const topLevelPaths = ['/', '/discover', '/likes', '/chat', '/profile'];
@@ -97,7 +97,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         return () => {
             webApp.BackButton.offClick(handleBack);
         };
-    }, [pathname, webApp, router]);
+    }, [pathname, webApp, router, supportsBackButton]);
 
     if (isAdmin) {
         // Full screen layout for admin
@@ -113,7 +113,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <ErrorBoundary>
             <QueryProvider>
                 {/* PERF-016: LazyMotion reduces framer-motion bundle by ~30KB */}
-                <LazyMotion features={domAnimation} strict>
+                {/* NOTE: strict mode disabled - requires replacing all 'motion' with 'm' across 70+ files */}
+                <LazyMotion features={domAnimation}>
                     {/* Desktop Background - Dark gradient like onboarding */}
                     <div className="fixed inset-0 bg-[#0f0f11] z-0" />
 

@@ -1,52 +1,149 @@
-# Database Session - Async SQLAlchemy engine и session для PostgreSQL
+# Database Session - Neon PostgreSQL
+# =============================================
+# ВАЖНО: Единственная разрешенная БД - Neon PostgreSQL
+# Использование SQLite, локального PostgreSQL ЗАПРЕЩЕНО
+# =============================================
 
 import os
-import urllib.parse
-from typing import AsyncGenerator
+import sys
+import ssl
+from typing import AsyncGenerator, Optional
+from contextlib import contextmanager, asynccontextmanager
 
+import psycopg2
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool
 
 from backend.config.settings import settings
 
 
-# Database URL from settings (preferred) or environment
+# Database URL from settings - ONLY Neon PostgreSQL allowed
 DATABASE_URL = settings.DATABASE_URL
 
 if not DATABASE_URL:
-    DATABASE_URL = "sqlite+aiosqlite:///./mambax.db"
+    raise RuntimeError(
+        "DATABASE_URL не установлен! "
+        "Используйте только Neon PostgreSQL: postgresql+asyncpg://...@...neon.tech/..."
+    )
+
+# Validate that it's Neon PostgreSQL
+if "neon.tech" not in DATABASE_URL and "neon" not in DATABASE_URL.lower():
+    if "sqlite" in DATABASE_URL.lower():
+        raise RuntimeError(
+            "SQLite ЗАПРЕЩЕН! Используйте только Neon PostgreSQL. "
+            "Получите бесплатную БД на https://neon.tech"
+        )
+    if "localhost" in DATABASE_URL or "127.0.0.1" in DATABASE_URL:
+        raise RuntimeError(
+            "Локальный PostgreSQL ЗАПРЕЩЕН! Используйте только Neon PostgreSQL. "
+            "Получите бесплатную БД на https://neon.tech"
+        )
+
+# Parse connection params from URL for psycopg2
+def _parse_neon_url(url: str) -> dict:
+    """Parse Neon URL into connection params for psycopg2"""
+    # postgresql+asyncpg://user:pass@host/db?ssl=require
+    import re
+    pattern = r'postgresql\+\w+://([^:]+):([^@]+)@([^/]+)/([^?]+)'
+    match = re.match(pattern, url)
+    if match:
+        return {
+            'user': match.group(1),
+            'password': match.group(2),
+            'host': match.group(3),
+            'database': match.group(4),
+            'sslmode': 'require',
+            'connect_timeout': 10,
+        }
+    raise ValueError(f"Cannot parse DATABASE_URL: {url}")
+
+NEON_CONN_PARAMS = _parse_neon_url(DATABASE_URL)
 
 
-# Fix scheme for asyncpg / aiosqlite
-if DATABASE_URL:
-    if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
-    elif DATABASE_URL.startswith("postgresql://"):
-        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-    elif DATABASE_URL.startswith("sqlite://"):
-        DATABASE_URL = DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://", 1)
+# ============================================
+# SYNC CONNECTION (for Windows local dev)
+# ============================================
 
-# SQLite config requires connect_args check_same_thread=False
-connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+class NeonSyncDB:
+    """
+    Синхронное подключение к Neon через psycopg2.
+    Используется для локальной разработки на Windows,
+    где SQLAlchemy async имеет проблемы с таймаутами.
+    """
+    
+    @staticmethod
+    @contextmanager
+    def get_connection():
+        conn = psycopg2.connect(**NEON_CONN_PARAMS)
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+    
+    @staticmethod
+    def execute(query: str, params: tuple = None):
+        with NeonSyncDB.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(query, params)
+            if cur.description:
+                return cur.fetchall()
+            return None
+    
+    @staticmethod
+    def fetchone(query: str, params: tuple = None):
+        with NeonSyncDB.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(query, params)
+            return cur.fetchone()
+    
+    @staticmethod
+    def fetchval(query: str, params: tuple = None):
+        result = NeonSyncDB.fetchone(query, params)
+        return result[0] if result else None
 
-# Engine configuration
+
+# ============================================
+# ASYNC CONNECTION (for production on Linux)
+# ============================================
+
+# Fix scheme for asyncpg
+_async_url = DATABASE_URL
+if _async_url.startswith("postgres://"):
+    _async_url = _async_url.replace("postgres://", "postgresql+asyncpg://", 1)
+elif _async_url.startswith("postgresql://") and "+asyncpg" not in _async_url:
+    _async_url = _async_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+# Replace sslmode with ssl for asyncpg compatibility
+if "sslmode=" in _async_url:
+    _async_url = _async_url.replace("sslmode=require", "ssl=require")
+
+# Create SSL context for Neon
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
+
+# Engine configuration for Neon PostgreSQL
 engine_kwargs = {
-    "echo": not settings.is_production,  # Only log SQL queries in development
+    "echo": not settings.is_production,
     "future": True,
-    "connect_args": connect_args,
+    "poolclass": NullPool,  # Neon pooler handles pooling
+    "connect_args": {
+        "ssl": ssl_context,
+        "timeout": 60,
+        "command_timeout": 60,
+        "statement_cache_size": 0,  # Disable for Neon pooler
+        "server_settings": {
+            "application_name": "mambax_backend"
+        }
+    }
 }
 
-# FIX: Add connection pooling for PostgreSQL (critical for production load)
-if "postgresql" in DATABASE_URL:
-    engine_kwargs["pool_size"] = 20
-    engine_kwargs["max_overflow"] = 10
-    engine_kwargs["pool_pre_ping"] = True
-    engine_kwargs["pool_recycle"] = 3600
-elif "sqlite" in DATABASE_URL:
-    # SQLite doesn't support pool_size/max_overflow
-    pass
-
 # Async Engine
-engine = create_async_engine(DATABASE_URL, **engine_kwargs)
+engine = create_async_engine(_async_url, **engine_kwargs)
 
 # Async Session Factory
 async_session_maker = async_sessionmaker(
@@ -80,13 +177,25 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db() -> None:
     """
-    Инициализация базы данных - создание таблиц.
-    Вызывается при старте приложения.
+    Инициализация базы данных - проверка подключения к Neon.
+    Таблицы уже созданы в Neon, не создаем их автоматически.
     """
     from backend.db.base import Base
-    # Import all models to register them with Base
-    # This ensures all tables are created
     from backend import models  # noqa: F401
+    from sqlalchemy import text
     
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # На Windows используем синхронное подключение для проверки
+    if sys.platform == 'win32':
+        try:
+            result = NeonSyncDB.fetchval("SELECT 1")
+            if result != 1:
+                raise RuntimeError("Neon connection test failed")
+        except Exception as e:
+            raise RuntimeError(f"Не удалось подключиться к Neon PostgreSQL: {e}")
+    else:
+        # На Linux используем async
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        except Exception as e:
+            raise RuntimeError(f"Не удалось подключиться к Neon PostgreSQL: {e}")

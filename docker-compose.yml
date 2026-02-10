@@ -1,28 +1,14 @@
+# =============================================
+# MAMBAX DOCKER COMPOSE - MINIMAL
+# =============================================
+# ВАЖНО: База данных - ТОЛЬКО Neon PostgreSQL (облачная)
+# Локальный PostgreSQL ЗАПРЕЩЕН
+# =============================================
+
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:16-alpine
-    container_name: mambax_postgres
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - mambax-network
-
-  # Redis Cache (Optional but recommended)
+  # Redis Cache (Optional - for local development)
   redis:
     image: redis:7-alpine
     container_name: mambax_redis
@@ -36,100 +22,8 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
-    networks:
-      - mambax-network
 
-  # Backend API (FastAPI)
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: mambax_backend
-    ports:
-      - "8001:8001"
-    environment:
-      - DATABASE_URL=${DOCKER_DATABASE_URL}
-      - REDIS_URL=redis://redis:6379
-      - SECRET_KEY=${SECRET_KEY}
-      - ENVIRONMENT=${ENVIRONMENT}
-      - LOCAL_NETWORK_ACCESS=${LOCAL_NETWORK_ACCESS}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - FRONTEND_URL=${FRONTEND_URL}
-      - BACKEND_URL=http://localhost:8001
-      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
-      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
-      - VAPID_CLAIMS_EMAIL=${VAPID_CLAIMS_EMAIL}
-      - SEED_ON_STARTUP=${SEED_ON_STARTUP:-False}
-      - ADMIN_PHONE=+79062148253
-      - ADMIN_USERNAME=RezidentMD
-      # S3 / MinIO Configuration
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION}
-      - S3_ENDPOINT_URL=http://minio:9000
-      - BACKUP_BUCKET=${BACKUP_BUCKET}
-    volumes:
-      - ./backend:/app/backend
-      - backend_uploads:/app/backend/static/uploads
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8001/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
-    networks:
-      - mambax-network
-
-  # Frontend (Next.js)
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: development
-    container_name: mambax_frontend
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8001
-      - BACKEND_URL=http://backend:8001
-      - NODE_ENV=development
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - mambax-network
-
-  # Telegram Bot (Optional - runs separately for local dev)
-  telegram-bot:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: mambax_bot
-    command: [ "python", "bot.py" ]
-    environment:
-      - DATABASE_URL=${DOCKER_DATABASE_URL}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - FRONTEND_URL=${FRONTEND_URL}
-      - PYTHONPATH=/app
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - mambax-network
-
-  # MinIO (S3 Compatible Storage for Backups)
+  # MinIO (S3 Compatible Storage for local file uploads)
   minio:
     image: minio/minio:latest
     container_name: mambax_minio
@@ -137,34 +31,24 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
-      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
-    networks:
-      - mambax-network
-
-  # Create Buckets for MinIO
-  createbuckets:
-    image: minio/mc
-    depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c " /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin; /usr/bin/mc mb myminio/backups; /usr/bin/mc anonymous set public myminio/backups; exit 0; "
-    networks:
-      - mambax-network
 
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
-    driver: local
-  backend_uploads:
     driver: local
   minio_data:
     driver: local
 
-networks:
-  mambax-network:
-    driver: bridge
+# =============================================
+# ПРИМЕЧАНИЕ:
+# База данных PostgreSQL НЕ включена в docker-compose.
+# Используйте ТОЛЬКО Neon PostgreSQL: https://neon.tech
+# 
+# Для запуска backend и frontend используйте:
+#   - Backend: cd backend && uvicorn main:app --reload --port 8001
+#   - Frontend: cd frontend && npm run dev
+# =============================================

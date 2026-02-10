@@ -116,25 +116,7 @@ export function SmartDiscoveryEngine({
         controls.set({ x: 0, y: 0, rotate: 0, opacity: 1 });
     }, [currentProfile, controls, x, y]);
 
-    // PERF-010: Мемоизация handleDragEnd
-    const handleDragEnd = useCallback(async (event: any, info: PanInfo) => {
-        if (isAnimating) return;
-
-        const threshold = 100;
-        const velocity = info.velocity.x;
-
-        if (info.offset.x > threshold || velocity > 500) {
-            await swipe('right');
-        } else if (info.offset.x < -threshold || velocity < -500) {
-            await swipe('left');
-        } else if (info.offset.y < -threshold) {
-            await swipe('up');
-        } else {
-            controls.start({ x: 0, y: 0 });
-        }
-    }, [isAnimating, swipe, controls]);
-
-    // PERF-010: Мемоизация swipe функции
+    // PERF-010: Мемоизация swipe функции (должна быть объявлена ДО handleDragEnd)
     const swipe = useCallback(async (direction: 'left' | 'right' | 'up') => {
         if (!currentProfile || isAnimating) return;
 
@@ -178,6 +160,24 @@ export function SmartDiscoveryEngine({
             setIsAnimating(false);
         }
     }, [currentProfile, isAnimating, expandedProfile, onSwipe, controls]);
+
+    // PERF-010: Мемоизация handleDragEnd
+    const handleDragEnd = useCallback(async (event: any, info: PanInfo) => {
+        if (isAnimating) return;
+
+        const threshold = 100;
+        const velocity = info.velocity.x;
+
+        if (info.offset.x > threshold || velocity > 500) {
+            await swipe('right');
+        } else if (info.offset.x < -threshold || velocity < -500) {
+            await swipe('left');
+        } else if (info.offset.y < -threshold) {
+            await swipe('up');
+        } else {
+            controls.start({ x: 0, y: 0 });
+        }
+    }, [isAnimating, swipe, controls]);
 
     if (!currentProfile) {
         return (

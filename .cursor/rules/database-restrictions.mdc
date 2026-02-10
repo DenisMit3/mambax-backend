@@ -1,0 +1,104 @@
+# Ограничения базы данных - ТОЛЬКО Neon PostgreSQL
+
+> **КРИТИЧНО**: Этот проект использует ТОЛЬКО Neon PostgreSQL. Любые другие базы данных СТРОГО ЗАПРЕЩЕНЫ.
+
+## 🚫 АБСОЛЮТНО ЗАПРЕЩЕНО
+
+### Альтернативные базы данных
+- **SQLite** - ЗАПРЕЩЕН полностью (включая `sqlite:///`, `aiosqlite`)
+- **Локальный PostgreSQL** - ЗАПРЕЩЕН (`localhost:5432`, `127.0.0.1:5432`)
+- **Docker PostgreSQL** - ЗАПРЕЩЕН (не использовать postgres в docker-compose)
+- **Supabase** - НЕ ИСПОЛЬЗОВАТЬ (проект мигрировал на Neon)
+- **Railway PostgreSQL** - НЕ ИСПОЛЬЗОВАТЬ
+- **Любые другие БД** - ЗАПРЕЩЕНЫ
+
+### Запрещенные паттерны в коде
+```python
+# ❌ ЗАПРЕЩЕНО - SQLite
+DATABASE_URL = "sqlite:///./mambax.db"
+DATABASE_URL = "sqlite+aiosqlite:///./mambax.db"
+
+# ❌ ЗАПРЕЩЕНО - Локальный PostgreSQL
+DATABASE_URL = "postgresql://user:pass@localhost:5432/db"
+DATABASE_URL = "postgresql://user:pass@127.0.0.1:5432/db"
+
+# ❌ ЗАПРЕЩЕНО - Docker PostgreSQL
+DATABASE_URL = "postgresql://user:pass@postgres:5432/db"
+DOCKER_DATABASE_URL = "..."
+```
+
+### Запрещенные файлы
+- `*.db` - SQLite файлы
+- `*.sqlite` - SQLite файлы
+- Docker-compose с PostgreSQL сервисом
+
+## ✅ ЕДИНСТВЕННАЯ РАЗРЕШЕННАЯ БД - Neon PostgreSQL
+
+### Credentials (Production)
+```
+Host: ep-still-band-agqygsk6-pooler.c-2.eu-central-1.aws.neon.tech
+Database: neondb
+User: neondb_owner
+Project: long-sea-64550481
+```
+
+### Правильный DATABASE_URL
+```env
+# ✅ ТОЛЬКО ТАК
+DATABASE_URL=postgresql+asyncpg://neondb_owner:npg_vjOPMFZV5K9n@ep-still-band-agqygsk6-pooler.c-2.eu-central-1.aws.neon.tech/neondb?ssl=require
+```
+
+### Neon Dashboard
+- URL: https://console.neon.tech
+- Project: long-sea-64550481
+
+## 🔒 Защита в коде
+
+### backend/config/settings.py
+Содержит валидатор `validate_database_url()` который:
+- Выбрасывает ошибку при попытке использовать SQLite
+- Выбрасывает ошибку при попытке использовать localhost
+- Предупреждает если URL не содержит "neon.tech"
+
+### backend/db/session.py
+Содержит проверки:
+- RuntimeError если DATABASE_URL не установлен
+- RuntimeError если обнаружен SQLite
+- RuntimeError если обнаружен localhost
+
+## 📁 Конфигурация
+
+### backend/.env
+```env
+DATABASE_URL=postgresql+asyncpg://neondb_owner:npg_vjOPMFZV5K9n@ep-still-band-agqygsk6-pooler.c-2.eu-central-1.aws.neon.tech/neondb?ssl=require
+```
+
+### Vercel Environment Variables
+Те же credentials должны быть установлены в:
+- Vercel Dashboard → mambax-backend → Settings → Environment Variables
+
+## 🗄️ Структура БД
+
+В Neon создано **61 таблица**:
+- Core: users, user_photos, user_interests, swipes, matches, messages, likes, blocks, reports
+- Monetization: subscription_plans, user_subscriptions, revenue_transactions, promo_codes...
+- Moderation: moderation_logs, banned_users, moderation_queue, appeals...
+- Analytics: daily_metrics, retention_cohorts, analytics_events...
+- System: audit_logs, feature_flags, security_alerts, backup_status...
+- И другие...
+
+## ⚠️ При нарушении
+
+Если кто-то попытается:
+1. Добавить SQLite - **код не запустится** (RuntimeError)
+2. Использовать localhost - **код не запустится** (RuntimeError)
+3. Создать docker-compose с PostgreSQL - **НЕ МЕРЖИТЬ** такой PR
+
+## 📝 Миграции
+
+Для изменения схемы БД:
+1. Изменить модели в `backend/models/`
+2. Создать миграцию: `alembic revision --autogenerate -m "description"`
+3. Применить к Neon: `DATABASE_URL=... alembic upgrade head`
+
+**НЕ ИСПОЛЬЗОВАТЬ** `Base.metadata.create_all()` - только Alembic миграции!

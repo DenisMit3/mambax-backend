@@ -12,3 +12,5 @@ venv/
 *.pem
 *.key
 *.bak
+.vercel
+.env*.local

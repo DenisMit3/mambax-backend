@@ -1,22 +1,30 @@
+# =============================================
+# MAMBAX SETTINGS
+# =============================================
+# ВАЖНО: Единственная разрешенная БД - Neon PostgreSQL
+# Использование SQLite, локального PostgreSQL ЗАПРЕЩЕНО
+# =============================================
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import Optional
 from pathlib import Path
 
 # Get the path to the backend directory
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "MambaX"
-    # Database & Cache
-    DATABASE_URL: Optional[str] = None
-    DOCKER_DATABASE_URL: Optional[str] = None
-    REDIS_URL: Optional[str] = None
     
-    # PostgreSQL (for Docker)
-    POSTGRES_USER: Optional[str] = None
-    POSTGRES_PASSWORD: Optional[str] = None
-    POSTGRES_DB: Optional[str] = None
+    # Database - ONLY Neon PostgreSQL
+    DATABASE_URL: str = Field(
+        ...,
+        description="Neon PostgreSQL URL. SQLite и локальный PostgreSQL ЗАПРЕЩЕНЫ!"
+    )
+    
+    # Redis (optional for caching)
+    REDIS_URL: Optional[str] = None
     
     # Security
     SECRET_KEY: str = Field(..., min_length=32)
@@ -58,13 +66,13 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
 
     # Firebase (Push Notifications)
-    FIREBASE_CREDENTIALS: Optional[str] = None  # Path to JSON or JSON string
+    FIREBASE_CREDENTIALS: Optional[str] = None
     
     # AWS (S3 Backups)
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_REGION: str = "us-east-1"
-    S3_ENDPOINT_URL: Optional[str] = None  # For MinIO compatibility
+    S3_ENDPOINT_URL: Optional[str] = None
     BACKUP_BUCKET: str = "app-backups"
     BACKUP_RETENTION_DAYS: int = 30
     
@@ -81,11 +89,51 @@ class Settings(BaseSettings):
     # Admin Configuration
     ADMIN_PHONE: str = "+79062148253"
     ADMIN_USERNAME: str = "RezidentMD"
-    ADMIN_TELEGRAM_ID: Optional[str] = None # Numeric ID if known
-    SEED_ON_STARTUP: bool = Field(False) # Set to False in production
+    ADMIN_TELEGRAM_ID: Optional[str] = None
+    SEED_ON_STARTUP: bool = Field(False)
     
     # Scheduler
     ENABLE_SCHEDULER: bool = True
+    
+    @field_validator('DATABASE_URL')
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        """
+        Валидация DATABASE_URL - разрешен ТОЛЬКО Neon PostgreSQL.
+        SQLite и локальный PostgreSQL ЗАПРЕЩЕНЫ.
+        """
+        if not v:
+            raise ValueError(
+                "DATABASE_URL обязателен! Используйте Neon PostgreSQL: "
+                "postgresql+asyncpg://...@...neon.tech/..."
+            )
+        
+        v_lower = v.lower()
+        
+        # Запрет SQLite
+        if "sqlite" in v_lower:
+            raise ValueError(
+                "SQLite ЗАПРЕЩЕН! Используйте только Neon PostgreSQL. "
+                "Получите бесплатную БД на https://neon.tech"
+            )
+        
+        # Запрет локального PostgreSQL
+        if "localhost" in v_lower or "127.0.0.1" in v_lower:
+            raise ValueError(
+                "Локальный PostgreSQL ЗАПРЕЩЕН! Используйте только Neon PostgreSQL. "
+                "Получите бесплатную БД на https://neon.tech"
+            )
+        
+        # Проверка что это Neon
+        if "neon.tech" not in v_lower and "neon" not in v_lower:
+            # Разрешаем другие облачные PostgreSQL (Supabase, Railway) но предупреждаем
+            import warnings
+            warnings.warn(
+                f"DATABASE_URL не содержит 'neon.tech'. "
+                f"Рекомендуется использовать Neon PostgreSQL."
+            )
+        
+        return v
     
     @property
     def is_production(self) -> bool:
@@ -97,5 +145,6 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore"
     )
+
 
 settings = Settings()

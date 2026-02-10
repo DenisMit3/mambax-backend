@@ -304,7 +304,7 @@ export const ChatInterface = ({
             audioRef.current.play();
             setPlayingAudio(url);
         }
-    };
+    }, [playingAudio]);
 
     const handleReaction = (messageId: string, emoji: string) => {
         onReaction(messageId, emoji);

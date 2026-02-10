@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Script from "next/script";
 
+// Flag to prevent multiple initializations
+let telegramInitialized = false;
+
 export function TelegramProvider({ children }: { children: React.ReactNode }) {
-  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     // Check if running in browser with window.Telegram
     const init = () => {
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && !telegramInitialized) {
         // Use 'unknown' cast or specific type for window.Telegram.
         // Define a type for the Telegram object we expect on window
         type WindowWithTelegram = Window & {
@@ -28,6 +30,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
           const tg = windowAsTelegram.Telegram.WebApp;
           tg.ready();
           tg.expand();
+          telegramInitialized = true;
 
           console.log("Telegram Web App Initialized");
 
