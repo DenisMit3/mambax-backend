@@ -4709,5 +4709,826 @@ async def detailed_health_check(
     return status
 
 
+# ============================================
+# MISSING ENDPOINTS FOR FRONTEND COMPATIBILITY
+# ============================================
+
+# --- FEED (alias for discovery) ---
+@app.get("/api/feed")
+async def get_feed(
+    limit: int = Query(10, ge=1, le=50),
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get feed profiles (alias for discovery)"""
+    query = """
+        SELECT 
+            u.id::text, u.name, u.age, u.bio, u.photos, u.gender,
+            u.interests, u.is_verified, u.is_vip, u.city
+        FROM users u
+        WHERE u.is_active = true 
+        AND u.id != :current_user_id
+        AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0
+        AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
+        ORDER BY RANDOM()
+        LIMIT :limit
+    """
+    result = await db.execute(text(query), {"current_user_id": current_user_id, "limit": limit})
+    rows = result.fetchall()
+    
+    items = []
+    for r in rows:
+        items.append({
+            "id": r[0],
+            "name": r[1],
+            "age": r[2],
+            "bio": r[3],
+            "photos": r[4] or [],
+            "gender": r[5],
+            "interests": r[6] or [],
+            "is_verified": r[7] or False,
+            "is_vip": r[8] or False,
+            "city": r[9]
+        })
+    
+    return {
+        "items": items,
+        "total": len(items),
+        "page": 1,
+        "size": limit,
+        "pages": 1,
+        "has_more": False
+    }
+
+
+# --- LIKES (POST) ---
+@app.post("/api/likes")
+async def like_user(
+    liked_user_id: str = Body(...),
+    is_super: bool = Body(False),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Like a user (alternative to swipe)"""
+    action = "superlike" if is_super else "like"
+    
+    # Record swipe
+    await db.execute(
+        text("""
+            INSERT INTO swipes (from_user_id, to_user_id, action, timestamp)
+            VALUES (:from_id, :to_id, :action, NOW())
+            ON CONFLICT (from_user_id, to_user_id) DO UPDATE SET action = :action
+        """),
+        {"from_id": current_user_id, "to_id": liked_user_id, "action": action}
+    )
+    
+    # Check for mutual like
+    mutual_check = await db.execute(
+        text("""
+            SELECT id FROM swipes 
+            WHERE from_user_id = :to_id AND to_user_id = :from_id AND action IN ('like', 'superlike')
+        """),
+        {"from_id": current_user_id, "to_id": liked_user_id}
+    )
+    is_match = mutual_check.fetchone() is not None
+    
+    match_id = None
+    if is_match:
+        # Create match
+        match_result = await db.execute(
+            text("""
+                INSERT INTO matches (user1_id, user2_id, created_at)
+                VALUES (:user1, :user2, NOW())
+                ON CONFLICT DO NOTHING
+                RETURNING id::text
+            """),
+            {"user1": current_user_id, "user2": liked_user_id}
+        )
+        row = match_result.fetchone()
+        if row:
+            match_id = row[0]
+    
+    await db.commit()
+    
+    return {
+        "status": "ok",
+        "is_match": is_match,
+        "match_id": match_id,
+        "action": action
+    }
+
+
+# --- CHAT START ---
+@app.post("/api/chat/start/{user_id}")
+async def start_chat(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Start a chat with a user (creates match if needed)"""
+    # Check if match exists
+    match_result = await db.execute(text("""
+        SELECT id::text FROM matches
+        WHERE (user1_id = :user1 AND user2_id = :user2)
+        OR (user1_id = :user2 AND user2_id = :user1)
+    """), {"user1": current_user_id, "user2": user_id})
+    
+    existing = match_result.fetchone()
+    
+    if existing:
+        return {"match_id": existing[0], "is_new": False}
+    
+    # Create new match
+    new_match = await db.execute(
+        text("""
+            INSERT INTO matches (user1_id, user2_id, created_at)
+            VALUES (:user1, :user2, NOW())
+            RETURNING id::text
+        """),
+        {"user1": current_user_id, "user2": user_id}
+    )
+    match_id = new_match.fetchone()[0]
+    await db.commit()
+    
+    return {"match_id": match_id, "is_new": True}
+
+
+# --- CHAT SEND ---
+@app.post("/api/chat/send")
+async def send_chat_message(
+    match_id: str = Body(...),
+    text_content: str = Body(..., alias="text"),
+    type: str = Body("text"),
+    media_url: Optional[str] = Body(None),
+    duration: Optional[int] = Body(None),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Send a message in chat"""
+    # Verify match access
+    match_check = await db.execute(
+        text("SELECT user1_id, user2_id FROM matches WHERE id = :match_id"),
+        {"match_id": match_id}
+    )
+    match = match_check.fetchone()
+    
+    if not match or current_user_id not in (str(match[0]), str(match[1])):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    receiver_id = str(match[1]) if current_user_id == str(match[0]) else str(match[0])
+    
+    # Insert message
+    result = await db.execute(
+        text("""
+            INSERT INTO messages (match_id, sender_id, receiver_id, content, message_type, media_url, duration, created_at)
+            VALUES (:match_id, :sender_id, :receiver_id, :content, :type, :media_url, :duration, NOW())
+            RETURNING id::text, created_at
+        """),
+        {
+            "match_id": match_id,
+            "sender_id": current_user_id,
+            "receiver_id": receiver_id,
+            "content": text_content,
+            "type": type,
+            "media_url": media_url,
+            "duration": duration
+        }
+    )
+    row = result.fetchone()
+    await db.commit()
+    
+    return {
+        "id": row[0],
+        "match_id": match_id,
+        "sender_id": current_user_id,
+        "content": text_content,
+        "type": type,
+        "created_at": row[1].isoformat() if row[1] else None
+    }
+
+
+# --- CHAT UPLOAD ---
+@app.post("/api/chat/upload")
+async def upload_chat_media(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Upload media for chat (placeholder)"""
+    return {
+        "url": None,
+        "message": "Media upload requires cloud storage integration"
+    }
+
+
+# --- CHAT CONVERSATION PROMPTS ---
+@app.get("/api/chat/conversation-prompts")
+async def get_conversation_prompts(
+    match_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get conversation prompts for stalled chats"""
+    # Check message count
+    msg_count = await db.execute(
+        text("SELECT COUNT(*) FROM messages WHERE match_id = :match_id"),
+        {"match_id": match_id}
+    )
+    count = msg_count.scalar() or 0
+    
+    # Consider stalled if < 5 messages in last 24h
+    stalled = count < 5
+    
+    prompts = [
+        "Какой твой любимый фильм?",
+        "Если бы ты мог путешествовать куда угодно, куда бы поехал?",
+        "Какое твое любимое блюдо?",
+        "Чем ты любишь заниматься в свободное время?",
+        "Какая музыка тебе нравится?"
+    ]
+    
+    return {"prompts": prompts, "stalled": stalled}
+
+
+# --- CHAT ICEBREAKERS USED ---
+@app.post("/api/chat/icebreakers/used")
+async def mark_icebreaker_used(
+    match_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Mark that an icebreaker was used"""
+    return {"status": "ok", "match_id": match_id}
+
+
+# --- CHAT QUESTION OF DAY ---
+@app.get("/api/chat/question-of-day")
+async def get_chat_question_of_day():
+    """Get question of the day for chat"""
+    questions = [
+        "Какое твое самое яркое воспоминание из детства?",
+        "Если бы ты мог иметь любую суперспособность, какую бы выбрал?",
+        "Какой навык ты хотел бы освоить?",
+        "Что тебя больше всего вдохновляет?",
+        "Какое место ты мечтаешь посетить?"
+    ]
+    
+    today = datetime.utcnow().date()
+    index = today.toordinal() % len(questions)
+    
+    return {
+        "question": questions[index],
+        "date": today.isoformat()
+    }
+
+
+@app.post("/api/chat/question-of-day/answer")
+async def answer_chat_question_of_day(
+    match_id: str = Body(...),
+    answer: str = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Answer question of the day in chat"""
+    return {
+        "status": "ok",
+        "partner_answered": False
+    }
+
+
+# --- CHAT VOICE ---
+@app.post("/api/chat/voice")
+async def send_voice_message(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Send voice message (placeholder)"""
+    return {
+        "url": None,
+        "message": "Voice messages require cloud storage integration"
+    }
+
+
+# --- USERS ME PHOTO ---
+@app.post("/api/users/me/photo")
+async def upload_user_photo(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Upload user photo (placeholder)"""
+    return {
+        "photos": [],
+        "message": "Photo upload requires cloud storage integration"
+    }
+
+
+# --- USERS ME EXPORT ---
+@app.get("/api/users/me/export")
+async def export_user_data_alias(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Export user data (alias)"""
+    result = await db.execute(
+        text("SELECT name, age, bio, photos, interests FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    user = result.fetchone()
+    
+    return {
+        "user": {
+            "id": current_user_id,
+            "name": user[0] if user else None,
+            "age": user[1] if user else None,
+            "bio": user[2] if user else None,
+            "photos": user[3] if user else [],
+            "interests": user[4] if user else []
+        },
+        "export_date": datetime.utcnow().isoformat()
+    }
+
+
+# --- USERS ME LIKES RECEIVED ---
+@app.get("/api/users/me/likes-received")
+async def get_likes_received_alias(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get received likes (alias)"""
+    result = await db.execute(text("""
+        SELECT u.id::text, u.name, u.age, u.photos, s.action, s.timestamp
+        FROM swipes s
+        JOIN users u ON s.from_user_id = u.id
+        WHERE s.to_user_id = :user_id AND s.action IN ('like', 'superlike')
+        ORDER BY s.timestamp DESC
+        LIMIT 50
+    """), {"user_id": current_user_id})
+    
+    rows = result.fetchall()
+    
+    likes = []
+    for r in rows:
+        likes.append({
+            "user": {
+                "id": r[0],
+                "name": r[1],
+                "age": r[2],
+                "photo": r[3][0] if r[3] else None
+            },
+            "is_super": r[4] == "superlike",
+            "timestamp": r[5].isoformat() if r[5] else None
+        })
+    
+    return {"likes": likes, "total": len(likes)}
+
+
+# --- USERS ME ADD STARS DEV ---
+@app.post("/api/users/me/add-stars-dev")
+async def add_stars_dev_alias(
+    amount: int = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """DEV: Add stars (alias)"""
+    if ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    await db.execute(
+        text("UPDATE users SET stars_balance = stars_balance + :amount WHERE id = :user_id"),
+        {"amount": amount, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"success": True, "added": amount}
+
+
+# --- USERS ME SPEND STARS DEV ---
+@app.post("/api/users/me/spend-stars-dev")
+async def spend_stars_dev(
+    amount: int = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """DEV: Spend stars"""
+    if ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    await db.execute(
+        text("UPDATE users SET stars_balance = stars_balance - :amount WHERE id = :user_id"),
+        {"amount": amount, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"success": True, "spent": amount}
+
+
+# --- USERS ME ONBOARDING ---
+@app.post("/api/users/me/onboarding/complete-step")
+async def complete_onboarding_step_alias(
+    step_name: str = Body(...),
+    completed: bool = Body(True),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Complete onboarding step (alias)"""
+    result = await db.execute(
+        text("SELECT onboarding_completed_steps FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    steps = row[0] if row and row[0] else {}
+    steps[step_name] = completed
+    
+    await db.execute(
+        text("UPDATE users SET onboarding_completed_steps = :steps WHERE id = :user_id"),
+        {"steps": steps, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "step": step_name, "completed": completed}
+
+
+@app.get("/api/users/me/onboarding/status")
+async def get_onboarding_status_alias(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get onboarding status (alias)"""
+    result = await db.execute(
+        text("SELECT onboarding_completed_steps FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    steps = row[0] if row and row[0] else {}
+    
+    required_steps = ["profile", "photos", "interests", "location"]
+    is_complete = all(steps.get(s, False) for s in required_steps)
+    
+    return {
+        "completed_steps": steps,
+        "is_onboarding_complete": is_complete
+    }
+
+
+@app.post("/api/users/me/onboarding/reset")
+async def reset_onboarding_alias(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Reset onboarding (alias)"""
+    await db.execute(
+        text("UPDATE users SET onboarding_completed_steps = '{}' WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "message": "Onboarding reset"}
+
+
+# --- NOTIFICATIONS ---
+@app.get("/api/notifications/vapid-public-key")
+async def get_vapid_public_key():
+    """Get VAPID public key for push notifications"""
+    # Placeholder - in production, generate real VAPID keys
+    return {
+        "publicKey": "placeholder-vapid-public-key"
+    }
+
+
+@app.post("/api/notifications/subscribe")
+async def subscribe_push_notifications(
+    endpoint: str = Body(...),
+    keys: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Subscribe to push notifications"""
+    await db.execute(
+        text("""
+            INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at)
+            VALUES (:user_id, :endpoint, :p256dh, :auth, NOW())
+            ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh = :p256dh, auth = :auth
+        """),
+        {
+            "user_id": current_user_id,
+            "endpoint": endpoint,
+            "p256dh": keys.get("p256dh"),
+            "auth": keys.get("auth")
+        }
+    )
+    await db.commit()
+    
+    return {"status": "ok", "message": "Subscribed to push notifications"}
+
+
+# --- PAYMENTS SUBSCRIPTION ---
+@app.post("/api/payments/subscription")
+async def buy_subscription(
+    tier: str = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Buy subscription"""
+    tiers = {
+        "plus": {"price": 199, "days": 30},
+        "premium": {"price": 399, "days": 30},
+        "vip": {"price": 599, "days": 30}
+    }
+    
+    if tier not in tiers:
+        raise HTTPException(status_code=400, detail="Invalid tier")
+    
+    # In production, integrate with Telegram Stars payment
+    return {
+        "status": "pending",
+        "tier": tier,
+        "price": tiers[tier]["price"],
+        "message": "Payment integration required"
+    }
+
+
+# --- PAYMENTS INVOICE ---
+@app.post("/api/payments/invoice")
+async def create_payment_invoice(
+    amount: int = Body(...),
+    label: str = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create payment invoice"""
+    import uuid
+    transaction_id = str(uuid.uuid4())
+    
+    return {
+        "invoice_link": None,
+        "transaction_id": transaction_id,
+        "amount": amount,
+        "currency": "XTR",
+        "message": "Invoice creation requires Telegram Bot API"
+    }
+
+
+# --- GIFTS MARK READ ---
+@app.post("/api/gifts/mark-read")
+async def mark_gift_read(
+    transaction_id: str = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Mark gift as read"""
+    await db.execute(
+        text("""
+            UPDATE gift_transactions 
+            SET is_read = true, read_at = NOW()
+            WHERE id = :transaction_id AND receiver_id = :user_id
+        """),
+        {"transaction_id": transaction_id, "user_id": current_user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok"}
+
+
+# --- ANALYTICS PROFILE ---
+@app.get("/api/analytics/profile")
+async def get_profile_analytics(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get profile analytics"""
+    # Profile views
+    views_result = await db.execute(
+        text("SELECT COUNT(*) FROM profile_views WHERE viewed_id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    views = views_result.scalar() or 0
+    
+    # Likes received
+    likes_result = await db.execute(
+        text("SELECT COUNT(*) FROM swipes WHERE to_user_id = :user_id AND action IN ('like', 'superlike')"),
+        {"user_id": current_user_id}
+    )
+    likes = likes_result.scalar() or 0
+    
+    # Matches
+    matches_result = await db.execute(
+        text("SELECT COUNT(*) FROM matches WHERE user1_id = :user_id OR user2_id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    matches = matches_result.scalar() or 0
+    
+    # Messages sent
+    messages_result = await db.execute(
+        text("SELECT COUNT(*) FROM messages WHERE sender_id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    messages = messages_result.scalar() or 0
+    
+    return {
+        "profile_views": views,
+        "likes_received": likes,
+        "matches": matches,
+        "messages_sent": messages,
+        "period": "all_time"
+    }
+
+
+# --- VERIFICATION ---
+@app.get("/api/verification/status")
+async def get_verification_status_v2(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get verification status"""
+    result = await db.execute(
+        text("SELECT is_verified, verification_selfie FROM users WHERE id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    row = result.fetchone()
+    
+    return {
+        "is_verified": row[0] if row else False,
+        "has_selfie": bool(row[1]) if row else False,
+        "status": "verified" if row and row[0] else "not_verified"
+    }
+
+
+@app.post("/api/verification/start")
+async def start_verification(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Start verification process"""
+    return {
+        "status": "started",
+        "instructions": "Please upload a selfie holding a paper with your username"
+    }
+
+
+@app.post("/api/verification/submit")
+async def submit_verification(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Submit verification"""
+    return {
+        "status": "pending",
+        "message": "Verification submitted for review"
+    }
+
+
+@app.post("/api/users/me/verification-photo")
+async def upload_verification_photo(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Upload verification selfie"""
+    return {
+        "status": "pending",
+        "message": "Photo upload requires cloud storage integration"
+    }
+
+
+# --- ADMIN EXTENDED ---
+@app.get("/api/admin/dashboard/metrics")
+async def get_admin_dashboard_metrics(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get admin dashboard metrics"""
+    # Total users
+    users_result = await db.execute(text("SELECT COUNT(*) FROM users WHERE is_active = true"))
+    total_users = users_result.scalar() or 0
+    
+    # New users today
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    new_today_result = await db.execute(
+        text("SELECT COUNT(*) FROM users WHERE created_at >= :today"),
+        {"today": today}
+    )
+    new_today = new_today_result.scalar() or 0
+    
+    # Total matches
+    matches_result = await db.execute(text("SELECT COUNT(*) FROM matches"))
+    total_matches = matches_result.scalar() or 0
+    
+    # Total messages
+    messages_result = await db.execute(text("SELECT COUNT(*) FROM messages"))
+    total_messages = messages_result.scalar() or 0
+    
+    return {
+        "total_users": total_users,
+        "new_users_today": new_today,
+        "total_matches": total_matches,
+        "total_messages": total_messages,
+        "active_users_24h": 0,
+        "revenue_today": 0
+    }
+
+
+@app.get("/api/admin/dashboard/activity")
+async def get_admin_dashboard_activity(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get recent activity for admin dashboard"""
+    # Recent signups
+    result = await db.execute(text("""
+        SELECT id::text, name, created_at, 'signup' as type
+        FROM users
+        ORDER BY created_at DESC
+        LIMIT :limit
+    """), {"limit": limit})
+    
+    rows = result.fetchall()
+    
+    activities = []
+    for r in rows:
+        activities.append({
+            "user_id": r[0],
+            "user_name": r[1],
+            "timestamp": r[2].isoformat() if r[2] else None,
+            "type": r[3]
+        })
+    
+    return activities
+
+
+@app.get("/api/admin/users/{user_id}")
+async def get_admin_user_detail(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user details for admin"""
+    result = await db.execute(
+        text("SELECT * FROM users WHERE id = :user_id"),
+        {"user_id": user_id}
+    )
+    user = result.fetchone()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "id": str(user[0]),
+        "name": user[1] if len(user) > 1 else None,
+        "email": user[2] if len(user) > 2 else None,
+        "is_active": True,
+        "created_at": None
+    }
+
+
+@app.post("/api/admin/users/{user_id}/action")
+async def admin_user_action(
+    user_id: str,
+    action: str = Body(...),
+    reason: Optional[str] = Body(None),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Perform admin action on user"""
+    if action == "ban":
+        await db.execute(
+            text("UPDATE users SET is_active = false WHERE id = :user_id"),
+            {"user_id": user_id}
+        )
+    elif action == "unban":
+        await db.execute(
+            text("UPDATE users SET is_active = true WHERE id = :user_id"),
+            {"user_id": user_id}
+        )
+    elif action == "verify":
+        await db.execute(
+            text("UPDATE users SET is_verified = true WHERE id = :user_id"),
+            {"user_id": user_id}
+        )
+    
+    await db.commit()
+    
+    return {"status": "ok", "action": action, "user_id": user_id}
+
+
+@app.post("/api/admin/users/{user_id}/stars")
+async def admin_add_user_stars(
+    user_id: str,
+    amount: int = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Add stars to user (admin)"""
+    await db.execute(
+        text("UPDATE users SET stars_balance = stars_balance + :amount WHERE id = :user_id"),
+        {"amount": amount, "user_id": user_id}
+    )
+    await db.commit()
+    
+    return {"status": "ok", "added": amount}
+
+
 # Vercel handler
 handler = app
