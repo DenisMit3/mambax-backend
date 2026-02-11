@@ -80,8 +80,9 @@ export default function AIOnboardingFlow() {
         const initOnboarding = async () => {
             console.log("[Onboarding] Starting initialization...");
             // #region agent log
-            const debugLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('debug_logs') || '[]'); logs.push({t: Date.now(), m: msg, d: data}); localStorage.setItem('debug_logs', JSON.stringify(logs.slice(-50))); } catch(e){} };
+            const debugLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('debug_logs') || '[]'); logs.push({t: Date.now(), m: msg, d: data}); localStorage.setItem('debug_logs', JSON.stringify(logs.slice(-50))); console.log('[DEBUG]', msg, data); } catch(e){} };
             debugLog('Onboarding init', {url: window.location.href});
+            alert('[DEBUG] Onboarding page loaded! URL: ' + window.location.href);
             // #endregion
             setIsInitializing(true);
             setInitError(null);

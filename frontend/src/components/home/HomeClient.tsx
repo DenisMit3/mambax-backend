@@ -59,8 +59,9 @@ export function HomeClient() {
     const checkAuth = useCallback(async () => {
         console.log("[Home] checkAuth started");
         // #region agent log
-        const debugLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('debug_logs') || '[]'); logs.push({t: Date.now(), m: msg, d: data}); localStorage.setItem('debug_logs', JSON.stringify(logs.slice(-50))); } catch(e){} };
+        const debugLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('debug_logs') || '[]'); logs.push({t: Date.now(), m: msg, d: data}); localStorage.setItem('debug_logs', JSON.stringify(logs.slice(-50))); console.log('[DEBUG]', msg, data); } catch(e){} };
         debugLog('HomeClient checkAuth', {url: typeof window !== 'undefined' ? window.location.href : 'ssr'});
+        alert('[DEBUG] HomeClient loaded! URL: ' + window.location.href);
         // #endregion
         
         // Helper to check if profile is complete
