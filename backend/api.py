@@ -332,9 +332,10 @@ async def get_current_user(
     user_id: str = Depends(get_current_user_id)
 ):
     """Get current user profile"""
+    # Get user basic info
     result = await db.execute(
         text("""
-            SELECT id, name, age, gender, bio, photos, interests, is_vip, is_complete, stars_balance
+            SELECT id, name, age, gender, bio, is_vip, is_complete, stars_balance
             FROM users WHERE id = :user_id
         """),
         {"user_id": user_id}
@@ -344,17 +345,31 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Get photos from user_photos table
+    photos_result = await db.execute(
+        text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+        {"user_id": user_id}
+    )
+    photos = [row[0] for row in photos_result.fetchall()]
+    
+    # Get interests from user_interests table
+    interests_result = await db.execute(
+        text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+        {"user_id": user_id}
+    )
+    interests = [row[0] for row in interests_result.fetchall()]
+    
     return UserProfile(
         id=str(user[0]),
         name=user[1],
         age=user[2],
         gender=user[3],
         bio=user[4],
-        photos=user[5] or [],
-        interests=user[6] or [],
-        is_vip=user[7] or False,
-        is_complete=user[8] or False,
-        stars_balance=user[9] or 0
+        photos=photos,
+        interests=interests,
+        is_vip=user[5] or False,
+        is_complete=user[6] or False,
+        stars_balance=user[7] or 0
     )
 
 
@@ -380,9 +395,6 @@ async def update_current_user(
     if data.bio is not None:
         updates.append("bio = :bio")
         params["bio"] = data.bio
-    if data.interests is not None:
-        updates.append("interests = :interests")
-        params["interests"] = data.interests
     if data.latitude is not None:
         updates.append("latitude = :latitude")
         params["latitude"] = data.latitude
@@ -398,6 +410,21 @@ async def update_current_user(
         await db.execute(text(query), params)
         await db.commit()
     
+    # Handle interests separately in user_interests table
+    if data.interests is not None:
+        # Delete old interests
+        await db.execute(
+            text("DELETE FROM user_interests WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+        # Insert new interests
+        for tag in data.interests:
+            await db.execute(
+                text("INSERT INTO user_interests (user_id, tag) VALUES (:user_id, :tag)"),
+                {"user_id": user_id, "tag": tag}
+            )
+        await db.commit()
+    
     return await get_current_user(db, user_id)
 
 
@@ -410,7 +437,7 @@ async def get_user_profile(
     """Get another user's public profile"""
     result = await db.execute(
         text("""
-            SELECT id, name, age, gender, bio, photos, interests, is_vip
+            SELECT id, name, age, gender, bio, is_vip
             FROM users WHERE id = :user_id AND is_active = true
         """),
         {"user_id": user_id}
@@ -420,15 +447,29 @@ async def get_user_profile(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Get photos from user_photos table
+    photos_result = await db.execute(
+        text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+        {"user_id": user_id}
+    )
+    photos = [row[0] for row in photos_result.fetchall()]
+    
+    # Get interests from user_interests table
+    interests_result = await db.execute(
+        text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+        {"user_id": user_id}
+    )
+    interests = [row[0] for row in interests_result.fetchall()]
+    
     return {
         "id": str(user[0]),
         "name": user[1],
         "age": user[2],
         "gender": user[3],
         "bio": user[4],
-        "photos": user[5] or [],
-        "interests": user[6] or [],
-        "is_vip": user[7] or False
+        "photos": photos,
+        "interests": interests,
+        "is_vip": user[5] or False
     }
 
 
@@ -445,15 +486,15 @@ async def get_discovery_profiles(
     """Get profiles for discovery feed (excluding already swiped)"""
     result = await db.execute(text("""
         SELECT 
-            u.id::text, u.name, u.age, u.bio, u.photos, u.gender, u.is_vip, u.interests
+            u.id::text, u.name, u.age, u.bio, u.gender, u.is_vip
         FROM users u
         WHERE u.is_active = true 
+        AND u.is_complete = true
         AND u.id != :current_user_id
-        AND u.photos IS NOT NULL 
-        AND array_length(u.photos, 1) > 0
         AND u.id NOT IN (
             SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id
         )
+        AND EXISTS (SELECT 1 FROM user_photos WHERE user_id = u.id)
         ORDER BY RANDOM() 
         LIMIT :limit
     """), {"current_user_id": current_user_id, "limit": limit})
@@ -462,15 +503,31 @@ async def get_discovery_profiles(
     
     profiles = []
     for row in rows:
+        user_id = row[0]
+        
+        # Get photos
+        photos_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+            {"user_id": user_id}
+        )
+        photos = [r[0] for r in photos_result.fetchall()]
+        
+        # Get interests
+        interests_result = await db.execute(
+            text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+        interests = [r[0] for r in interests_result.fetchall()]
+        
         profiles.append({
-            "id": row[0],
+            "id": user_id,
             "name": row[1],
             "age": row[2],
             "bio": row[3],
-            "photos": row[4] or [],
-            "gender": row[5],
-            "is_vip": row[6] or False,
-            "interests": row[7] or []
+            "photos": photos,
+            "gender": row[4],
+            "is_vip": row[5] or False,
+            "interests": interests
         })
     
     return {"profiles": profiles, "total": len(profiles)}
@@ -766,8 +823,7 @@ async def get_received_likes(
             s.action,
             s.timestamp,
             u.name,
-            u.age,
-            u.photos
+            u.age
         FROM swipes s
         JOIN users u ON s.from_user_id = u.id
         WHERE s.to_user_id = :user_id 
@@ -781,13 +837,21 @@ async def get_received_likes(
     
     likes = []
     for row in rows:
+        user_id = row[0]
+        # Get photos
+        photos_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at LIMIT 1"),
+            {"user_id": user_id}
+        )
+        photos = [r[0] for r in photos_result.fetchall()]
+        
         likes.append({
-            "id": row[0],
+            "id": user_id,
             "isSuper": row[1] == "superlike",
             "likedAt": row[2].isoformat() if row[2] else None,
             "name": row[3],
             "age": row[4],
-            "photos": row[5] or []
+            "photos": photos
         })
     
     return {"likes": likes, "total": len(likes)}
@@ -984,7 +1048,7 @@ async def get_blocked_users(
 ):
     """Get list of blocked users"""
     result = await db.execute(text("""
-        SELECT b.blocked_id::text, b.reason, b.created_at, u.name, u.photos
+        SELECT b.blocked_id::text, b.reason, b.created_at, u.name
         FROM blocks b
         JOIN users u ON b.blocked_id = u.id
         WHERE b.blocker_id = :user_id
@@ -995,12 +1059,20 @@ async def get_blocked_users(
     
     blocked = []
     for row in rows:
+        user_id = row[0]
+        # Get first photo
+        photo_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at LIMIT 1"),
+            {"user_id": user_id}
+        )
+        photo_row = photo_result.fetchone()
+        
         blocked.append({
-            "id": row[0],
+            "id": user_id,
             "reason": row[1],
             "blocked_at": row[2].isoformat() if row[2] else None,
             "name": row[3],
-            "photo": row[4][0] if row[4] else None
+            "photo": photo_row[0] if photo_row else None
         })
     
     return {"blocked": blocked, "total": len(blocked)}
@@ -1197,7 +1269,7 @@ async def get_received_gifts(
             gt.id::text, gt.sender_id::text, gt.gift_id::text, gt.price_paid,
             gt.message, gt.is_anonymous, gt.is_read, gt.created_at,
             g.name as gift_name, g.image_url,
-            u.name as sender_name, u.photos as sender_photos
+            u.name as sender_name
         FROM gift_transactions gt
         JOIN virtual_gifts g ON gt.gift_id = g.id
         LEFT JOIN users u ON gt.sender_id = u.id
@@ -1210,6 +1282,15 @@ async def get_received_gifts(
     
     gifts = []
     for r in rows:
+        sender_photo = None
+        if not r[5] and r[1]:  # Not anonymous and has sender_id
+            photo_result = await db.execute(
+                text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at LIMIT 1"),
+                {"user_id": r[1]}
+            )
+            photo_row = photo_result.fetchone()
+            sender_photo = photo_row[0] if photo_row else None
+        
         gifts.append({
             "id": r[0],
             "sender_id": None if r[5] else r[1],  # Hide if anonymous
@@ -1222,7 +1303,7 @@ async def get_received_gifts(
             "gift_name": r[8],
             "gift_image": r[9],
             "sender_name": "Anonymous" if r[5] else r[10],
-            "sender_photo": None if r[5] else (r[11][0] if r[11] else None)
+            "sender_photo": sender_photo
         })
     
     # Get unread count
@@ -1247,7 +1328,7 @@ async def get_sent_gifts(
             gt.id::text, gt.receiver_id::text, gt.gift_id::text, gt.price_paid,
             gt.message, gt.is_anonymous, gt.created_at,
             g.name as gift_name, g.image_url,
-            u.name as receiver_name, u.photos as receiver_photos
+            u.name as receiver_name
         FROM gift_transactions gt
         JOIN virtual_gifts g ON gt.gift_id = g.id
         JOIN users u ON gt.receiver_id = u.id
@@ -1260,6 +1341,15 @@ async def get_sent_gifts(
     
     gifts = []
     for r in rows:
+        receiver_photo = None
+        if r[1]:  # Has receiver_id
+            photo_result = await db.execute(
+                text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at LIMIT 1"),
+                {"user_id": r[1]}
+            )
+            photo_row = photo_result.fetchone()
+            receiver_photo = photo_row[0] if photo_row else None
+        
         gifts.append({
             "id": r[0],
             "receiver_id": r[1],
@@ -1271,7 +1361,7 @@ async def get_sent_gifts(
             "gift_name": r[7],
             "gift_image": r[8],
             "receiver_name": r[9],
-            "receiver_photo": r[10][0] if r[10] else None
+            "receiver_photo": receiver_photo
         })
     
     # Get total spent
@@ -2211,7 +2301,7 @@ async def get_admin_verifications(
     result = await db.execute(text("""
         SELECT 
             vr.id::text, vr.user_id::text, vr.status, vr.created_at,
-            u.name, u.photos, u.verification_selfie
+            u.name, u.verification_selfie
         FROM verification_requests vr
         JOIN users u ON vr.user_id = u.id
         WHERE vr.status = :status
@@ -2223,14 +2313,22 @@ async def get_admin_verifications(
     
     requests = []
     for r in rows:
+        user_id = r[1]
+        # Get photos
+        photos_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+            {"user_id": user_id}
+        )
+        photos = [p[0] for p in photos_result.fetchall()]
+        
         requests.append({
             "id": r[0],
-            "user_id": r[1],
+            "user_id": user_id,
             "status": r[2],
             "created_at": r[3].isoformat() if r[3] else None,
             "user_name": r[4],
-            "user_photos": r[5] or [],
-            "verification_selfie": r[6]
+            "user_photos": photos,
+            "verification_selfie": r[5]
         })
     
     return {"requests": requests, "total": len(requests)}
@@ -2356,10 +2454,11 @@ async def discover_profiles(
     """Discover profiles with filters"""
     query = """
         SELECT 
-            u.id::text, u.name, u.age, u.bio, u.photos, u.gender, 
-            u.is_vip, u.interests, u.is_verified
+            u.id::text, u.name, u.age, u.bio, u.gender, 
+            u.is_vip, u.is_verified
         FROM users u
         WHERE u.is_active = true 
+        AND u.is_complete = true
         AND u.id != :current_user_id
         AND u.age >= :age_min AND u.age <= :age_max
     """
@@ -2379,7 +2478,7 @@ async def discover_profiles(
         query += " AND u.is_verified = true"
     
     if filters.with_photos_only:
-        query += " AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0"
+        query += " AND EXISTS (SELECT 1 FROM user_photos WHERE user_id = u.id)"
     
     # Exclude already swiped
     query += " AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)"
@@ -2391,16 +2490,31 @@ async def discover_profiles(
     
     profiles = []
     for r in rows:
+        user_id = r[0]
+        # Get photos
+        photos_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+            {"user_id": user_id}
+        )
+        photos = [p[0] for p in photos_result.fetchall()]
+        
+        # Get interests
+        interests_result = await db.execute(
+            text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+        interests = [i[0] for i in interests_result.fetchall()]
+        
         profiles.append({
-            "id": r[0],
+            "id": user_id,
             "name": r[1],
             "age": r[2],
             "bio": r[3],
-            "photos": r[4] or [],
-            "gender": r[5],
-            "is_vip": r[6] or False,
-            "interests": r[7] or [],
-            "is_verified": r[8] or False
+            "photos": photos,
+            "gender": r[4],
+            "is_vip": r[5] or False,
+            "interests": interests,
+            "is_verified": r[6] or False
         })
     
     return {"profiles": profiles, "total": len(profiles)}
@@ -2414,20 +2528,21 @@ async def get_daily_picks(
     """Get AI-curated daily picks (5 profiles)"""
     # Get user preferences
     user_result = await db.execute(
-        text("SELECT gender, interests FROM users WHERE id = :user_id"),
+        text("SELECT gender FROM users WHERE id = :user_id"),
         {"user_id": current_user_id}
     )
     user = user_result.fetchone()
     
-    # Simple matching: opposite gender, similar interests
+    # Simple matching: users with photos who haven't been swiped
     query = """
         SELECT 
-            u.id::text, u.name, u.age, u.bio, u.photos, u.interests, u.is_verified
+            u.id::text, u.name, u.age, u.bio, u.is_verified
         FROM users u
         WHERE u.is_active = true 
+        AND u.is_complete = true
         AND u.id != :current_user_id
-        AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0
         AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
+        AND EXISTS (SELECT 1 FROM user_photos WHERE user_id = u.id)
         ORDER BY 
             CASE WHEN u.is_verified THEN 0 ELSE 1 END,
             RANDOM()
@@ -2439,14 +2554,30 @@ async def get_daily_picks(
     
     picks = []
     for r in rows:
+        user_id = r[0]
+        
+        # Get photos for this user
+        photos_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+            {"user_id": user_id}
+        )
+        photos = [row[0] for row in photos_result.fetchall()]
+        
+        # Get interests for this user
+        interests_result = await db.execute(
+            text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+        interests = [row[0] for row in interests_result.fetchall()]
+        
         picks.append({
-            "id": r[0],
+            "id": user_id,
             "name": r[1],
             "age": r[2],
             "bio": r[3],
-            "photos": r[4] or [],
-            "interests": r[5] or [],
-            "is_verified": r[6] or False,
+            "photos": photos,
+            "interests": interests,
+            "is_verified": r[4] or False,
             "match_reason": "Daily pick for you"
         })
     
@@ -2670,10 +2801,17 @@ async def get_icebreakers(
     partner_id = str(match[1]) if current_user_id == str(match[0]) else str(match[0])
     
     partner_result = await db.execute(
-        text("SELECT name, interests, bio FROM users WHERE id = :user_id"),
+        text("SELECT name, bio FROM users WHERE id = :user_id"),
         {"user_id": partner_id}
     )
     partner = partner_result.fetchone()
+    
+    # Get partner interests from user_interests table
+    interests_result = await db.execute(
+        text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+        {"user_id": partner_id}
+    )
+    interests = [row[0] for row in interests_result.fetchall()]
     
     # Generate icebreakers based on partner info
     icebreakers = [
@@ -2685,10 +2823,8 @@ async def get_icebreakers(
     ]
     
     # Add interest-based icebreaker if available
-    if partner and partner[1]:
-        interests = partner[1]
-        if interests:
-            icebreakers.append(f"Вижу, тебе нравится {interests[0]}! Расскажи подробнее?")
+    if interests:
+        icebreakers.append(f"Вижу, тебе нравится {interests[0]}! Расскажи подробнее?")
     
     return {"icebreakers": icebreakers[:5]}
 
@@ -2766,7 +2902,7 @@ async def get_profile_completion(
     """Get profile completion status"""
     result = await db.execute(
         text("""
-            SELECT name, age, gender, bio, photos, interests, is_verified
+            SELECT name, age, gender, bio, is_verified
             FROM users WHERE id = :user_id
         """),
         {"user_id": current_user_id}
@@ -2776,14 +2912,28 @@ async def get_profile_completion(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Get photos count from user_photos table
+    photos_result = await db.execute(
+        text("SELECT COUNT(*) FROM user_photos WHERE user_id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    photos_count = photos_result.scalar() or 0
+    
+    # Get interests count from user_interests table
+    interests_result = await db.execute(
+        text("SELECT COUNT(*) FROM user_interests WHERE user_id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    interests_count = interests_result.scalar() or 0
+    
     completion = {
         "name": bool(user[0]),
         "age": bool(user[1]),
         "gender": bool(user[2]),
         "bio": bool(user[3]),
-        "photos": bool(user[4] and len(user[4]) > 0),
-        "interests": bool(user[5] and len(user[5]) > 0),
-        "verified": bool(user[6])
+        "photos": photos_count > 0,
+        "interests": interests_count > 0,
+        "verified": bool(user[4])
     }
     
     completed = sum(completion.values())
@@ -3188,11 +3338,20 @@ async def reorder_photos(
     db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
-    """Reorder user photos"""
+    """Reorder user photos - delete all and re-insert in new order"""
+    # Delete existing photos
     await db.execute(
-        text("UPDATE users SET photos = :photos WHERE id = :user_id"),
-        {"photos": data.photo_urls, "user_id": current_user_id}
+        text("DELETE FROM user_photos WHERE user_id = :user_id"),
+        {"user_id": current_user_id}
     )
+    
+    # Insert photos in new order
+    for url in data.photo_urls:
+        await db.execute(
+            text("INSERT INTO user_photos (id, user_id, url, created_at) VALUES (gen_random_uuid(), :user_id, :url, NOW())"),
+            {"user_id": current_user_id, "url": url}
+        )
+    
     await db.commit()
     
     return {"status": "ok", "photos": data.photo_urls}
@@ -3205,29 +3364,37 @@ async def delete_photo(
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Delete photo by index"""
+    # Get photos from user_photos table
     result = await db.execute(
-        text("SELECT photos FROM users WHERE id = :user_id"),
+        text("SELECT id, url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
         {"user_id": current_user_id}
     )
-    row = result.fetchone()
+    photos = result.fetchall()
     
-    if not row or not row[0]:
+    if not photos:
         raise HTTPException(status_code=404, detail="No photos found")
-    
-    photos = list(row[0])
     
     if photo_index < 0 or photo_index >= len(photos):
         raise HTTPException(status_code=400, detail="Invalid photo index")
     
-    deleted = photos.pop(photo_index)
+    photo_to_delete = photos[photo_index]
+    deleted_url = photo_to_delete[1]
     
+    # Delete the photo
     await db.execute(
-        text("UPDATE users SET photos = :photos WHERE id = :user_id"),
-        {"photos": photos, "user_id": current_user_id}
+        text("DELETE FROM user_photos WHERE id = :photo_id"),
+        {"photo_id": photo_to_delete[0]}
     )
     await db.commit()
     
-    return {"status": "ok", "deleted": deleted, "remaining": photos}
+    # Get remaining photos
+    remaining_result = await db.execute(
+        text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+        {"user_id": current_user_id}
+    )
+    remaining = [row[0] for row in remaining_result.fetchall()]
+    
+    return {"status": "ok", "deleted": deleted_url, "remaining": remaining}
 
 
 # ============================================
@@ -3280,10 +3447,17 @@ async def update_interests(
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Update user interests"""
+    # Delete old interests
     await db.execute(
-        text("UPDATE users SET interests = :interests WHERE id = :user_id"),
-        {"interests": interests, "user_id": current_user_id}
+        text("DELETE FROM user_interests WHERE user_id = :user_id"),
+        {"user_id": current_user_id}
     )
+    # Insert new interests
+    for tag in interests:
+        await db.execute(
+            text("INSERT INTO user_interests (user_id, tag) VALUES (:user_id, :tag)"),
+            {"user_id": current_user_id, "tag": tag}
+        )
     await db.commit()
     
     return {"status": "ok", "interests": interests}
@@ -3369,9 +3543,9 @@ async def get_compatibility(
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Calculate compatibility score with another user"""
-    # Get both users
+    # Verify both users exist
     result = await db.execute(
-        text("SELECT id::text, interests, prompts FROM users WHERE id IN (:user1, :user2)"),
+        text("SELECT id::text FROM users WHERE id IN (:user1, :user2)"),
         {"user1": current_user_id, "user2": user_id}
     )
     rows = result.fetchall()
@@ -3379,17 +3553,23 @@ async def get_compatibility(
     if len(rows) < 2:
         raise HTTPException(status_code=404, detail="User not found")
     
-    user1 = None
-    user2 = None
-    for r in rows:
-        if r[0] == current_user_id:
-            user1 = {"interests": r[1] or [], "prompts": r[2] or {}}
-        else:
-            user2 = {"interests": r[1] or [], "prompts": r[2] or {}}
+    # Get interests for current user
+    interests1_result = await db.execute(
+        text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    interests1 = [row[0] for row in interests1_result.fetchall()]
+    
+    # Get interests for other user
+    interests2_result = await db.execute(
+        text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+        {"user_id": user_id}
+    )
+    interests2 = [row[0] for row in interests2_result.fetchall()]
     
     # Calculate interest overlap
-    common_interests = set(user1["interests"]) & set(user2["interests"])
-    total_interests = set(user1["interests"]) | set(user2["interests"])
+    common_interests = set(interests1) & set(interests2)
+    total_interests = set(interests1) | set(interests2)
     
     interest_score = len(common_interests) / max(len(total_interests), 1) * 100
     
@@ -3499,7 +3679,7 @@ async def get_who_viewed_me(
     
     result = await db.execute(text("""
         SELECT 
-            u.id::text, u.name, u.age, u.photos, pv.viewed_at
+            u.id::text, u.name, u.age, pv.viewed_at
         FROM profile_views pv
         JOIN users u ON pv.viewer_id = u.id
         WHERE pv.viewed_id = :user_id
@@ -3511,12 +3691,20 @@ async def get_who_viewed_me(
     
     viewers = []
     for r in rows:
+        user_id = r[0]
+        # Get first photo
+        photo_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at LIMIT 1"),
+            {"user_id": user_id}
+        )
+        photo_row = photo_result.fetchone()
+        
         viewers.append({
-            "id": r[0],
+            "id": user_id,
             "name": r[1],
             "age": r[2],
-            "photo": r[3][0] if r[3] else None,
-            "viewed_at": r[4].isoformat() if r[4] else None
+            "photo": photo_row[0] if photo_row else None,
+            "viewed_at": r[3].isoformat() if r[3] else None
         })
     
     return {"viewers": viewers, "total": len(viewers)}
@@ -3596,11 +3784,12 @@ async def get_spotlight_profiles(
     """Get spotlight/featured profiles"""
     result = await db.execute(text("""
         SELECT 
-            u.id::text, u.name, u.age, u.photos, u.bio, u.is_verified
+            u.id::text, u.name, u.age, u.bio, u.is_verified
         FROM users u
         WHERE u.is_active = true 
+        AND u.is_complete = true
         AND u.id != :current_user_id
-        AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0
+        AND EXISTS (SELECT 1 FROM user_photos WHERE user_id = u.id)
         AND (u.is_vip = true OR u.is_verified = true)
         AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
         ORDER BY 
@@ -3613,13 +3802,21 @@ async def get_spotlight_profiles(
     
     profiles = []
     for r in rows:
+        user_id = r[0]
+        # Get photos
+        photos_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+            {"user_id": user_id}
+        )
+        photos = [p[0] for p in photos_result.fetchall()]
+        
         profiles.append({
-            "id": r[0],
+            "id": user_id,
             "name": r[1],
             "age": r[2],
-            "photos": r[3] or [],
-            "bio": r[4],
-            "is_verified": r[5]
+            "photos": photos,
+            "bio": r[3],
+            "is_verified": r[4]
         })
     
     return {"profiles": profiles}
@@ -4578,30 +4775,27 @@ async def get_match_suggestions(
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Get AI-powered match suggestions"""
-    # Get user info for matching
-    user_result = await db.execute(
-        text("SELECT interests, matching_preferences FROM users WHERE id = :user_id"),
+    # Get user interests from user_interests table
+    interests_result = await db.execute(
+        text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
         {"user_id": current_user_id}
     )
-    user = user_result.fetchone()
+    user_interests = [row[0] for row in interests_result.fetchall()]
     
-    user_interests = user[0] if user and user[0] else []
-    
-    # Find users with similar interests
+    # Find users with photos who haven't been swiped
     result = await db.execute(text("""
         SELECT 
-            u.id::text, u.name, u.age, u.photos, u.bio, u.interests, u.is_verified,
-            (SELECT COUNT(*) FROM unnest(u.interests) i WHERE i = ANY(:interests)) as common_count
+            u.id::text, u.name, u.age, u.bio, u.is_verified
         FROM users u
         WHERE u.is_active = true 
+        AND u.is_complete = true
         AND u.id != :current_user_id
-        AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0
         AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
-        ORDER BY common_count DESC, u.is_verified DESC, RANDOM()
+        AND EXISTS (SELECT 1 FROM user_photos WHERE user_id = u.id)
+        ORDER BY u.is_verified DESC, RANDOM()
         LIMIT :limit
     """), {
         "current_user_id": current_user_id,
-        "interests": user_interests,
         "limit": limit
     })
     
@@ -4609,14 +4803,30 @@ async def get_match_suggestions(
     
     suggestions = []
     for r in rows:
-        common = list(set(r[5] or []) & set(user_interests)) if r[5] else []
+        user_id = r[0]
+        
+        # Get photos for this user
+        photos_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+            {"user_id": user_id}
+        )
+        photos = [row[0] for row in photos_result.fetchall()]
+        
+        # Get interests for this user
+        interests_result = await db.execute(
+            text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+        interests = [row[0] for row in interests_result.fetchall()]
+        
+        common = list(set(interests) & set(user_interests))
         suggestions.append({
-            "id": r[0],
+            "id": user_id,
             "name": r[1],
             "age": r[2],
-            "photos": r[3] or [],
-            "bio": r[4],
-            "is_verified": r[6],
+            "photos": photos,
+            "bio": r[3],
+            "is_verified": r[4],
             "common_interests": common,
             "match_score": min(50 + len(common) * 10, 99)
         })
@@ -4725,12 +4935,13 @@ async def get_feed(
     """Get feed profiles (alias for discovery)"""
     query = """
         SELECT 
-            u.id::text, u.name, u.age, u.bio, u.photos, u.gender,
-            u.interests, u.is_verified, u.is_vip, u.city
+            u.id::text, u.name, u.age, u.bio, u.gender,
+            u.is_verified, u.is_vip, u.city
         FROM users u
         WHERE u.is_active = true 
+        AND u.is_complete = true
         AND u.id != :current_user_id
-        AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0
+        AND EXISTS (SELECT 1 FROM user_photos WHERE user_id = u.id)
         AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
         ORDER BY RANDOM()
         LIMIT :limit
@@ -4740,17 +4951,32 @@ async def get_feed(
     
     items = []
     for r in rows:
+        user_id = r[0]
+        # Get photos
+        photos_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+            {"user_id": user_id}
+        )
+        photos = [p[0] for p in photos_result.fetchall()]
+        
+        # Get interests
+        interests_result = await db.execute(
+            text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+        interests = [i[0] for i in interests_result.fetchall()]
+        
         items.append({
-            "id": r[0],
+            "id": user_id,
             "name": r[1],
             "age": r[2],
             "bio": r[3],
-            "photos": r[4] or [],
-            "gender": r[5],
-            "interests": r[6] or [],
-            "is_verified": r[7] or False,
-            "is_vip": r[8] or False,
-            "city": r[9]
+            "photos": photos,
+            "gender": r[4],
+            "interests": interests,
+            "is_verified": r[5] or False,
+            "is_vip": r[6] or False,
+            "city": r[7]
         })
     
     return {
@@ -5031,10 +5257,24 @@ async def export_user_data_alias(
 ):
     """Export user data (alias)"""
     result = await db.execute(
-        text("SELECT name, age, bio, photos, interests FROM users WHERE id = :user_id"),
+        text("SELECT name, age, bio FROM users WHERE id = :user_id"),
         {"user_id": current_user_id}
     )
     user = result.fetchone()
+    
+    # Get photos from user_photos table
+    photos_result = await db.execute(
+        text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+        {"user_id": current_user_id}
+    )
+    photos = [row[0] for row in photos_result.fetchall()]
+    
+    # Get interests from user_interests table
+    interests_result = await db.execute(
+        text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+        {"user_id": current_user_id}
+    )
+    interests = [row[0] for row in interests_result.fetchall()]
     
     return {
         "user": {
@@ -5042,8 +5282,8 @@ async def export_user_data_alias(
             "name": user[0] if user else None,
             "age": user[1] if user else None,
             "bio": user[2] if user else None,
-            "photos": user[3] if user else [],
-            "interests": user[4] if user else []
+            "photos": photos,
+            "interests": interests
         },
         "export_date": datetime.utcnow().isoformat()
     }
@@ -5057,7 +5297,7 @@ async def get_likes_received_alias(
 ):
     """Get received likes (alias)"""
     result = await db.execute(text("""
-        SELECT u.id::text, u.name, u.age, u.photos, s.action, s.timestamp
+        SELECT u.id::text, u.name, u.age, s.action, s.timestamp
         FROM swipes s
         JOIN users u ON s.from_user_id = u.id
         WHERE s.to_user_id = :user_id AND s.action IN ('like', 'superlike')
@@ -5069,15 +5309,23 @@ async def get_likes_received_alias(
     
     likes = []
     for r in rows:
+        user_id = r[0]
+        # Get first photo
+        photo_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at LIMIT 1"),
+            {"user_id": user_id}
+        )
+        photo_row = photo_result.fetchone()
+        
         likes.append({
             "user": {
-                "id": r[0],
+                "id": user_id,
                 "name": r[1],
                 "age": r[2],
-                "photo": r[3][0] if r[3] else None
+                "photo": photo_row[0] if photo_row else None
             },
-            "is_super": r[4] == "superlike",
-            "timestamp": r[5].isoformat() if r[5] else None
+            "is_super": r[3] == "superlike",
+            "timestamp": r[4].isoformat() if r[4] else None
         })
     
     return {"likes": likes, "total": len(likes)}
@@ -6435,7 +6683,7 @@ async def get_smart_filters(
     """Get smart filter suggestions based on user preferences"""
     # Get user data for personalized filters
     user_result = await db.execute(
-        text("SELECT age, gender, interests FROM users WHERE id = :user_id"),
+        text("SELECT age, gender FROM users WHERE id = :user_id"),
         {"user_id": current_user_id}
     )
     user = user_result.fetchone()
@@ -6484,11 +6732,12 @@ async def refresh_daily_picks(
     # Get new picks
     result = await db.execute(text("""
         SELECT 
-            u.id::text, u.name, u.age, u.bio, u.photos, u.interests, u.is_verified
+            u.id::text, u.name, u.age, u.bio, u.is_verified
         FROM users u
         WHERE u.is_active = true 
+        AND u.is_complete = true
         AND u.id != :current_user_id
-        AND u.photos IS NOT NULL AND array_length(u.photos, 1) > 0
+        AND EXISTS (SELECT 1 FROM user_photos WHERE user_id = u.id)
         AND u.id NOT IN (SELECT to_user_id FROM swipes WHERE from_user_id = :current_user_id)
         ORDER BY RANDOM()
         LIMIT 5
@@ -6498,14 +6747,29 @@ async def refresh_daily_picks(
     
     picks = []
     for r in rows:
+        user_id = r[0]
+        # Get photos
+        photos_result = await db.execute(
+            text("SELECT url FROM user_photos WHERE user_id = :user_id ORDER BY created_at"),
+            {"user_id": user_id}
+        )
+        photos = [p[0] for p in photos_result.fetchall()]
+        
+        # Get interests
+        interests_result = await db.execute(
+            text("SELECT tag FROM user_interests WHERE user_id = :user_id"),
+            {"user_id": user_id}
+        )
+        interests = [i[0] for i in interests_result.fetchall()]
+        
         picks.append({
-            "id": r[0],
+            "id": user_id,
             "name": r[1],
             "age": r[2],
             "bio": r[3],
-            "photos": r[4] or [],
-            "interests": r[5] or [],
-            "is_verified": r[6] or False,
+            "photos": photos,
+            "interests": interests,
+            "is_verified": r[4] or False,
             "match_reason": "Refreshed pick for you"
         })
     
