@@ -92,6 +92,7 @@ export default function AIOnboardingFlow() {
             console.log("[Onboarding] Existing token:", !!token);
             // #region agent log
             debugLog('Token check', {hasToken: !!token});
+            alert('[DEBUG] Step 1 - Token: ' + (token ? 'EXISTS' : 'NO TOKEN'));
             // #endregion
             
             // Step 2: If no token, try Telegram auth
@@ -100,13 +101,16 @@ export default function AIOnboardingFlow() {
                 if (initData && initData.trim()) {
                     console.log("[Onboarding] No token, attempting Telegram auth...");
                     console.log("[Onboarding] initData length:", initData.length);
+                    alert('[DEBUG] Step 2 - Trying Telegram auth...');
                     try {
                         const result = await authService.telegramLogin(initData);
                         console.log("[Onboarding] Telegram auth success, has_profile:", result.has_profile);
+                        alert('[DEBUG] Step 2 - Telegram auth SUCCESS');
                         token = localStorage.getItem('accessToken');
                     } catch (err: any) {
                         console.error("[Onboarding] Telegram auth failed:", err);
                         const errorMsg = err?.message || err?.data?.detail || 'Unknown error';
+                        alert('[DEBUG] Step 2 - Telegram auth FAILED: ' + errorMsg);
                         setInitError(`Ошибка авторизации: ${errorMsg}`);
                         setIsInitializing(false);
                         return;
@@ -118,9 +122,11 @@ export default function AIOnboardingFlow() {
             if (!token) {
                 const hasTelegramData = typeof window !== 'undefined' && !!window.Telegram?.WebApp?.initData;
                 console.warn("[Onboarding] No auth available, hasTelegramData:", hasTelegramData);
+                alert('[DEBUG] Step 3 - NO TOKEN, hasTelegramData: ' + hasTelegramData);
                 
                 if (!hasTelegramData) {
                     // Not in Telegram Mini App - redirect to login
+                    alert('[DEBUG] Step 3 - Redirecting to /auth/phone');
                     window.location.href = '/auth/phone';
                     return;
                 }
@@ -133,10 +139,12 @@ export default function AIOnboardingFlow() {
             
             // Step 4: Check profile status
             try {
+                alert('[DEBUG] Step 4 - Checking profile...');
                 const me = await authService.getMe();
                 console.log("[Onboarding] Profile check - is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
                 // #region agent log
                 debugLog('Profile check', {is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender, name: me.name});
+                alert('[DEBUG] Step 4 - Profile: is_complete=' + me.is_complete + ', photos=' + (me.photos?.length || 0) + ', gender=' + me.gender);
                 // #endregion
                 
                 // Only redirect if profile is TRULY complete (has photos AND real gender)
@@ -151,6 +159,7 @@ export default function AIOnboardingFlow() {
                     console.log("[Onboarding] Profile complete, redirecting to home");
                     // #region agent log
                     debugLog('REDIRECT TO HOME', {reason: 'profile complete'});
+                    alert('[DEBUG] Step 4 - Profile COMPLETE, redirecting to /');
                     // #endregion
                     window.location.href = '/';
                     return;
@@ -160,6 +169,7 @@ export default function AIOnboardingFlow() {
                 console.log("[Onboarding] Profile incomplete, starting onboarding flow");
                 // #region agent log
                 debugLog('Starting onboarding', {reason: 'profile incomplete'});
+                alert('[DEBUG] Step 4 - Profile INCOMPLETE, starting onboarding!');
                 // #endregion
                 initialMessageSent.current = true;
                 setIsInitializing(false);
