@@ -80,7 +80,8 @@ export default function AIOnboardingFlow() {
         const initOnboarding = async () => {
             console.log("[Onboarding] Starting initialization...");
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:82',message:'Onboarding init started',data:{url:window.location.href},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+            const debugLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('debug_logs') || '[]'); logs.push({t: Date.now(), m: msg, d: data}); localStorage.setItem('debug_logs', JSON.stringify(logs.slice(-50))); } catch(e){} };
+            debugLog('Onboarding init', {url: window.location.href});
             // #endregion
             setIsInitializing(true);
             setInitError(null);
@@ -89,7 +90,7 @@ export default function AIOnboardingFlow() {
             let token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') || localStorage.getItem('token')) : null;
             console.log("[Onboarding] Existing token:", !!token);
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:88',message:'Token check',data:{hasToken:!!token,tokenKey:token?'exists':'null'},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+            debugLog('Token check', {hasToken: !!token});
             // #endregion
             
             // Step 2: If no token, try Telegram auth
@@ -134,7 +135,7 @@ export default function AIOnboardingFlow() {
                 const me = await authService.getMe();
                 console.log("[Onboarding] Profile check - is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:135',message:'Profile check result',data:{is_complete:me.is_complete,photosCount:me.photos?.length,gender:me.gender,name:me.name},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+                debugLog('Profile check', {is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender, name: me.name});
                 // #endregion
                 
                 // Only redirect if profile is TRULY complete (has photos AND real gender)
@@ -142,13 +143,13 @@ export default function AIOnboardingFlow() {
                 const hasRealGender = me.gender && me.gender !== 'other';
                 
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:143',message:'Profile complete check',data:{hasPhotos,hasRealGender,willRedirect:me.is_complete===true&&hasPhotos&&hasRealGender},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+                debugLog('Profile complete check', {hasPhotos, hasRealGender, willRedirect: me.is_complete === true && hasPhotos && hasRealGender});
                 // #endregion
                 
                 if (me.is_complete === true && hasPhotos && hasRealGender) {
                     console.log("[Onboarding] Profile complete, redirecting to home");
                     // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:149',message:'REDIRECTING TO HOME - profile complete',data:{},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+                    debugLog('REDIRECT TO HOME', {reason: 'profile complete'});
                     // #endregion
                     window.location.href = '/';
                     return;
@@ -157,7 +158,7 @@ export default function AIOnboardingFlow() {
                 // Profile incomplete - start onboarding
                 console.log("[Onboarding] Profile incomplete, starting onboarding flow");
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:158',message:'Starting onboarding flow - profile incomplete',data:{},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+                debugLog('Starting onboarding', {reason: 'profile incomplete'});
                 // #endregion
                 initialMessageSent.current = true;
                 setIsInitializing(false);

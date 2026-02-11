@@ -59,7 +59,8 @@ export function HomeClient() {
     const checkAuth = useCallback(async () => {
         console.log("[Home] checkAuth started");
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'HomeClient.tsx:60',message:'HomeClient checkAuth started',data:{url:typeof window!=='undefined'?window.location.href:'ssr'},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+        const debugLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('debug_logs') || '[]'); logs.push({t: Date.now(), m: msg, d: data}); localStorage.setItem('debug_logs', JSON.stringify(logs.slice(-50))); } catch(e){} };
+        debugLog('HomeClient checkAuth', {url: typeof window !== 'undefined' ? window.location.href : 'ssr'});
         // #endregion
         
         // Helper to check if profile is complete
@@ -73,7 +74,7 @@ export function HomeClient() {
         const hasToken = httpClient.isAuthenticated();
         console.log("[Home] Token check:", hasToken);
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'HomeClient.tsx:75',message:'HomeClient token check',data:{hasToken},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+        debugLog('HomeClient token', {hasToken});
         // #endregion
         
         if (hasToken) {
@@ -81,20 +82,20 @@ export function HomeClient() {
                 const me = await authService.getMe();
                 console.log("[Home] Token valid, is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'HomeClient.tsx:82',message:'HomeClient getMe result',data:{is_complete:me.is_complete,photosCount:me.photos?.length,gender:me.gender,name:me.name},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+                debugLog('HomeClient getMe', {is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender, name: me.name});
                 // #endregion
                 
                 if (!isProfileComplete(me)) {
                     console.log("[Home] Profile incomplete, redirecting to onboarding...");
                     // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'HomeClient.tsx:89',message:'HomeClient REDIRECTING to onboarding',data:{reason:'profile incomplete'},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+                    debugLog('HomeClient REDIRECT to onboarding', {reason: 'profile incomplete'});
                     // #endregion
                     router.replace('/onboarding');
                     return;
                 }
                 
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'HomeClient.tsx:97',message:'HomeClient profile COMPLETE - staying on home',data:{},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+                debugLog('HomeClient staying on home', {reason: 'profile complete'});
                 // #endregion
                 setIsAuth(true);
                 setAuthError(null);
