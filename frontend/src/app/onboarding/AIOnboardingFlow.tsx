@@ -82,7 +82,9 @@ export default function AIOnboardingFlow() {
             // #region agent log
             const debugLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('debug_logs') || '[]'); logs.push({t: Date.now(), m: msg, d: data}); localStorage.setItem('debug_logs', JSON.stringify(logs.slice(-50))); console.log('[DEBUG]', msg, data); } catch(e){} };
             debugLog('Onboarding init', {url: window.location.href});
-            alert('[DEBUG] Onboarding page loaded! URL: ' + window.location.href);
+            const tgWebApp = (window as any).Telegram?.WebApp;
+            const tgInitData = tgWebApp?.initData;
+            alert('[DEBUG] Onboarding loaded!\nURL: ' + window.location.href + '\nTelegram SDK: ' + (tgWebApp ? 'LOADED' : 'NOT LOADED') + '\ninitData: ' + (tgInitData ? tgInitData.substring(0, 50) + '...' : 'EMPTY'));
             // #endregion
             setIsInitializing(true);
             setInitError(null);
