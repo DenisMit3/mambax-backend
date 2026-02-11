@@ -79,12 +79,18 @@ export default function AIOnboardingFlow() {
         
         const initOnboarding = async () => {
             console.log("[Onboarding] Starting initialization...");
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:82',message:'Onboarding init started',data:{url:window.location.href},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             setIsInitializing(true);
             setInitError(null);
             
             // Step 1: Check for existing token
             let token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') || localStorage.getItem('token')) : null;
             console.log("[Onboarding] Existing token:", !!token);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:88',message:'Token check',data:{hasToken:!!token,tokenKey:token?'exists':'null'},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             
             // Step 2: If no token, try Telegram auth
             if (!token && typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
@@ -127,19 +133,32 @@ export default function AIOnboardingFlow() {
             try {
                 const me = await authService.getMe();
                 console.log("[Onboarding] Profile check - is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:135',message:'Profile check result',data:{is_complete:me.is_complete,photosCount:me.photos?.length,gender:me.gender,name:me.name},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 
                 // Only redirect if profile is TRULY complete (has photos AND real gender)
                 const hasPhotos = me.photos && me.photos.length > 0;
                 const hasRealGender = me.gender && me.gender !== 'other';
                 
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:143',message:'Profile complete check',data:{hasPhotos,hasRealGender,willRedirect:me.is_complete===true&&hasPhotos&&hasRealGender},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
+                
                 if (me.is_complete === true && hasPhotos && hasRealGender) {
                     console.log("[Onboarding] Profile complete, redirecting to home");
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:149',message:'REDIRECTING TO HOME - profile complete',data:{},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     window.location.href = '/';
                     return;
                 }
                 
                 // Profile incomplete - start onboarding
                 console.log("[Onboarding] Profile incomplete, starting onboarding flow");
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIOnboardingFlow.tsx:158',message:'Starting onboarding flow - profile incomplete',data:{},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 initialMessageSent.current = true;
                 setIsInitializing(false);
                 addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
