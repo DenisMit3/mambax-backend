@@ -298,6 +298,46 @@ async def reset_user_profile(telegram_id: str):
         return {"status": "error", "message": str(e)}
 
 
+@router.post("/reset-all-profiles")
+async def reset_all_profiles():
+    """
+    Reset ALL users' profiles to force re-onboarding.
+    Sets is_complete=False, gender='other', and deletes all photos.
+    """
+    try:
+        async with database.async_session() as session:
+            # Get all users
+            result = await session.execute(select(models.User))
+            users = result.scalars().all()
+            
+            if not users:
+                return {"status": "ok", "message": "No users found", "reset_count": 0}
+            
+            reset_users = []
+            for user in users:
+                reset_users.append({
+                    "telegram_id": user.telegram_id,
+                    "name": user.name,
+                    "old_is_complete": user.is_complete
+                })
+                user.is_complete = False
+                user.gender = models.Gender.OTHER
+            
+            # Delete all photos
+            await session.execute(text("DELETE FROM user_photos"))
+            
+            await session.commit()
+            
+            return {
+                "status": "success",
+                "message": f"Reset {len(users)} user(s)",
+                "reset_count": len(users),
+                "users": reset_users
+            }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @router.delete("/clear-all-users")
 async def clear_all_users():
     """
