@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useCallback } from 'react';
 import {
   CreditCard,
   CheckCircle,
   XCircle,
   AlertTriangle,
   RefreshCw,
-  TrendingUp,
   Activity,
   DollarSign,
   Zap,
@@ -16,6 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { adminApi } from '@/services/adminApi';
 import styles from '../../admin.module.css';
 
 interface Gateway {
@@ -44,108 +43,53 @@ interface FailedPayment {
   createdAt: string;
 }
 
-const mockGateways: Gateway[] = [
-  {
-    name: 'stripe',
-    displayName: 'Stripe',
-    status: 'operational',
-    transactions24h: 1247,
-    successRate: 98.7,
-    avgResponseMs: 245,
-    failedTransactions: 16,
-    volume24h: 48923.50,
-    icon: '💳'
-  },
-  {
-    name: 'paypal',
-    displayName: 'PayPal',
-    status: 'operational',
-    transactions24h: 423,
-    successRate: 97.2,
-    avgResponseMs: 312,
-    failedTransactions: 12,
-    volume24h: 15678.25,
-    icon: '🅿️'
-  },
-  {
-    name: 'apple_pay',
-    displayName: 'Apple Pay',
-    status: 'operational',
-    transactions24h: 289,
-    successRate: 99.3,
-    avgResponseMs: 189,
-    failedTransactions: 2,
-    volume24h: 11234.75,
-    icon: '🍎'
-  },
-  {
-    name: 'google_pay',
-    displayName: 'Google Pay',
-    status: 'degraded',
-    transactions24h: 198,
-    successRate: 95.5,
-    avgResponseMs: 403,
-    failedTransactions: 9,
-    volume24h: 7823.50,
-    icon: '🔵'
-  }
-];
+interface OverallStatsData {
+  total_transactions: number;
+  success_rate: number;
+  total_volume: number;
+  failed_count: number;
+  avg_response_ms: number;
+}
 
-const mockFailedPayments: FailedPayment[] = [
-  {
-    id: 'failed-1',
-    transactionId: 'txn-f1234',
-    userId: 'user-201',
-    userName: 'Alex Brown',
-    amount: 29.99,
-    gateway: 'stripe',
-    errorCode: 'card_declined',
-    errorMessage: 'Your card was declined. Try a different payment method.',
-    retryCount: 2,
-    lastRetry: '2024-02-06T10:30:00Z',
-    createdAt: '2024-02-06T08:15:00Z'
-  },
-  {
-    id: 'failed-2',
-    transactionId: 'txn-f1235',
-    userId: 'user-202',
-    userName: 'Emma Davis',
-    amount: 49.99,
-    gateway: 'paypal',
-    errorCode: 'insufficient_funds',
-    errorMessage: 'Insufficient funds in PayPal account',
-    retryCount: 1,
-    lastRetry: '2024-02-06T09:00:00Z',
-    createdAt: '2024-02-06T07:45:00Z'
-  },
-  {
-    id: 'failed-3',
-    transactionId: 'txn-f1236',
-    userId: 'user-203',
-    userName: 'Chris Wilson',
-    amount: 29.99,
-    gateway: 'google_pay',
-    errorCode: 'expired_card',
-    errorMessage: 'The card on file has expired',
-    retryCount: 0,
-    lastRetry: '',
-    createdAt: '2024-02-06T11:20:00Z'
-  }
-];
+// Скелетон для загрузки
+function Skeleton({ className = '' }: { className?: string }) {
+  return (
+    <div className={`animate-pulse bg-slate-700/30 rounded-lg ${className}`} />
+  );
+}
 
-function OverallStats() {
-  const stats = [
-    { label: 'Total Transactions', value: '2.16K', icon: <CreditCard size={18} />, color: '#3b82f6' },
-    { label: 'Success Rate', value: '98.5%', icon: <CheckCircle size={18} />, color: '#10b981' },
-    { label: 'Total Volume', value: '$83.7K', icon: <DollarSign size={18} />, color: '#a855f7' },
-    { label: 'Failed Payments', value: '33', icon: <XCircle size={18} />, color: '#ef4444' },
-    { label: 'Avg Response', value: '287ms', icon: <Zap size={18} />, color: '#f59e0b' },
-    { label: 'All Systems', value: 'Online', icon: <Server size={18} />, color: '#10b981' },
+function OverallStats({ stats, loading }: { stats: OverallStatsData | null; loading: boolean }) {
+  if (loading || !stats) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <GlassCard key={i} className="p-4 flex flex-col gap-3">
+            <Skeleton className="w-10 h-10 rounded-xl" />
+            <div>
+              <Skeleton className="h-6 w-16 mb-2" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          </GlassCard>
+        ))}
+      </div>
+    );
+  }
+
+  // Определяем статус систем по данным
+  const allOnline = stats.success_rate > 90;
+
+  const items = [
+    { label: 'Total Transactions', value: stats.total_transactions >= 1000 ? `${(stats.total_transactions / 1000).toFixed(2)}K` : stats.total_transactions.toString(), icon: <CreditCard size={18} />, color: '#3b82f6' },
+    { label: 'Success Rate', value: `${stats.success_rate.toFixed(1)}%`, icon: <CheckCircle size={18} />, color: '#10b981' },
+    { label: 'Total Volume', value: `$${stats.total_volume >= 1000 ? `${(stats.total_volume / 1000).toFixed(1)}K` : stats.total_volume.toFixed(0)}`, icon: <DollarSign size={18} />, color: '#a855f7' },
+    { label: 'Failed Payments', value: stats.failed_count.toString(), icon: <XCircle size={18} />, color: '#ef4444' },
+    { label: 'Avg Response', value: `${Math.round(stats.avg_response_ms)}ms`, icon: <Zap size={18} />, color: '#f59e0b' },
+    { label: 'All Systems', value: allOnline ? 'Online' : 'Issues', icon: <Server size={18} />, color: allOnline ? '#10b981' : '#f59e0b' },
   ];
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-      {stats.map((stat, index) => (
+      {items.map((stat) => (
         <GlassCard
           key={stat.label}
           className="p-4 flex flex-col gap-3"
@@ -173,14 +117,7 @@ function GatewayCard({ gateway }: { gateway: Gateway }) {
   };
 
   const status = statusColors[gateway.status];
-  const [ping, setPing] = useState(gateway.avgResponseMs);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPing(gateway.avgResponseMs + Math.floor(Math.random() * 50) - 25);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [gateway.avgResponseMs]);
+  const ping = gateway.avgResponseMs;
 
   return (
     <GlassCard className="p-6">
@@ -239,7 +176,32 @@ function GatewayCard({ gateway }: { gateway: Gateway }) {
   );
 }
 
-function FailedPaymentsTable({ payments, onRetry }: { payments: FailedPayment[]; onRetry: (id: string) => void }) {
+function GatewaysSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <GlassCard key={i} className="p-6">
+          <div className="flex justify-between items-center mb-5">
+            <div className="flex items-center gap-3">
+              <Skeleton className="w-8 h-8 rounded-lg" />
+              <Skeleton className="h-5 w-24" />
+            </div>
+            <Skeleton className="h-6 w-24 rounded-full" />
+          </div>
+          <Skeleton className="h-10 w-full rounded-xl mb-5" />
+          <div className="grid grid-cols-2 gap-4 mb-5">
+            {Array.from({ length: 4 }).map((_, j) => (
+              <Skeleton key={j} className="h-16 rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="h-1.5 w-full rounded-full" />
+        </GlassCard>
+      ))}
+    </div>
+  );
+}
+
+function FailedPaymentsTable({ payments, onRetry, retryingId }: { payments: FailedPayment[]; onRetry: (id: string) => void; retryingId: string | null }) {
   const getErrorColor = (code: string) => {
     switch (code) {
       case 'card_declined': return '#ef4444';
@@ -275,7 +237,13 @@ function FailedPaymentsTable({ payments, onRetry }: { payments: FailedPayment[];
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--admin-glass-border)]">
-            {payments.map((payment) => (
+            {payments.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-sm text-[var(--admin-text-muted)]">
+                  No failed payments — all clear! ✨
+                </td>
+              </tr>
+            ) : payments.map((payment) => (
               <tr key={payment.id} className="group">
                 <td className="py-4">
                   <div className="flex items-center gap-3">
@@ -312,10 +280,10 @@ function FailedPaymentsTable({ payments, onRetry }: { payments: FailedPayment[];
                   <button
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-500 text-xs font-medium hover:bg-blue-500 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed mx-0"
                     onClick={() => onRetry(payment.id)}
-                    disabled={payment.retryCount >= 3}
+                    disabled={payment.retryCount >= 3 || retryingId === payment.id}
                   >
-                    <RefreshCw size={12} />
-                    Retry
+                    <RefreshCw size={12} className={retryingId === payment.id ? 'animate-spin' : ''} />
+                    {retryingId === payment.id ? '...' : 'Retry'}
                   </button>
                 </td>
               </tr>
@@ -327,15 +295,83 @@ function FailedPaymentsTable({ payments, onRetry }: { payments: FailedPayment[];
   );
 }
 
-export default function PaymentGatewayPage() {
-  const [gateways] = useState(mockGateways);
-  const [failedPayments, setFailedPayments] = useState(mockFailedPayments);
+// Блок ошибки с кнопкой повтора
+function ErrorBlock({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <GlassCard className="p-8 flex flex-col items-center gap-4">
+      <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center">
+        <AlertTriangle size={28} className="text-red-500" />
+      </div>
+      <p className="text-sm text-[var(--admin-text-muted)] text-center">{message}</p>
+      <button
+        onClick={onRetry}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-500 text-sm font-medium hover:bg-blue-500 hover:text-white transition-all"
+      >
+        <RefreshCw size={14} />
+        Retry
+      </button>
+    </GlassCard>
+  );
+}
 
-  const handleRetry = (id: string) => {
-    setFailedPayments(prev =>
-      prev.map(p => p.id === id ? { ...p, retryCount: p.retryCount + 1, lastRetry: new Date().toISOString() } : p)
-    );
-  };
+export default function PaymentGatewayPage() {
+  const [gateways, setGateways] = useState<Gateway[]>([]);
+  const [stats, setStats] = useState<OverallStatsData | null>(null);
+  const [failedPayments, setFailedPayments] = useState<FailedPayment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  // Загрузка данных
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [gatewaysRes, failedRes] = await Promise.all([
+        adminApi.monetization.payments.getGateways(),
+        adminApi.monetization.payments.getFailedPayments(),
+      ]);
+      setGateways((gatewaysRes as any).gateways ?? []);
+      setStats((gatewaysRes as any).stats ?? null);
+      setFailedPayments((failedRes as any).payments ?? []);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load payment data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Перезагрузка только failed payments
+  const refetchFailed = useCallback(async () => {
+    try {
+      const res = await adminApi.monetization.payments.getFailedPayments();
+      setFailedPayments((res as any).payments ?? []);
+    } catch {
+      // Тихо — основные данные уже загружены
+    }
+  }, []);
+
+  // Retry конкретного платежа
+  const handleRetry = useCallback(async (id: string) => {
+    setRetryingId(id);
+    try {
+      await adminApi.monetization.payments.retryPayment(id);
+      await refetchFailed();
+    } catch {
+      // Ошибка retry — ничего страшного, данные обновятся
+    } finally {
+      setRetryingId(null);
+    }
+  }, [refetchFailed]);
+
+  // Определяем общий статус систем
+  const hasDownGateway = gateways.some(g => g.status === 'down');
+  const hasDegradedGateway = gateways.some(g => g.status === 'degraded');
+  const systemStatus = hasDownGateway ? 'down' : hasDegradedGateway ? 'degraded' : 'operational';
 
   return (
     <div className={styles.pageContainer}>
@@ -345,21 +381,49 @@ export default function PaymentGatewayPage() {
           <h1 className={styles.headerTitle}>Payment Gateway Monitor</h1>
           <p className={styles.headerDescription}>Real-time monitoring of payment processing systems</p>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-sm font-semibold">
-          <ShieldCheck size={18} />
-          <span>All Systems Operational</span>
-        </div>
+        {!loading && !error && (
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${
+            systemStatus === 'operational'
+              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-500'
+              : systemStatus === 'degraded'
+              ? 'bg-orange-500/10 border border-orange-500/20 text-orange-500'
+              : 'bg-red-500/10 border border-red-500/20 text-red-500'
+          }`}>
+            <ShieldCheck size={18} />
+            <span>{systemStatus === 'operational' ? 'All Systems Operational' : systemStatus === 'degraded' ? 'Degraded Performance' : 'System Issues'}</span>
+          </div>
+        )}
       </div>
 
-      <OverallStats />
+      {error ? (
+        <ErrorBlock message={error} onRetry={fetchData} />
+      ) : (
+        <>
+          <OverallStats stats={stats} loading={loading} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {gateways.map((gateway) => (
-          <GatewayCard key={gateway.name} gateway={gateway} />
-        ))}
-      </div>
+          {loading ? (
+            <GatewaysSkeleton />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              {gateways.map((gateway) => (
+                <GatewayCard key={gateway.name} gateway={gateway} />
+              ))}
+            </div>
+          )}
 
-      <FailedPaymentsTable payments={failedPayments} onRetry={handleRetry} />
+          {loading ? (
+            <GlassCard className="p-6">
+              <Skeleton className="h-5 w-40 mb-2" />
+              <Skeleton className="h-4 w-64 mb-6" />
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full mb-3" />
+              ))}
+            </GlassCard>
+          ) : (
+            <FailedPaymentsTable payments={failedPayments} onRetry={handleRetry} retryingId={retryingId} />
+          )}
+        </>
+      )}
     </div>
   );
 }

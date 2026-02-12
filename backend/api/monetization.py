@@ -1594,9 +1594,10 @@ from pydantic import BaseModel as PydanticBaseModel
 
 class TopUpRequest(PydanticBaseModel):
     amount: int  # Amount of stars to purchase
+    label: str = "Top Up"  # Optional label for the invoice
 
 class TopUpResponse(PydanticBaseModel):
-    invoice_url: str
+    invoice_link: str
     amount: int
     transaction_id: uuid.UUID
 
@@ -1690,7 +1691,7 @@ async def create_top_up_invoice(
     
     return TopUpResponse(
 
-        invoice_url=invoice_link,
+        invoice_link=invoice_link,
         amount=request.amount,
         transaction_id=transaction_id
     )

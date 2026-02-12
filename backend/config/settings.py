@@ -87,8 +87,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 60
 
     # Admin Configuration
-    ADMIN_PHONE: str = "+79062148253"
-    ADMIN_USERNAME: str = "RezidentMD"
+    ADMIN_PHONE: str = ""
+    ADMIN_USERNAME: str = "admin"
     ADMIN_TELEGRAM_ID: Optional[str] = None
     SEED_ON_STARTUP: bool = Field(False)
     

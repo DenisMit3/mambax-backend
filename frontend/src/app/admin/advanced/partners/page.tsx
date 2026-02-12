@@ -23,6 +23,8 @@ export default function PartnersPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
+  const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -55,17 +57,44 @@ export default function PartnersPage() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
     setSubmitting(true);
     try {
-      await advancedApi.createPartner(formData);
-      setShowModal(false);
-      setFormData({ name: '', domain: '', revenue_share_percentage: 15 });
+      if (editingPartner) {
+        await advancedApi.updatePartner(editingPartner.id, formData);
+      } else {
+        await advancedApi.createPartner(formData);
+      }
+      closeModal();
       loadData();
-    } catch (e) { setFormErrors({ submit: 'Failed to create partner' }); }
+    } catch (e) { setFormErrors({ submit: editingPartner ? 'Failed to update partner' : 'Failed to create partner' }); }
     finally { setSubmitting(false); }
+  };
+
+  const openEdit = (p: Partner) => {
+    setEditingPartner(p);
+    setFormData({ name: p.name, domain: p.domain || '', revenue_share_percentage: p.revenue_share });
+    setFormErrors({});
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingPartner(null);
+    setFormData({ name: '', domain: '', revenue_share_percentage: 15 });
+    setFormErrors({});
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this partner?')) return;
+    setDeletingId(id);
+    try {
+      await advancedApi.deletePartner(id);
+      loadData();
+    } catch (e) { console.error('Failed to delete partner', e); }
+    finally { setDeletingId(null); }
   };
 
   const getStatusIcon = (status: string) => {
@@ -94,7 +123,7 @@ export default function PartnersPage() {
 
       <div className="header">
         <div><h1>White-Label Partners</h1><p>Manage partner integrations and revenue sharing</p></div>
-        <button className="btn pri" onClick={() => setShowModal(true)}><Plus size={18} />Add Partner</button>
+        <button className="btn pri" onClick={() => { setEditingPartner(null); setFormData({ name: '', domain: '', revenue_share_percentage: 15 }); setFormErrors({}); setShowModal(true); }}><Plus size={18} />Add Partner</button>
       </div>
 
       {stats && (
@@ -143,8 +172,8 @@ export default function PartnersPage() {
                   <td className="date">{new Date(p.joined_at).toLocaleDateString()}</td>
                   <td><div className="acts">
                     <button onClick={() => setSelectedPartner(p)}><Eye size={14} /></button>
-                    <button><Edit2 size={14} /></button>
-                    <button className="del"><Trash2 size={14} /></button>
+                    <button onClick={() => openEdit(p)}><Edit2 size={14} /></button>
+                    <button className="del" disabled={deletingId === p.id} onClick={() => handleDelete(p.id)}>{deletingId === p.id ? <Loader2 className="spin" size={14} /> : <Trash2 size={14} />}</button>
                   </div></td>
                 </tr>
               ))}
@@ -156,10 +185,10 @@ export default function PartnersPage() {
       {/* Create Modal */}
       <AnimatePresence>
         {showModal && (
-          <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModal(false)}>
+          <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeModal}>
             <motion.div className="modal" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-              <div className="mhead"><h2>Add Partner</h2><button onClick={() => setShowModal(false)}><X size={20} /></button></div>
-              <form onSubmit={handleCreate}>
+              <div className="mhead"><h2>{editingPartner ? 'Edit Partner' : 'Add Partner'}</h2><button onClick={closeModal}><X size={20} /></button></div>
+              <form onSubmit={handleSubmit}>
                 <div className="field">
                   <label>Partner Name *</label>
                   <input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} placeholder="Company Name" />
@@ -180,8 +209,8 @@ export default function PartnersPage() {
                 <div className="info-box"><Percent size={16} />Revenue share determines the percentage of subscription revenue paid to the partner for users acquired through their platform.</div>
                 {formErrors.submit && <div className="ferr">{formErrors.submit}</div>}
                 <div className="mfoot">
-                  <button type="button" className="btn sec" onClick={() => setShowModal(false)}>Cancel</button>
-                  <button type="submit" className="btn pri" disabled={submitting}>{submitting ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}Add Partner</button>
+                  <button type="button" className="btn sec" onClick={closeModal}>Cancel</button>
+                  <button type="submit" className="btn pri" disabled={submitting}>{submitting ? <Loader2 className="spin" size={16} /> : editingPartner ? <Edit2 size={16} /> : <Plus size={16} />}{editingPartner ? 'Save Changes' : 'Add Partner'}</button>
                 </div>
               </form>
             </motion.div>
@@ -264,6 +293,7 @@ export default function PartnersPage() {
         .acts button{padding:7px;background:var(--glass-bg-light);border:1px solid var(--glass-border);border-radius:6px;color:var(--text-secondary);cursor:pointer}
         .acts button:hover{color:var(--text-primary)}
         .acts .del:hover{color:var(--neon-red)}
+        .acts button:disabled{opacity:0.5;cursor:not-allowed}
         .empty{text-align:center;padding:40px;color:var(--text-muted)}
         .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
         .modal{background:var(--admin-bg-secondary);border:1px solid var(--glass-border);border-radius:18px;width:100%;max-width:500px}

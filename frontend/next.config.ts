@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Required for Docker production build
+  output: 'standalone',
   // Skip TS check during build (speeds up CI)
   typescript: { ignoreBuildErrors: true },
   // Security: Hide source code in production

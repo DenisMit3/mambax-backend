@@ -19,13 +19,20 @@ interface GiftCatalogProps {
 
 // Fallback mock data
 const FALLBACK_CATEGORIES: GiftCategory[] = [
-    { id: "1", name: "Romantic", description: "Express your feelings", icon: "💕", sort_order: 1, is_active: true },
-    { id: "2", name: "Fun", description: "Fun gifts", icon: "🎉", sort_order: 2, is_active: true },
-    { id: "3", name: "Premium", description: "Exclusive gifts", icon: "💎", sort_order: 3, is_active: true },
+    { id: "1", name: "Романтика", description: "Подарки для проявления нежных чувств", icon: "❤️", sort_order: 1, is_active: true },
+    { id: "2", name: "Веселье", description: "Поднимите настроение собеседнику", icon: "🎉", sort_order: 2, is_active: true },
+    { id: "3", name: "Премиум", description: "Эксклюзивные подарки для особенных случаев", icon: "💎", sort_order: 3, is_active: true },
 ];
 
 const FALLBACK_GIFTS: VirtualGift[] = [
-    { id: "1", name: "Red Rose", description: "A classic symbol of love", image_url: "/static/gifts/rose.png", animation_url: null, price: 10, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, is_active: true, times_sent: 1250, category_id: "1", sort_order: 1, available_until: null, max_quantity: null },
+    { id: "1", name: "Красная роза", description: "Классический символ любви", image_url: "/static/gifts/rose.png", animation_url: null, price: 10, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, is_active: true, times_sent: 1250, category_id: "1", sort_order: 1, available_until: null, max_quantity: null },
+    { id: "2", name: "Воздушное сердце", description: "Милый воздушный шарик-сердечко", image_url: "/static/gifts/heart_balloon.png", animation_url: null, price: 15, currency: "XTR", is_animated: true, is_premium: false, is_limited: false, is_active: true, times_sent: 980, category_id: "1", sort_order: 2, available_until: null, max_quantity: null },
+    { id: "3", name: "Плюшевый мишка", description: "Уютный плюшевый медвежонок", image_url: "/static/gifts/teddy.png", animation_url: null, price: 25, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, is_active: true, times_sent: 750, category_id: "1", sort_order: 3, available_until: null, max_quantity: null },
+    { id: "4", name: "Шампанское", description: "Отпразднуйте особенный момент", image_url: "/static/gifts/champagne.png", animation_url: null, price: 30, currency: "XTR", is_animated: true, is_premium: false, is_limited: false, is_active: true, times_sent: 620, category_id: "2", sort_order: 4, available_until: null, max_quantity: null },
+    { id: "5", name: "Звезда", description: "Ты - моя звезда!", image_url: "/static/gifts/star.png", animation_url: null, price: 5, currency: "XTR", is_animated: true, is_premium: false, is_limited: false, is_active: true, times_sent: 2100, category_id: "2", sort_order: 7, available_until: null, max_quantity: null },
+    { id: "6", name: "Коробка конфет", description: "Сладкая, как ты", image_url: "/static/gifts/chocolate.png", animation_url: null, price: 20, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, is_active: true, times_sent: 890, category_id: "2", sort_order: 8, available_until: null, max_quantity: null },
+    { id: "7", name: "Бриллиантовое кольцо", description: "Для самого особенного человека", image_url: "/static/gifts/diamond_ring.png", animation_url: null, price: 100, currency: "XTR", is_animated: true, is_premium: true, is_limited: false, is_active: true, times_sent: 320, category_id: "3", sort_order: 5, available_until: null, max_quantity: null },
+    { id: "8", name: "Романтический ужин", description: "Виртуальное свидание за ужином", image_url: "/static/gifts/dinner.png", animation_url: null, price: 50, currency: "XTR", is_animated: false, is_premium: true, is_limited: false, is_active: true, times_sent: 450, category_id: "3", sort_order: 6, available_until: null, max_quantity: null },
 ];
 
 export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }: GiftCatalogProps) {
@@ -66,15 +73,22 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
     };
 
     const getGiftImage = (gift: VirtualGift) => {
-        // Use emoji fallback if image fails to load
         const emojiMap: { [key: string]: string } = {
+            "Красная роза": "🌹",
+            "Воздушное сердце": "🎈",
+            "Плюшевый мишка": "🧸",
+            "Бриллиантовое кольцо": "💍",
+            "Шампанское": "🍾",
+            "Звезда": "⭐",
+            "Коробка конфет": "🍫",
+            "Романтический ужин": "🍽️",
+            // English fallbacks
             "Red Rose": "🌹",
             "Heart Balloon": "🎈",
             "Teddy Bear": "🧸",
             "Diamond Ring": "💍",
-            "Party Popper": "🎉",
-            "Star": "⭐",
             "Champagne": "🍾",
+            "Star": "⭐",
             "Chocolate Box": "🍫",
             "Romantic Dinner": "🍽️",
         };
@@ -85,7 +99,7 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
         return (
             <div className="flex flex-col items-center justify-center gap-4 py-12 text-muted-foreground">
                 <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin"></div>
-                <p>Loading gifts...</p>
+                <p>Загрузка подарков...</p>
             </div>
         );
     }
@@ -97,7 +111,7 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
                 <Search className="absolute left-3 text-muted-foreground" size={18} />
                 <input
                     type="text"
-                    placeholder="Search gifts..."
+                    placeholder="Поиск подарков..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full py-3 pl-10 pr-3 rounded-xl border border-border bg-surface text-foreground text-sm transition-all focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
@@ -111,7 +125,7 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
                     onClick={() => setSelectedCategory(null)}
                 >
                     <GiftIcon size={14} />
-                    All
+                    Все
                 </button>
                 {categories.map((category) => (
                     <button
@@ -184,7 +198,7 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
             {filteredGifts.length === 0 && (
                 <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
                     <GiftIcon size={48} className="opacity-50" />
-                    <p>No gifts found</p>
+                    <p>Подарки не найдены</p>
                 </div>
             )}
         </div>

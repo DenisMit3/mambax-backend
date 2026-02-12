@@ -1,243 +1,157 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
     Flag,
     ToggleLeft,
     ToggleRight,
     Search,
-    Clock,
-    User,
-    Zap,
     Users,
     Percent,
     AlertCircle,
     CheckCircle,
+    AlertTriangle,
     Info,
+    RefreshCw,
+    Loader2,
 } from 'lucide-react';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { adminApi, FeatureFlag } from '@/services/adminApi';
+import styles from '../../admin.module.css';
 
-interface FeatureFlag {
-    id: string;
-    name: string;
-    description: string;
-    enabled: boolean;
-    rolloutPercentage: number;
-    createdAt: string;
-    updatedAt: string;
-    updatedBy: string;
-}
-
-const mockFlags: FeatureFlag[] = [
-    {
-        id: 'video-calls',
-        name: 'Video Calls',
-        description: 'Enable in-app video calling feature',
-        enabled: true,
-        rolloutPercentage: 100,
-        createdAt: '2024-01-15',
-        updatedAt: '2024-02-01',
-        updatedBy: 'John Admin'
-    },
-    {
-        id: 'ai-icebreakers',
-        name: 'AI Icebreakers',
-        description: 'AI-generated conversation starters',
-        enabled: true,
-        rolloutPercentage: 50,
-        createdAt: '2024-01-20',
-        updatedAt: '2024-02-05',
-        updatedBy: 'John Admin'
-    },
-    {
-        id: 'explore-mode',
-        name: 'Explore Mode',
-        description: 'Location-based discovery feature',
-        enabled: false,
-        rolloutPercentage: 0,
-        createdAt: '2024-02-01',
-        updatedAt: '2024-02-01',
-        updatedBy: 'John Admin'
-    },
-    {
-        id: 'voice-messages',
-        name: 'Voice Messages',
-        description: 'Send voice messages in chat',
-        enabled: true,
-        rolloutPercentage: 100,
-        createdAt: '2023-11-01',
-        updatedAt: '2023-12-15',
-        updatedBy: 'Jane Moderator'
-    },
-    {
-        id: 'photo-verification-v2',
-        name: 'Photo Verification V2',
-        description: 'New AI photo verification system',
-        enabled: true,
-        rolloutPercentage: 25,
-        createdAt: '2024-02-03',
-        updatedAt: '2024-02-06',
-        updatedBy: 'John Admin'
-    },
-    {
-        id: 'super-likes-boost',
-        name: 'Super Likes Boost',
-        description: 'Boost effect for super likes',
-        enabled: false,
-        rolloutPercentage: 0,
-        createdAt: '2024-02-05',
-        updatedAt: '2024-02-05',
-        updatedBy: 'Sarah Analyst'
-    },
-    {
-        id: 'premium-filters',
-        name: 'Premium Filters',
-        description: 'Advanced filtering options for premium users',
-        enabled: true,
-        rolloutPercentage: 100,
-        createdAt: '2023-09-15',
-        updatedAt: '2023-10-01',
-        updatedBy: 'John Admin'
-    },
-    {
-        id: 'incognito-mode',
-        name: 'Incognito Mode',
-        description: 'Browse profiles without being seen',
-        enabled: true,
-        rolloutPercentage: 100,
-        createdAt: '2023-10-20',
-        updatedAt: '2023-11-01',
-        updatedBy: 'John Admin'
-    }
-];
-
-function FlagStats() {
-    const enabledCount = mockFlags.filter(f => f.enabled).length;
-    const partialRollout = mockFlags.filter(f => f.enabled && f.rolloutPercentage < 100).length;
-
-    const stats = [
-        { label: 'Total Flags', value: mockFlags.length, icon: <Flag size={18} />, color: '#3b82f6' },
-        { label: 'Enabled', value: enabledCount, icon: <CheckCircle size={18} />, color: '#10b981' },
-        { label: 'Disabled', value: mockFlags.length - enabledCount, icon: <AlertCircle size={18} />, color: '#64748b' },
-        { label: 'Partial Rollout', value: partialRollout, icon: <Percent size={18} />, color: '#f59e0b' },
-    ];
-
+// === Скелетон статистики ===
+function FlagStatsSkeleton() {
     return (
-        <div className="flag-stats">
-            {stats.map((stat, index) => (
-                <motion.div
-                    key={stat.label}
-                    className="stat-card"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                >
-                    <div className="stat-icon" style={{ background: `${stat.color}20`, color: stat.color }}>
-                        {stat.icon}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+                <GlassCard key={i} className="p-4 flex items-center gap-3" hover={false}>
+                    <div className="w-[42px] h-[42px] rounded-xl bg-slate-700/30 animate-pulse" />
+                    <div className="flex flex-col gap-2">
+                        <div className="w-10 h-5 bg-slate-700/30 rounded animate-pulse" />
+                        <div className="w-16 h-3 bg-slate-700/30 rounded animate-pulse" />
                     </div>
-                    <div className="stat-content">
-                        <span className="stat-value">{stat.value}</span>
-                        <span className="stat-label">{stat.label}</span>
-                    </div>
-                </motion.div>
+                </GlassCard>
             ))}
-
-            <style jsx>{`
-        .flag-stats {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 16px;
-          margin-bottom: 24px;
-        }
-        
-        @media (max-width: 900px) {
-          .flag-stats {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        
-        .stat-card {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          padding: 18px 20px;
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 16px;
-        }
-        
-        .stat-icon {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .stat-content {
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .stat-value {
-          font-size: 24px;
-          font-weight: 700;
-          color: #f1f5f9;
-        }
-        
-        .stat-label {
-          font-size: 12px;
-          color: #94a3b8;
-        }
-      `}</style>
         </div>
     );
 }
 
-function FlagCard({ flag, onToggle, onRolloutChange }: {
+// === Статистика флагов ===
+function FlagStats({ flags }: { flags: FeatureFlag[] }) {
+    const enabledCount = flags.filter(f => f.enabled).length;
+    const partialRollout = flags.filter(f => f.enabled && f.rollout < 100).length;
+
+    const items = [
+        { label: 'Total Flags', value: flags.length, icon: <Flag size={18} />, color: '#3b82f6' },
+        { label: 'Enabled', value: enabledCount, icon: <CheckCircle size={18} />, color: '#10b981' },
+        { label: 'Disabled', value: flags.length - enabledCount, icon: <AlertCircle size={18} />, color: '#64748b' },
+        { label: 'Partial Rollout', value: partialRollout, icon: <Percent size={18} />, color: '#f59e0b' },
+    ];
+
+    return (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {items.map((stat, index) => (
+                <GlassCard key={stat.label} className="p-4 flex items-center gap-3" hover={false}>
+                    <motion.div
+                        className="w-[42px] h-[42px] rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: `${stat.color}20`, color: stat.color }}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                    >
+                        {stat.icon}
+                    </motion.div>
+                    <div className="flex flex-col">
+                        <span className="text-xl font-bold text-[var(--admin-text-primary)]">{stat.value}</span>
+                        <span className="text-[11px] text-[var(--admin-text-muted)]">{stat.label}</span>
+                    </div>
+                </GlassCard>
+            ))}
+        </div>
+    );
+}
+
+// === Скелетон списка флагов ===
+function FlagsListSkeleton() {
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                    key={i}
+                    className="bg-[rgba(15,23,42,0.65)] border border-slate-400/20 rounded-2xl p-6"
+                >
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="flex flex-col gap-2 flex-1">
+                            <div className="w-40 h-5 bg-slate-700/30 rounded animate-pulse" />
+                            <div className="w-56 h-3 bg-slate-700/30 rounded animate-pulse" />
+                        </div>
+                        <div className="w-8 h-8 bg-slate-700/30 rounded-full animate-pulse" />
+                    </div>
+                    <div className="w-full h-10 bg-slate-700/30 rounded-xl animate-pulse" />
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// === Карточка флага ===
+function FlagCard({ flag, onToggle, onRolloutChange, saving }: {
     flag: FeatureFlag;
     onToggle: (id: string) => void;
     onRolloutChange: (id: string, value: number) => void;
+    saving: boolean;
 }) {
     const [showRollout, setShowRollout] = useState(false);
 
     return (
         <motion.div
-            className={`flag-card ${flag.enabled ? 'enabled' : 'disabled'}`}
+            className={`p-6 bg-[rgba(15,23,42,0.65)] backdrop-blur-[20px] border-2 rounded-2xl transition-all hover:border-purple-500/40 ${
+                flag.enabled ? 'border-emerald-500/30' : 'border-slate-400/20 opacity-70'
+            }`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
         >
-            <div className="card-header">
-                <div className="flag-info">
-                    <h3>{flag.name}</h3>
-                    <p>{flag.description}</p>
+            {/* Заголовок + переключатель */}
+            <div className="flex justify-between items-start gap-4 mb-4">
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-[var(--admin-text-primary)]">{flag.name}</h3>
+                        {saving && <Loader2 size={14} className="animate-spin text-purple-400" />}
+                    </div>
+                    <p className="text-[13px] text-slate-400 mt-1">ID: {flag.id}</p>
                 </div>
                 <button
-                    className={`toggle-btn ${flag.enabled ? 'on' : 'off'}`}
+                    className={`bg-transparent border-none cursor-pointer p-0 transition-transform hover:scale-110 ${
+                        flag.enabled ? 'text-emerald-500' : 'text-slate-500'
+                    }`}
                     onClick={() => onToggle(flag.id)}
+                    aria-label={flag.enabled ? 'Выключить флаг' : 'Включить флаг'}
                 >
                     {flag.enabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
                 </button>
             </div>
 
+            {/* Секция rollout (только для включённых) */}
             {flag.enabled && (
-                <div className="rollout-section">
-                    <div className="rollout-header" onClick={() => setShowRollout(!showRollout)}>
+                <div className="mb-0">
+                    <button
+                        className="w-full flex items-center gap-2.5 p-3 bg-slate-800/50 rounded-xl cursor-pointer border-none text-left text-slate-400"
+                        onClick={() => setShowRollout(!showRollout)}
+                    >
                         <Users size={16} />
-                        <span>Rollout: {flag.rolloutPercentage}%</span>
-                        <div className="rollout-bar">
+                        <span className="text-[13px] font-medium">Rollout: {flag.rollout}%</span>
+                        <div className="flex-1 h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
                             <div
-                                className="rollout-fill"
-                                style={{ width: `${flag.rolloutPercentage}%` }}
+                                className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full transition-all duration-300"
+                                style={{ width: `${flag.rollout}%` }}
                             />
                         </div>
-                    </div>
+                    </button>
 
                     {showRollout && (
                         <motion.div
-                            className="rollout-controls"
+                            className="p-4 bg-slate-800/30 rounded-b-xl"
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
                         >
@@ -245,14 +159,19 @@ function FlagCard({ flag, onToggle, onRolloutChange }: {
                                 type="range"
                                 min="0"
                                 max="100"
-                                value={flag.rolloutPercentage}
+                                value={flag.rollout}
                                 onChange={(e) => onRolloutChange(flag.id, parseInt(e.target.value))}
+                                className="w-full mb-3 accent-purple-500"
                             />
-                            <div className="rollout-presets">
+                            <div className="flex gap-2">
                                 {[0, 10, 25, 50, 100].map(val => (
                                     <button
                                         key={val}
-                                        className={flag.rolloutPercentage === val ? 'active' : ''}
+                                        className={`flex-1 py-2 rounded-lg text-xs cursor-pointer transition-all border ${
+                                            flag.rollout === val
+                                                ? 'bg-purple-500/20 border-purple-500/40 text-purple-400'
+                                                : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:bg-purple-500/10 hover:border-purple-500/30 hover:text-purple-400'
+                                        }`}
                                         onClick={() => onRolloutChange(flag.id, val)}
                                     >
                                         {val}%
@@ -263,234 +182,164 @@ function FlagCard({ flag, onToggle, onRolloutChange }: {
                     )}
                 </div>
             )}
-
-            <div className="card-footer">
-                <div className="meta-item">
-                    <Clock size={12} />
-                    <span>Updated {flag.updatedAt}</span>
-                </div>
-                <div className="meta-item">
-                    <User size={12} />
-                    <span>by {flag.updatedBy}</span>
-                </div>
-            </div>
-
-            <style jsx>{`
-        .flag-card {
-          padding: 24px;
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 2px solid rgba(148, 163, 184, 0.2);
-          border-radius: 20px;
-          transition: all 0.3s ease;
-        }
-        
-        .flag-card.enabled {
-          border-color: rgba(16, 185, 129, 0.3);
-        }
-        
-        .flag-card.disabled {
-          opacity: 0.7;
-        }
-        
-        .flag-card:hover {
-          border-color: rgba(168, 85, 247, 0.4);
-        }
-        
-        .card-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 16px;
-          margin-bottom: 16px;
-        }
-        
-        .flag-info h3 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-          margin-bottom: 4px;
-        }
-        
-        .flag-info p {
-          font-size: 13px;
-          color: #94a3b8;
-        }
-        
-        .toggle-btn {
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          padding: 0;
-          transition: transform 0.2s;
-        }
-        
-        .toggle-btn:hover {
-          transform: scale(1.1);
-        }
-        
-        .toggle-btn.on {
-          color: #10b981;
-        }
-        
-        .toggle-btn.off {
-          color: #64748b;
-        }
-        
-        .rollout-section {
-          margin-bottom: 16px;
-        }
-        
-        .rollout-header {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border-radius: 12px;
-          cursor: pointer;
-          color: #94a3b8;
-        }
-        
-        .rollout-header span {
-          font-size: 13px;
-          font-weight: 500;
-        }
-        
-        .rollout-bar {
-          flex: 1;
-          height: 6px;
-          background: rgba(148, 163, 184, 0.2);
-          border-radius: 3px;
-          overflow: hidden;
-        }
-        
-        .rollout-fill {
-          height: 100%;
-          background: linear-gradient(90deg, #10b981, #3b82f6);
-          border-radius: 3px;
-          transition: width 0.3s;
-        }
-        
-        .rollout-controls {
-          padding: 16px;
-          background: rgba(30, 41, 59, 0.3);
-          border-radius: 0 0 12px 12px;
-        }
-        
-        .rollout-controls input[type="range"] {
-          width: 100%;
-          margin-bottom: 12px;
-          accent-color: #a855f7;
-        }
-        
-        .rollout-presets {
-          display: flex;
-          gap: 8px;
-        }
-        
-        .rollout-presets button {
-          flex: 1;
-          padding: 8px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 8px;
-          color: #94a3b8;
-          font-size: 12px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .rollout-presets button.active,
-        .rollout-presets button:hover {
-          background: rgba(168, 85, 247, 0.2);
-          border-color: rgba(168, 85, 247, 0.4);
-          color: #a855f7;
-        }
-        
-        .card-footer {
-          display: flex;
-          gap: 16px;
-          padding-top: 12px;
-          border-top: 1px solid rgba(148, 163, 184, 0.1);
-        }
-        
-        .meta-item {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 12px;
-          color: #64748b;
-        }
-      `}</style>
         </motion.div>
     );
 }
 
+// === Главная страница ===
 export default function FeatureFlagsPage() {
-    const [flags, setFlags] = useState(mockFlags);
+    const [flags, setFlags] = useState<FeatureFlag[]>([]);
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
 
-    const handleToggle = (id: string) => {
+    // Ref для debounce таймеров rollout
+    const rolloutTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+    // Загрузка флагов с API
+    const fetchFlags = useCallback(async () => {
+        try {
+            setError(null);
+            setLoading(true);
+            const data = await adminApi.system.getFeatureFlags();
+            setFlags(data.flags ?? []);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Не удалось загрузить feature flags');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchFlags();
+    }, [fetchFlags]);
+
+    // Очистка таймеров при размонтировании
+    useEffect(() => {
+        return () => {
+            rolloutTimers.current.forEach(timer => clearTimeout(timer));
+        };
+    }, []);
+
+    // Переключение флага (optimistic update)
+    const handleToggle = async (id: string) => {
+        const flag = flags.find(f => f.id === id);
+        if (!flag) return;
+
+        const newEnabled = !flag.enabled;
+
+        // Оптимистичное обновление UI
         setFlags(prev => prev.map(f =>
-            f.id === id ? { ...f, enabled: !f.enabled, updatedAt: new Date().toISOString().split('T')[0] } : f
+            f.id === id ? { ...f, enabled: newEnabled } : f
         ));
+
+        setSavingIds(prev => new Set(prev).add(id));
+        try {
+            await adminApi.system.updateFeatureFlag(id, newEnabled, flag.rollout);
+        } catch {
+            // Откат при ошибке
+            setFlags(prev => prev.map(f =>
+                f.id === id ? { ...f, enabled: !newEnabled } : f
+            ));
+        } finally {
+            setSavingIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
     };
 
+    // Изменение rollout с debounce (optimistic update)
     const handleRolloutChange = (id: string, value: number) => {
+        // Оптимистичное обновление UI сразу
         setFlags(prev => prev.map(f =>
-            f.id === id ? { ...f, rolloutPercentage: value, updatedAt: new Date().toISOString().split('T')[0] } : f
+            f.id === id ? { ...f, rollout: value } : f
         ));
+
+        // Отменяем предыдущий таймер для этого флага
+        const existing = rolloutTimers.current.get(id);
+        if (existing) clearTimeout(existing);
+
+        // Debounce: сохраняем через 600ms после последнего изменения
+        const timer = setTimeout(async () => {
+            const flag = flags.find(f => f.id === id);
+            if (!flag) return;
+
+            setSavingIds(prev => new Set(prev).add(id));
+            try {
+                await adminApi.system.updateFeatureFlag(id, flag.enabled, value);
+            } catch {
+                // При ошибке перезагружаем данные
+                await fetchFlags();
+            } finally {
+                setSavingIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
+            }
+            rolloutTimers.current.delete(id);
+        }, 600);
+
+        rolloutTimers.current.set(id, timer);
     };
 
+    // Фильтрация
     const filteredFlags = flags.filter(f => {
-        if (search && !f.name.toLowerCase().includes(search.toLowerCase())) return false;
+        if (search && !f.name.toLowerCase().includes(search.toLowerCase()) && !f.id.toLowerCase().includes(search.toLowerCase())) return false;
         if (filter === 'enabled' && !f.enabled) return false;
         if (filter === 'disabled' && f.enabled) return false;
         return true;
     });
 
     return (
-        <div className="flags-page">
-            {/* Header */}
-            <div className="page-header">
-                <div>
-                    <h1>Feature Flags</h1>
-                    <p>Control feature rollouts and experiments</p>
+        <div className={styles.pageContainer}>
+            {/* Заголовок */}
+            <div className={styles.headerSection}>
+                <div className={styles.headerContent}>
+                    <h1 className={styles.headerTitle}>Feature Flags</h1>
+                    <p className={styles.headerDescription}>Управление функциями и постепенный раскат</p>
                 </div>
+                <button
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-sm bg-slate-800/50 border border-slate-700/50 text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-50"
+                    onClick={fetchFlags}
+                    disabled={loading}
+                >
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    Обновить
+                </button>
             </div>
 
-            {/* Stats */}
-            <FlagStats />
+            {/* Статистика */}
+            {loading ? <FlagStatsSkeleton /> : <FlagStats flags={flags} />}
 
-            {/* Info Banner */}
-            <div className="info-banner">
-                <Info size={18} />
-                <span>Changes to feature flags take effect immediately. Use rollout percentages for gradual releases.</span>
+            {/* Инфо-баннер */}
+            <div className="flex items-center gap-3 px-5 py-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 text-[13px] mb-6">
+                <Info size={18} className="shrink-0" />
+                <span>Изменения feature flags применяются мгновенно. Используйте rollout для постепенного раската.</span>
             </div>
 
-            {/* Filters */}
-            <div className="filters-bar">
-                <div className="search-box">
-                    <Search size={16} />
-                    <input
-                        type="text"
-                        placeholder="Search features..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                    />
-                </div>
-
-                <div className="filter-tabs">
+            {/* Фильтры + поиск */}
+            <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+                <div className="flex gap-2">
                     {(['all', 'enabled', 'disabled'] as const).map((f) => (
                         <button
                             key={f}
-                            className={filter === f ? 'active' : ''}
+                            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-[10px] text-[13px] cursor-pointer transition-all duration-200 border ${
+                                filter === f
+                                    ? 'bg-purple-500/20 border-purple-500/40 text-purple-400'
+                                    : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:bg-slate-800'
+                            }`}
                             onClick={() => setFilter(f)}
                         >
+                            {f === 'all' && <Flag size={14} />}
+                            {f === 'enabled' && <CheckCircle size={14} />}
+                            {f === 'disabled' && <AlertCircle size={14} />}
                             {f.charAt(0).toUpperCase() + f.slice(1)}
-                            <span className="count">
+                            <span className="px-1.5 py-0.5 bg-slate-700/30 rounded-lg text-[11px]">
                                 {f === 'all' ? flags.length :
                                     f === 'enabled' ? flags.filter(fl => fl.enabled).length :
                                         flags.filter(fl => !fl.enabled).length}
@@ -498,132 +347,57 @@ export default function FeatureFlagsPage() {
                         </button>
                     ))}
                 </div>
-            </div>
 
-            {/* Flags Grid */}
-            <div className="flags-grid">
-                {filteredFlags.map((flag) => (
-                    <FlagCard
-                        key={flag.id}
-                        flag={flag}
-                        onToggle={handleToggle}
-                        onRolloutChange={handleRolloutChange}
+                <div className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-800/50 border border-slate-700/50 rounded-[10px] min-w-[280px]">
+                    <Search size={16} className="text-slate-500" />
+                    <input
+                        type="text"
+                        placeholder="Поиск по названию или ID..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="flex-1 bg-transparent border-none outline-none text-[var(--admin-text-primary)] text-sm placeholder:text-slate-500"
                     />
-                ))}
+                </div>
             </div>
 
-            <style jsx>{`
-        .flags-page {
-          max-width: 1400px;
-          margin: 0 auto;
-        }
-        
-        .page-header {
-          margin-bottom: 24px;
-        }
-        
-        .page-header h1 {
-          font-size: 28px;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin-bottom: 4px;
-        }
-        
-        .page-header p {
-          font-size: 15px;
-          color: #94a3b8;
-        }
-        
-        .info-banner {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 14px 20px;
-          background: rgba(59, 130, 246, 0.1);
-          border: 1px solid rgba(59, 130, 246, 0.2);
-          border-radius: 12px;
-          color: #3b82f6;
-          font-size: 13px;
-          margin-bottom: 24px;
-        }
-        
-        .filters-bar {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 16px;
-          margin-bottom: 24px;
-          flex-wrap: wrap;
-        }
-        
-        .search-box {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 12px;
-          min-width: 280px;
-        }
-        
-        .search-box svg {
-          color: #64748b;
-        }
-        
-        .search-box input {
-          flex: 1;
-          background: transparent;
-          border: none;
-          outline: none;
-          color: #f1f5f9;
-          font-size: 14px;
-        }
-        
-        .filter-tabs {
-          display: flex;
-          gap: 8px;
-        }
-        
-        .filter-tabs button {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #94a3b8;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .filter-tabs button.active {
-          background: rgba(168, 85, 247, 0.2);
-          border-color: rgba(168, 85, 247, 0.4);
-          color: #a855f7;
-        }
-        
-        .filter-tabs .count {
-          padding: 2px 8px;
-          background: rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          font-size: 11px;
-        }
-        
-        .flags-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 20px;
-        }
-        
-        @media (max-width: 900px) {
-          .flags-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
+            {/* Ошибка */}
+            {error && (
+                <div className={styles.errorContainer}>
+                    <AlertTriangle size={48} className={styles.errorIcon} />
+                    <h3 className={styles.errorTitle}>Ошибка загрузки</h3>
+                    <p className={styles.errorMessage}>{error}</p>
+                    <button className={styles.retryButton} onClick={fetchFlags}>
+                        <RefreshCw size={16} />
+                        Повторить
+                    </button>
+                </div>
+            )}
+
+            {/* Скелетон */}
+            {loading && !error && <FlagsListSkeleton />}
+
+            {/* Список флагов */}
+            {!loading && !error && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    {filteredFlags.map((flag) => (
+                        <FlagCard
+                            key={flag.id}
+                            flag={flag}
+                            onToggle={handleToggle}
+                            onRolloutChange={handleRolloutChange}
+                            saving={savingIds.has(flag.id)}
+                        />
+                    ))}
+
+                    {filteredFlags.length === 0 && (
+                        <div className="col-span-full text-center py-16 text-slate-500">
+                            <Flag size={48} className="mx-auto mb-4 opacity-50" />
+                            <h3 className="text-xl font-semibold text-[var(--admin-text-primary)] mb-2">Флагов не найдено</h3>
+                            <p>Нет feature flags, соответствующих фильтрам</p>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

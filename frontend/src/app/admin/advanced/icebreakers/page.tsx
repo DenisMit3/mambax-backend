@@ -42,6 +42,9 @@ export default function IcebreakersPage() {
     const [aiGenerating, setAiGenerating] = useState(false);
     const [generated, setGenerated] = useState<string[]>([]);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
     useEffect(() => { loadData(); }, []);
 
@@ -77,8 +80,7 @@ export default function IcebreakersPage() {
                 category: formData.category,
                 tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean)
             });
-            setShowModal(false);
-            setFormData({ text: '', category: 'general', tags: '' });
+            closeModal();
             loadData();
         } catch (e) { setFormErrors({ submit: 'Failed to create' }); }
         finally { setSubmitting(false); }
@@ -99,6 +101,47 @@ export default function IcebreakersPage() {
         loadData();
     };
 
+    const openEdit = (ib: Icebreaker) => {
+        setEditingId(ib.id);
+        setFormData({ text: ib.text, category: ib.category, tags: ib.tags.join(', ') });
+        setFormErrors({});
+        setShowModal(true);
+    };
+
+    const handleEdit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!formData.text.trim()) { setFormErrors({ text: 'Required' }); return; }
+        if (!editingId) return;
+        setSubmitting(true);
+        try {
+            await advancedApi.updateIcebreaker(editingId, {
+                text: formData.text,
+                category: formData.category,
+                tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean)
+            });
+            closeModal();
+            loadData();
+        } catch (e) { setFormErrors({ submit: 'Failed to update' }); }
+        finally { setSubmitting(false); }
+    };
+
+    const handleDelete = async (id: string) => {
+        setDeletingId(id);
+        try {
+            await advancedApi.deleteIcebreaker(id);
+            setShowDeleteConfirm(null);
+            loadData();
+        } catch (e) { console.error(e); }
+        finally { setDeletingId(null); }
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setEditingId(null);
+        setFormData({ text: '', category: 'general', tags: '' });
+        setFormErrors({});
+    };
+
     const copy = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
         setCopiedId(id);
@@ -113,7 +156,7 @@ export default function IcebreakersPage() {
                 <div><h1>Icebreaker Templates</h1><p>Manage conversation starters</p></div>
                 <div className="actions">
                     <button className="btn sec" onClick={() => setShowAIModal(true)}><Zap size={18} />AI Generate</button>
-                    <button className="btn pri" onClick={() => setShowModal(true)}><Plus size={18} />Add New</button>
+                    <button className="btn pri" onClick={() => { setEditingId(null); setFormData({ text: '', category: 'general', tags: '' }); setFormErrors({}); setShowModal(true); }}><Plus size={18} />Add New</button>
                 </div>
             </div>
 
@@ -156,8 +199,8 @@ export default function IcebreakersPage() {
                                     <td><div className="rate"><div style={{ width: `${ib.success_rate}%` }} />{ib.success_rate}%</div></td>
                                     <td><div className="acts">
                                         <button onClick={() => copy(ib.text, ib.id)}>{copiedId === ib.id ? <Check size={14} /> : <Copy size={14} />}</button>
-                                        <button><Edit2 size={14} /></button>
-                                        <button className="del"><Trash2 size={14} /></button>
+                                        <button onClick={() => openEdit(ib)} disabled={editingId === ib.id}>{editingId === ib.id ? <Loader2 className="spin" size={14} /> : <Edit2 size={14} />}</button>
+                                        <button className="del" onClick={() => setShowDeleteConfirm(ib.id)} disabled={deletingId === ib.id}>{deletingId === ib.id ? <Loader2 className="spin" size={14} /> : <Trash2 size={14} />}</button>
                                     </div></td>
                                 </tr>
                             ))}
@@ -168,10 +211,10 @@ export default function IcebreakersPage() {
 
             <AnimatePresence>
                 {showModal && (
-                    <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModal(false)}>
+                    <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeModal}>
                         <motion.div className="modal" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-                            <div className="mhead"><h2>Create Icebreaker</h2><button onClick={() => setShowModal(false)}><X size={20} /></button></div>
-                            <form onSubmit={handleCreate}>
+                            <div className="mhead"><h2>{editingId ? 'Edit Icebreaker' : 'Create Icebreaker'}</h2><button onClick={closeModal}><X size={20} /></button></div>
+                            <form onSubmit={editingId ? handleEdit : handleCreate}>
                                 <div className="field">
                                     <label>Text *</label>
                                     <textarea value={formData.text} onChange={e => setFormData(p => ({ ...p, text: e.target.value }))} rows={3} />
@@ -182,7 +225,7 @@ export default function IcebreakersPage() {
                                     <div className="field"><label>Tags</label><input value={formData.tags} onChange={e => setFormData(p => ({ ...p, tags: e.target.value }))} placeholder="comma,separated" /></div>
                                 </div>
                                 {formErrors.submit && <div className="ferr">{formErrors.submit}</div>}
-                                <div className="mfoot"><button type="button" className="btn sec" onClick={() => setShowModal(false)}>Cancel</button><button type="submit" className="btn pri" disabled={submitting}>{submitting ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}Create</button></div>
+                                <div className="mfoot"><button type="button" className="btn sec" onClick={closeModal}>Cancel</button><button type="submit" className="btn pri" disabled={submitting}>{submitting ? <Loader2 className="spin" size={16} /> : editingId ? <Edit2 size={16} /> : <Plus size={16} />}{editingId ? 'Save' : 'Create'}</button></div>
                             </form>
                         </motion.div>
                     </motion.div>
@@ -202,6 +245,23 @@ export default function IcebreakersPage() {
                                 {generated.length === 0 ? <div className="gen-empty">Click generate to create AI icebreakers</div> : generated.map((t, i) => (
                                     <div key={i} className="gen-item"><p>{t}</p><div><button onClick={() => copy(t, `g${i}`)}>{copiedId === `g${i}` ? <Check size={14} /> : <Copy size={14} />}</button><button className="btn pri sm" onClick={() => saveGenerated(t)}><Plus size={14} />Save</button></div></div>
                                 ))}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showDeleteConfirm && (
+                    <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDeleteConfirm(null)}>
+                        <motion.div className="modal confirm" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
+                            <div className="mhead"><h2><Trash2 size={18} />Delete Icebreaker</h2><button onClick={() => setShowDeleteConfirm(null)}><X size={20} /></button></div>
+                            <div className="confirm-body"><p>Are you sure you want to delete this icebreaker? This action cannot be undone.</p></div>
+                            <div className="mfoot" style={{ padding: '14px 22px' }}>
+                                <button className="btn sec" onClick={() => setShowDeleteConfirm(null)}>Cancel</button>
+                                <button className="btn danger" onClick={() => handleDelete(showDeleteConfirm)} disabled={deletingId === showDeleteConfirm}>
+                                    {deletingId === showDeleteConfirm ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />}Delete
+                                </button>
                             </div>
                         </motion.div>
                     </motion.div>
@@ -281,6 +341,13 @@ export default function IcebreakersPage() {
         .gen-item div{display:flex;gap:8px}
         .gen-item button{padding:6px;background:var(--glass-bg-light);border:1px solid var(--glass-border);border-radius:6px;color:var(--text-secondary);cursor:pointer}
         .spin{animation:spin 1s linear infinite}
+        .btn.danger{background:rgba(239,68,68,0.9);color:#fff}
+        .btn.danger:hover{background:rgba(239,68,68,1);box-shadow:0 0 20px rgba(239,68,68,0.3)}
+        .btn.danger:disabled{opacity:0.6}
+        .modal.confirm{max-width:400px}
+        .confirm-body{padding:22px;color:var(--text-secondary);font-size:14px;line-height:1.6}
+        .confirm-body p{margin:0}
+        .acts button:disabled{opacity:0.5;cursor:not-allowed}
         @keyframes spin{to{transform:rotate(360deg)}}
         @media(max-width:768px){.stats{grid-template-columns:1fr 1fr}.header{flex-direction:column;align-items:flex-start}.row{grid-template-columns:1fr}}
       `}</style>

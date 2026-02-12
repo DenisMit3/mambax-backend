@@ -80,7 +80,7 @@ function QueueStats({ stats, loading }: { stats: ModerationStats | null; loading
   );
 }
 
-function ContentCard({ item, onAction }: { item: QueueItem; onAction: (action: string, item: QueueItem) => void }) {
+function ContentCard({ item, onAction, onSelect }: { item: QueueItem; onAction: (action: string, item: QueueItem) => void; onSelect: (item: QueueItem) => void }) {
   const priorityColors = {
     high: { bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' },
     medium: { bg: 'rgba(249, 115, 22, 0.15)', color: '#f97316' },
@@ -108,7 +108,7 @@ function ContentCard({ item, onAction }: { item: QueueItem; onAction: (action: s
       layout
     >
       {/* Content Preview */}
-      <div className="relative h-[180px] flex items-center justify-center bg-slate-800/50 border-b border-[var(--admin-glass-border)]">
+      <div className="relative h-[180px] flex items-center justify-center bg-slate-800/50 border-b border-[var(--admin-glass-border)] cursor-pointer" onClick={() => onSelect(item)}>
         {item.type === 'photo' && (
           <div className="flex flex-col items-center gap-2 text-[var(--admin-text-muted)]">
             <Image size={32} />
@@ -474,6 +474,7 @@ export default function ModerationPage() {
                 key={item.id}
                 item={item}
                 onAction={handleAction}
+                onSelect={setSelectedItem}
               />
             ))}
           </AnimatePresence>

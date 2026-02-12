@@ -27,6 +27,8 @@ export default function EventsPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const eventTypes = [
     { id: 'speed-dating', name: 'Speed Dating', icon: Clock },
@@ -81,11 +83,67 @@ export default function EventsPage() {
         max_participants: formData.max_participants,
         is_premium: formData.is_premium
       });
-      setShowModal(false);
-      setFormData({ name: '', event_type: 'speed-dating', start_date: '', max_participants: 50, is_premium: false });
+      closeModal();
       loadData();
     } catch (e) { setFormErrors({ submit: 'Failed to create event' }); }
     finally { setSubmitting(false); }
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEvent || !validate()) return;
+    setSubmitting(true);
+    try {
+      await advancedApi.updateEvent(editingEvent.id, {
+        name: formData.name,
+        event_type: formData.event_type,
+        start_date: new Date(formData.start_date).toISOString(),
+        max_participants: formData.max_participants,
+        is_premium: formData.is_premium
+      });
+      closeModal();
+      loadData();
+    } catch (e) { setFormErrors({ submit: 'Failed to update event' }); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleDelete = async (ev: Event) => {
+    if (!confirm(`Delete "${ev.name}"? This action cannot be undone.`)) return;
+    setDeletingId(ev.id);
+    try {
+      await advancedApi.deleteEvent(ev.id);
+      loadData();
+    } catch (e) { console.error('Failed to delete event', e); }
+    finally { setDeletingId(null); }
+  };
+
+  const openEditModal = (ev: Event) => {
+    // Конвертируем ISO дату в формат datetime-local
+    const localDate = ev.start_date ? new Date(ev.start_date).toISOString().slice(0, 16) : '';
+    setFormData({
+      name: ev.name,
+      event_type: ev.type,
+      start_date: localDate,
+      max_participants: ev.max_participants,
+      is_premium: ev.is_premium
+    });
+    setEditingEvent(ev);
+    setFormErrors({});
+    setShowModal(true);
+  };
+
+  const openCreateModal = () => {
+    setFormData({ name: '', event_type: 'speed-dating', start_date: '', max_participants: 50, is_premium: false });
+    setEditingEvent(null);
+    setFormErrors({});
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingEvent(null);
+    setFormData({ name: '', event_type: 'speed-dating', start_date: '', max_participants: 50, is_premium: false });
+    setFormErrors({});
   };
 
   const getStatusColor = (status: string) => {
@@ -114,7 +172,7 @@ export default function EventsPage() {
 
       <div className="header">
         <div><h1>Virtual Dating Events</h1><p>Create and manage online dating experiences</p></div>
-        <button className="btn pri" onClick={() => setShowModal(true)}><Plus size={18} />Create Event</button>
+        <button className="btn pri" onClick={openCreateModal}><Plus size={18} />Create Event</button>
       </div>
 
       {stats && (
@@ -141,7 +199,7 @@ export default function EventsPage() {
       {loading ? <div className="loading"><Loader2 className="spin" size={32} /></div> : (
         <div className="events-grid">
           {filtered.length === 0 ? (
-            <div className="empty"><Calendar size={48} /><p>No events found</p><button className="btn pri" onClick={() => setShowModal(true)}><Plus size={16} />Create Event</button></div>
+            <div className="empty"><Calendar size={48} /><p>No events found</p><button className="btn pri" onClick={openCreateModal}><Plus size={16} />Create Event</button></div>
           ) : filtered.map((ev, i) => (
             <motion.div key={ev.id} className="event-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
               <div className="card-head">
@@ -159,21 +217,23 @@ export default function EventsPage() {
               <p className="host">Host: {ev.host || 'TBD'}</p>
               <div className="card-actions">
                 <button onClick={() => setSelectedEvent(ev)}><Eye size={14} />View</button>
-                <button><Edit2 size={14} /></button>
-                <button className="del"><Trash2 size={14} /></button>
+                <button onClick={() => openEditModal(ev)}><Edit2 size={14} />Edit</button>
+                <button className="del" disabled={deletingId === ev.id} onClick={() => handleDelete(ev)}>
+                  {deletingId === ev.id ? <Loader2 className="spin" size={14} /> : <Trash2 size={14} />}
+                </button>
               </div>
             </motion.div>
           ))}
         </div>
       )}
 
-      {/* Create Modal */}
+      {/* Create/Edit Modal */}
       <AnimatePresence>
         {showModal && (
-          <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModal(false)}>
+          <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeModal}>
             <motion.div className="modal" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-              <div className="mhead"><h2>Create Event</h2><button onClick={() => setShowModal(false)}><X size={20} /></button></div>
-              <form onSubmit={handleCreate}>
+              <div className="mhead"><h2>{editingEvent ? 'Edit Event' : 'Create Event'}</h2><button onClick={closeModal}><X size={20} /></button></div>
+              <form onSubmit={editingEvent ? handleEdit : handleCreate}>
                 <div className="field">
                   <label>Event Name *</label>
                   <input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} placeholder="Friday Night Mixer" />
@@ -208,8 +268,11 @@ export default function EventsPage() {
                 </div>
                 {formErrors.submit && <div className="ferr">{formErrors.submit}</div>}
                 <div className="mfoot">
-                  <button type="button" className="btn sec" onClick={() => setShowModal(false)}>Cancel</button>
-                  <button type="submit" className="btn pri" disabled={submitting}>{submitting ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}Create Event</button>
+                  <button type="button" className="btn sec" onClick={closeModal}>Cancel</button>
+                  <button type="submit" className="btn pri" disabled={submitting}>
+                    {submitting ? <Loader2 className="spin" size={16} /> : editingEvent ? <Edit2 size={16} /> : <Plus size={16} />}
+                    {editingEvent ? 'Save Changes' : 'Create Event'}
+                  </button>
                 </div>
               </form>
             </motion.div>
@@ -291,6 +354,7 @@ export default function EventsPage() {
         .card-actions button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;background:var(--glass-bg-light);border:1px solid var(--glass-border);border-radius:8px;font-size:12px;color:var(--text-secondary);cursor:pointer}
         .card-actions button:hover{color:var(--text-primary);border-color:var(--neon-blue)}
         .card-actions .del:hover{color:var(--neon-red);border-color:var(--neon-red)}
+        .card-actions button:disabled{opacity:0.5;cursor:not-allowed}
         .empty{grid-column:1/-1;text-align:center;padding:60px;color:var(--text-muted)}
         .empty svg{margin-bottom:16px;opacity:0.5}
         .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}

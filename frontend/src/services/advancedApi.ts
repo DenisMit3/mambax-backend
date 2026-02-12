@@ -410,6 +410,35 @@ export const advancedApi = {
     async createPartner(data: any): Promise<any> {
         return httpClient.post('/admin/advanced/partners', data);
     },
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async updatePartner(id: string, data: any): Promise<any> {
+        return httpClient.put(`/admin/advanced/partners/${id}`, data);
+    },
+
+    async deletePartner(id: string): Promise<void> {
+        return httpClient.delete(`/admin/advanced/partners/${id}`);
+    },
+
+    // Events update/delete
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async updateEvent(id: string, data: any): Promise<any> {
+        return httpClient.put(`/admin/advanced/events/${id}`, data);
+    },
+
+    async deleteEvent(id: string): Promise<void> {
+        return httpClient.delete(`/admin/advanced/events/${id}`);
+    },
+
+    // Icebreakers update/delete
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async updateIcebreaker(id: string, data: any): Promise<any> {
+        return httpClient.put(`/admin/advanced/icebreakers/${id}`, data);
+    },
+
+    async deleteIcebreaker(id: string): Promise<void> {
+        return httpClient.delete(`/admin/advanced/icebreakers/${id}`);
+    },
 };
 
 export default advancedApi;

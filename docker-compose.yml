@@ -1,5 +1,5 @@
 # =============================================
-# MAMBAX DOCKER COMPOSE - MINIMAL
+# MAMBAX DOCKER COMPOSE
 # =============================================
 # ВАЖНО: База данных - ТОЛЬКО Neon PostgreSQL (облачная)
 # Локальный PostgreSQL ЗАПРЕЩЕН
@@ -8,7 +8,7 @@
 version: '3.8'
 
 services:
-  # Redis Cache (Optional - for local development)
+  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: mambax_redis
@@ -36,19 +36,42 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+    restart: unless-stopped
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mambax_backend
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: mambax_frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./frontend/.env.local
+    environment:
+      - BACKEND_URL=http://backend:8001
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
   redis_data:
     driver: local
   minio_data:
     driver: local
-
-# =============================================
-# ПРИМЕЧАНИЕ:
-# База данных PostgreSQL НЕ включена в docker-compose.
-# Используйте ТОЛЬКО Neon PostgreSQL: https://neon.tech
-# 
-# Для запуска backend и frontend используйте:
-#   - Backend: cd backend && uvicorn main:app --reload --port 8001
-#   - Frontend: cd frontend && npm run dev
-# =============================================

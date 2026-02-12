@@ -172,7 +172,7 @@ export function GiftRevealAnimation({
                             transition={{ delay: 0.2 }}
                         >
                             <h1 className="text-3xl font-black text-white mb-2 leading-tight">
-                                You received a gift! 🎉
+                                Вам прислали подарок! 🎉
                             </h1>
 
                             <div className="inline-block px-6 py-2 rounded-full bg-pink-500/20 border border-pink-500/40 mt-2">
@@ -189,7 +189,7 @@ export function GiftRevealAnimation({
                                 transition={{ delay: 0.4 }}
                                 className="text-slate-400 font-bold uppercase tracking-widest text-sm"
                             >
-                                From <span className="text-amber-400">{senderName}</span>
+                                От <span className="text-amber-400">{senderName}</span>
                             </motion.p>
                         )}
 
@@ -216,7 +216,7 @@ export function GiftRevealAnimation({
                             onClick={onClose}
                             className="mt-4 px-10 py-4 rounded-2xl bg-gradient-to-r from-neon-pink to-neon-purple text-white text-lg font-black shadow-[0_8px_30px_rgba(236,72,153,0.4)] hover:shadow-neon-pink/60 transition-shadow uppercase tracking-widest"
                         >
-                            Thank You! 💝
+                            Спасибо! 💝
                         </motion.button>
                     </div>
                 </div>

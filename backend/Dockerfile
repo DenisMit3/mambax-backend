@@ -49,8 +49,6 @@ COPY . ./backend
 RUN chown -R mambax:mambax /app
 
 # Switch to non-root user
-
-# Switch to non-root user
 USER mambax
 
 # Expose port

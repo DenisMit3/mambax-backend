@@ -8,6 +8,7 @@ from backend.models.monetization import GiftCategory, VirtualGift
 async def seed_gifts(db: AsyncSession):
     """
     Seeds the virtual gifts catalog with categories and items.
+    Uses local images from /static/gifts/.
     """
     print("Seeding Virtual Gifts...")
     
@@ -45,50 +46,92 @@ async def seed_gifts(db: AsyncSession):
     for cat in categories:
         db.add(cat)
     
-    await db.flush() # To get IDs for gifts
+    await db.flush()
     
-    # 3. Create Gifts
+    # 3. Create Gifts (8 items with local images)
     gifts_data = [
-        # Romantic
+        # Романтика
         {
             "name": "Красная роза",
+            "description": "Классический символ любви",
             "price": 10,
             "category_idx": 0,
-            "img": "https://cdn-icons-png.flaticon.com/512/726/726338.png"
+            "img": "/static/gifts/rose.png",
+            "is_animated": False,
+            "is_premium": False,
+            "sort_order": 1
         },
         {
-            "name": "Сердце",
+            "name": "Воздушное сердце",
+            "description": "Милый воздушный шарик-сердечко",
+            "price": 15,
+            "category_idx": 0,
+            "img": "/static/gifts/heart_balloon.png",
+            "is_animated": True,
+            "is_premium": False,
+            "sort_order": 2
+        },
+        {
+            "name": "Плюшевый мишка",
+            "description": "Уютный плюшевый медвежонок",
             "price": 25,
             "category_idx": 0,
-            "img": "https://cdn-icons-png.flaticon.com/512/833/833472.png"
+            "img": "/static/gifts/teddy.png",
+            "is_animated": False,
+            "is_premium": False,
+            "sort_order": 3
         },
-        # Fun
+        # Веселье
         {
-            "name": "Кофе",
-            "price": 15,
+            "name": "Шампанское",
+            "description": "Отпразднуйте особенный момент",
+            "price": 30,
             "category_idx": 1,
-            "img": "https://cdn-icons-png.flaticon.com/512/924/924514.png"
+            "img": "/static/gifts/champagne.png",
+            "is_animated": True,
+            "is_premium": False,
+            "sort_order": 4
         },
         {
-            "name": "Пицца",
+            "name": "Звезда",
+            "description": "Ты - моя звезда!",
+            "price": 5,
+            "category_idx": 1,
+            "img": "/static/gifts/star.png",
+            "is_animated": True,
+            "is_premium": False,
+            "sort_order": 7
+        },
+        {
+            "name": "Коробка конфет",
+            "description": "Сладкая, как ты",
             "price": 20,
             "category_idx": 1,
-            "img": "https://cdn-icons-png.flaticon.com/512/3595/3595455.png"
+            "img": "/static/gifts/chocolate.png",
+            "is_animated": False,
+            "is_premium": False,
+            "sort_order": 8
         },
-        # Premium
+        # Премиум
         {
-            "name": "Бриллиант",
+            "name": "Бриллиантовое кольцо",
+            "description": "Для самого особенного человека",
             "price": 100,
             "category_idx": 2,
-            "img": "https://cdn-icons-png.flaticon.com/512/3135/3135761.png",
-            "is_premium": True
+            "img": "/static/gifts/diamond_ring.png",
+            "is_animated": True,
+            "is_premium": True,
+            "sort_order": 5
         },
         {
-            "name": "Корона",
-            "price": 250,
+            "name": "Романтический ужин",
+            "description": "Виртуальное свидание за ужином",
+            "price": 50,
             "category_idx": 2,
-            "img": "https://cdn-icons-png.flaticon.com/512/1067/1067055.png",
-            "is_premium": True
+            "img": "/static/gifts/dinner.png",
+            "is_animated": False,
+            "is_premium": True,
+            "sort_order": 6
         }
     ]
     
@@ -97,15 +140,16 @@ async def seed_gifts(db: AsyncSession):
             id=uuid.uuid4(),
             category_id=categories[g["category_idx"]].id,
             name=g["name"],
-            description=f"Отправьте {g['name'].lower()} чтобы привлечь внимание!",
+            description=g["description"],
             image_url=g["img"],
             price=Decimal(str(g["price"])),
             currency="XTR",
+            is_animated=g.get("is_animated", False),
             is_premium=g.get("is_premium", False),
             is_active=True,
-            sort_order=0
+            sort_order=g["sort_order"]
         )
         db.add(gift)
         
     await db.commit()
-    print("✅ Virtual Gifts seeded successfully!")
+    print("✅ Virtual Gifts seeded successfully! (8 gifts, 3 categories)")

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
     RefreshCw,
@@ -8,763 +8,419 @@ import {
     Clock,
     CheckCircle,
     XCircle,
-    AlertTriangle,
-    User,
-    CreditCard,
     Calendar,
     MessageSquare,
     ChevronRight,
     Search,
-    Filter,
+    AlertTriangle,
+    Loader2,
 } from 'lucide-react';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { adminApi } from '@/services/adminApi';
+import styles from '../../admin.module.css';
 
+// Интерфейс запроса на возврат (snake_case от API)
 interface RefundRequest {
     id: string;
-    transactionId: string;
-    userId: string;
-    userName: string;
-    userEmail: string;
+    transaction_id: string;
+    user_id: string;
+    user_name: string;
+    user_email: string;
     amount: number;
     reason: string;
     status: 'pending' | 'approved' | 'rejected' | 'processed';
     plan: string;
-    originalPurchaseDate: string;
-    requestDate: string;
-    daysSincePurchase: number;
-    reviewedAt?: string;
-    adminNotes?: string;
+    original_purchase_date: string;
+    request_date: string;
+    days_since_purchase: number;
+    reviewed_at?: string;
+    admin_notes?: string;
 }
 
-const mockRefunds: RefundRequest[] = [
-    {
-        id: 'refund-1',
-        transactionId: 'txn-12345',
-        userId: 'user-101',
-        userName: 'John Smith',
-        userEmail: 'john@example.com',
-        amount: 29.99,
-        reason: 'Accidental purchase - I meant to look at the features but accidentally confirmed',
-        status: 'pending',
-        plan: 'gold',
-        originalPurchaseDate: '2024-02-01T10:30:00Z',
-        requestDate: '2024-02-05T14:20:00Z',
-        daysSincePurchase: 4
-    },
-    {
-        id: 'refund-2',
-        transactionId: 'txn-12346',
-        userId: 'user-102',
-        userName: 'Sarah Johnson',
-        userEmail: 'sarah@example.com',
-        amount: 49.99,
-        reason: 'Not satisfied with Platinum features, expected more from the premium tier',
-        status: 'pending',
-        plan: 'platinum',
-        originalPurchaseDate: '2024-02-03T08:15:00Z',
-        requestDate: '2024-02-06T11:45:00Z',
-        daysSincePurchase: 3
-    },
-    {
-        id: 'refund-3',
-        transactionId: 'txn-12347',
-        userId: 'user-103',
-        userName: 'Mike Williams',
-        userEmail: 'mike@example.com',
-        amount: 29.99,
-        reason: 'Duplicate charge - was charged twice for same subscription',
-        status: 'approved',
-        plan: 'gold',
-        originalPurchaseDate: '2024-01-28T16:00:00Z',
-        requestDate: '2024-01-28T16:05:00Z',
-        daysSincePurchase: 0,
-        reviewedAt: '2024-01-28T18:00:00Z',
-        adminNotes: 'Confirmed duplicate charge in payment logs'
-    },
-    {
-        id: 'refund-4',
-        transactionId: 'txn-12348',
-        userId: 'user-104',
-        userName: 'Emma Davis',
-        userEmail: 'emma@example.com',
-        amount: 29.99,
-        reason: 'Requested refund after 45 days of use',
-        status: 'rejected',
-        plan: 'gold',
-        originalPurchaseDate: '2023-12-15T09:00:00Z',
-        requestDate: '2024-01-30T10:00:00Z',
-        daysSincePurchase: 46,
-        reviewedAt: '2024-01-30T14:00:00Z',
-        adminNotes: 'Outside 30-day refund window, user had significant activity'
-    }
-];
+// Статистика возвратов от API
+interface RefundStatsData {
+    pending: number;
+    approved_month: number;
+    rejected_month: number;
+    total_refunded: number;
+    refund_rate: number;
+    avg_processing_days: number;
+}
 
-function RefundStats() {
-    const stats = [
-        { label: 'Pending', value: 15, icon: <Clock size={18} />, color: '#f97316' },
-        { label: 'Approved (Month)', value: 47, icon: <CheckCircle size={18} />, color: '#10b981' },
-        { label: 'Rejected (Month)', value: 12, icon: <XCircle size={18} />, color: '#ef4444' },
-        { label: 'Total Refunded', value: '$1.9K', icon: <DollarSign size={18} />, color: '#3b82f6' },
-        { label: 'Refund Rate', value: '2.3%', icon: <RefreshCw size={18} />, color: '#a855f7' },
-        { label: 'Avg Processing', value: '1.5 days', icon: <Calendar size={18} />, color: '#10b981' },
-    ];
+// === Компонент статистики ===
+function RefundStats({ stats, loading }: { stats: RefundStatsData | null; loading: boolean }) {
+    const items = stats
+        ? [
+            { label: 'Pending', value: stats.pending, icon: <Clock size={18} />, color: '#f97316' },
+            { label: 'Approved (Month)', value: stats.approved_month, icon: <CheckCircle size={18} />, color: '#10b981' },
+            { label: 'Rejected (Month)', value: stats.rejected_month, icon: <XCircle size={18} />, color: '#ef4444' },
+            { label: 'Total Refunded', value: `$${stats.total_refunded >= 1000 ? (stats.total_refunded / 1000).toFixed(1) + 'K' : stats.total_refunded}`, icon: <DollarSign size={18} />, color: '#3b82f6' },
+            { label: 'Refund Rate', value: `${stats.refund_rate}%`, icon: <RefreshCw size={18} />, color: '#a855f7' },
+            { label: 'Avg Processing', value: `${stats.avg_processing_days} days`, icon: <Calendar size={18} />, color: '#10b981' },
+        ]
+        : [];
+
+    // Скелетон при загрузке
+    if (loading) {
+        return (
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+                {Array.from({ length: 6 }).map((_, i) => (
+                    <GlassCard key={i} className="p-4 flex items-center gap-3" hover={false}>
+                        <div className="w-[42px] h-[42px] rounded-xl bg-slate-700/30 animate-pulse" />
+                        <div className="flex flex-col gap-2">
+                            <div className="w-12 h-5 bg-slate-700/30 rounded animate-pulse" />
+                            <div className="w-16 h-3 bg-slate-700/30 rounded animate-pulse" />
+                        </div>
+                    </GlassCard>
+                ))}
+            </div>
+        );
+    }
+
+    if (!stats) return null;
 
     return (
-        <div className="refund-stats">
-            {stats.map((stat, index) => (
-                <motion.div
-                    key={stat.label}
-                    className="stat-card"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                >
-                    <div className="stat-icon" style={{ background: `${stat.color}20`, color: stat.color }}>
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+            {items.map((stat, index) => (
+                <GlassCard key={stat.label} className="p-4 flex items-center gap-3" hover={false}>
+                    <motion.div
+                        className="w-[42px] h-[42px] rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: `${stat.color}20`, color: stat.color }}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                    >
                         {stat.icon}
+                    </motion.div>
+                    <div className="flex flex-col">
+                        <span className="text-xl font-bold text-[var(--admin-text-primary)]">{stat.value}</span>
+                        <span className="text-[11px] text-[var(--admin-text-muted)]">{stat.label}</span>
                     </div>
-                    <div className="stat-content">
-                        <span className="stat-value">{stat.value}</span>
-                        <span className="stat-label">{stat.label}</span>
-                    </div>
-                </motion.div>
+                </GlassCard>
             ))}
-
-            <style jsx>{`
-        .refund-stats {
-          display: grid;
-          grid-template-columns: repeat(6, 1fr);
-          gap: 16px;
-          margin-bottom: 24px;
-        }
-        
-        @media (max-width: 1400px) {
-          .refund-stats {
-            grid-template-columns: repeat(3, 1fr);
-          }
-        }
-        
-        @media (max-width: 800px) {
-          .refund-stats {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        
-        .stat-card {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 16px 18px;
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 14px;
-        }
-        
-        .stat-icon {
-          width: 42px;
-          height: 42px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .stat-content {
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .stat-value {
-          font-size: 20px;
-          font-weight: 700;
-          color: #f1f5f9;
-        }
-        
-        .stat-label {
-          font-size: 11px;
-          color: #94a3b8;
-        }
-      `}</style>
         </div>
     );
 }
 
-function RefundCard({ refund, onAction }: {
+// === Карточка возврата ===
+function RefundCard({ refund, onAction, actionLoading }: {
     refund: RefundRequest;
-    onAction: (id: string, action: 'approve' | 'reject') => void
+    onAction: (id: string, action: 'approve' | 'reject') => void;
+    actionLoading: string | null;
 }) {
     const [showDetails, setShowDetails] = useState(false);
 
-    const statusColors = {
-        pending: { bg: 'rgba(249, 115, 22, 0.15)', color: '#f97316' },
-        approved: { bg: 'rgba(16, 185, 129, 0.15)', color: '#10b981' },
-        rejected: { bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' },
-        processed: { bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' },
+    const statusConfig = {
+        pending: { bg: 'bg-orange-500/15', text: 'text-orange-500', border: 'border-l-orange-500', icon: <Clock size={12} /> },
+        approved: { bg: 'bg-emerald-500/15', text: 'text-emerald-500', border: 'border-l-emerald-500', icon: <CheckCircle size={12} /> },
+        rejected: { bg: 'bg-red-500/15', text: 'text-red-500', border: 'border-l-red-500', icon: <XCircle size={12} /> },
+        processed: { bg: 'bg-blue-500/15', text: 'text-blue-500', border: 'border-l-blue-500', icon: <CheckCircle size={12} /> },
     };
 
-    const planColors = {
-        gold: { bg: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' },
-        platinum: { bg: 'rgba(168, 85, 247, 0.15)', color: '#a855f7' },
+    const planConfig: Record<string, string> = {
+        gold: 'bg-amber-500/15 text-amber-500',
+        platinum: 'bg-purple-500/15 text-purple-500',
     };
 
     const getEligibility = () => {
-        if (refund.daysSincePurchase <= 7) {
-            return { label: 'Full Refund Eligible', color: '#10b981' };
-        } else if (refund.daysSincePurchase <= 30) {
-            return { label: 'Partial Refund Eligible', color: '#f59e0b' };
-        } else {
-            return { label: 'Outside Refund Window', color: '#ef4444' };
-        }
+        if (refund.days_since_purchase <= 7) return { label: 'Full Refund Eligible', cls: 'text-emerald-500' };
+        if (refund.days_since_purchase <= 30) return { label: 'Partial Refund Eligible', cls: 'text-amber-500' };
+        return { label: 'Outside Refund Window', cls: 'text-red-500' };
     };
 
     const eligibility = getEligibility();
+    const sc = statusConfig[refund.status];
+    const isProcessing = actionLoading === refund.id;
 
     return (
         <motion.div
-            className={`refund-card ${refund.status}`}
+            className={`bg-[rgba(15,23,42,0.65)] backdrop-blur-[20px] border border-slate-400/20 rounded-2xl overflow-hidden mb-3 transition-all hover:border-slate-400/40 border-l-[3px] ${sc.border}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
         >
-            <div className="card-main" onClick={() => setShowDetails(!showDetails)}>
-                <div className="user-info">
-                    <div className="user-avatar">{refund.userName.charAt(0)}</div>
-                    <div className="user-details">
-                        <span className="user-name">{refund.userName}</span>
-                        <span className="user-email">{refund.userEmail}</span>
+            {/* Основная строка */}
+            <div
+                className="flex items-center gap-5 px-5 py-4 cursor-pointer"
+                onClick={() => setShowDetails(!showDetails)}
+            >
+                {/* Аватар + имя */}
+                <div className="flex items-center gap-3 min-w-[200px]">
+                    <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-600 rounded-[10px] flex items-center justify-center text-base font-semibold text-white">
+                        {refund.user_name.charAt(0)}
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-[var(--admin-text-primary)]">{refund.user_name}</span>
+                        <span className="text-xs text-slate-500">{refund.user_email}</span>
                     </div>
                 </div>
 
-                <div className="refund-amount">
-                    <span className="amount">${refund.amount.toFixed(2)}</span>
-                    <span
-                        className="plan-badge"
-                        style={planColors[refund.plan as keyof typeof planColors]}
-                    >
+                {/* Сумма + план */}
+                <div className="flex flex-col items-end min-w-[100px]">
+                    <span className="text-lg font-bold text-[var(--admin-text-primary)]">${refund.amount.toFixed(2)}</span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-[10px] uppercase ${planConfig[refund.plan] || 'bg-slate-700/30 text-slate-400'}`}>
                         {refund.plan}
                     </span>
                 </div>
 
-                <div className="refund-meta">
-                    <div className="meta-item">
+                {/* Мета */}
+                <div className="flex-1 flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
                         <Calendar size={14} />
-                        <span>{refund.daysSincePurchase} days ago</span>
+                        <span>{refund.days_since_purchase} days ago</span>
                     </div>
-                    <span className="eligibility" style={{ color: eligibility.color }}>
+                    <span className={`text-[11px] font-semibold ${eligibility.cls}`}>
                         {eligibility.label}
                     </span>
                 </div>
 
-                <span
-                    className="status-badge"
-                    style={statusColors[refund.status]}
-                >
-                    {refund.status === 'pending' && <Clock size={12} />}
-                    {refund.status === 'approved' && <CheckCircle size={12} />}
-                    {refund.status === 'rejected' && <XCircle size={12} />}
+                {/* Статус */}
+                <span className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full capitalize ${sc.bg} ${sc.text}`}>
+                    {sc.icon}
                     {refund.status}
                 </span>
 
+                {/* Стрелка раскрытия */}
                 <ChevronRight
                     size={18}
-                    className={`expand-icon ${showDetails ? 'expanded' : ''}`}
+                    className={`text-slate-500 transition-transform duration-200 ${showDetails ? 'rotate-90' : ''}`}
                 />
             </div>
 
+            {/* Детали (раскрываемая секция) */}
             {showDetails && (
                 <motion.div
-                    className="card-details"
+                    className="px-5 pb-5 border-t border-slate-400/10"
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                 >
-                    <div className="details-grid">
-                        <div className="detail-item">
-                            <span className="detail-label">Transaction ID</span>
-                            <span className="detail-value">{refund.transactionId}</span>
+                    {/* Сетка деталей */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-4">
+                        <div className="flex flex-col">
+                            <span className="text-[11px] text-slate-500 mb-1">Transaction ID</span>
+                            <span className="text-[13px] font-medium text-[var(--admin-text-primary)]">{refund.transaction_id}</span>
                         </div>
-                        <div className="detail-item">
-                            <span className="detail-label">Purchase Date</span>
-                            <span className="detail-value">
-                                {new Date(refund.originalPurchaseDate).toLocaleDateString()}
+                        <div className="flex flex-col">
+                            <span className="text-[11px] text-slate-500 mb-1">Purchase Date</span>
+                            <span className="text-[13px] font-medium text-[var(--admin-text-primary)]">
+                                {new Date(refund.original_purchase_date).toLocaleDateString()}
                             </span>
                         </div>
-                        <div className="detail-item">
-                            <span className="detail-label">Request Date</span>
-                            <span className="detail-value">
-                                {new Date(refund.requestDate).toLocaleDateString()}
+                        <div className="flex flex-col">
+                            <span className="text-[11px] text-slate-500 mb-1">Request Date</span>
+                            <span className="text-[13px] font-medium text-[var(--admin-text-primary)]">
+                                {new Date(refund.request_date).toLocaleDateString()}
                             </span>
                         </div>
-                        {refund.reviewedAt && (
-                            <div className="detail-item">
-                                <span className="detail-label">Reviewed At</span>
-                                <span className="detail-value">
-                                    {new Date(refund.reviewedAt).toLocaleDateString()}
+                        {refund.reviewed_at && (
+                            <div className="flex flex-col">
+                                <span className="text-[11px] text-slate-500 mb-1">Reviewed At</span>
+                                <span className="text-[13px] font-medium text-[var(--admin-text-primary)]">
+                                    {new Date(refund.reviewed_at).toLocaleDateString()}
                                 </span>
                             </div>
                         )}
                     </div>
 
-                    <div className="reason-section">
-                        <span className="reason-label">
+                    {/* Причина */}
+                    <div className="p-3 bg-slate-800/40 rounded-[10px] mb-3">
+                        <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mb-2">
                             <MessageSquare size={14} /> Reason
                         </span>
-                        <p className="reason-text">{refund.reason}</p>
+                        <p className="text-[13px] text-[var(--admin-text-primary)] leading-relaxed m-0">{refund.reason}</p>
                     </div>
 
-                    {refund.adminNotes && (
-                        <div className="notes-section">
-                            <span className="notes-label">Admin Notes</span>
-                            <p className="notes-text">{refund.adminNotes}</p>
+                    {/* Заметки админа */}
+                    {refund.admin_notes && (
+                        <div className="p-3 bg-orange-500/10 rounded-[10px] mb-3">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mb-2">Admin Notes</span>
+                            <p className="text-[13px] text-[var(--admin-text-primary)] leading-relaxed m-0">{refund.admin_notes}</p>
                         </div>
                     )}
 
+                    {/* Кнопки действий */}
                     {refund.status === 'pending' && (
-                        <div className="action-buttons">
+                        <div className="flex gap-3 pt-3">
                             <button
-                                className="btn-approve"
+                                className="flex-1 flex items-center justify-center gap-2 py-3 px-5 rounded-[10px] text-sm font-semibold cursor-pointer transition-all bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 hover:bg-emerald-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 onClick={(e) => { e.stopPropagation(); onAction(refund.id, 'approve'); }}
+                                disabled={isProcessing}
                             >
-                                <CheckCircle size={16} />
+                                {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                                 Approve Refund
                             </button>
                             <button
-                                className="btn-reject"
+                                className="flex-1 flex items-center justify-center gap-2 py-3 px-5 rounded-[10px] text-sm font-semibold cursor-pointer transition-all bg-red-500/15 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 onClick={(e) => { e.stopPropagation(); onAction(refund.id, 'reject'); }}
+                                disabled={isProcessing}
                             >
-                                <XCircle size={16} />
+                                {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={16} />}
                                 Reject
                             </button>
                         </div>
                     )}
                 </motion.div>
             )}
-
-            <style jsx>{`
-        .refund-card {
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 16px;
-          overflow: hidden;
-          margin-bottom: 12px;
-          transition: all 0.2s;
-        }
-        
-        .refund-card:hover {
-          border-color: rgba(148, 163, 184, 0.4);
-        }
-        
-        .refund-card.pending {
-          border-left: 3px solid #f97316;
-        }
-        
-        .refund-card.approved {
-          border-left: 3px solid #10b981;
-        }
-        
-        .refund-card.rejected {
-          border-left: 3px solid #ef4444;
-        }
-        
-        .card-main {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-          padding: 16px 20px;
-          cursor: pointer;
-        }
-        
-        .user-info {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          min-width: 200px;
-        }
-        
-        .user-avatar {
-          width: 40px;
-          height: 40px;
-          background: linear-gradient(135deg, #667eea, #764ba2);
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 16px;
-          font-weight: 600;
-          color: white;
-        }
-        
-        .user-details {
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .user-name {
-          font-size: 14px;
-          font-weight: 600;
-          color: #f1f5f9;
-        }
-        
-        .user-email {
-          font-size: 12px;
-          color: #64748b;
-        }
-        
-        .refund-amount {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          min-width: 100px;
-        }
-        
-        .amount {
-          font-size: 18px;
-          font-weight: 700;
-          color: #f1f5f9;
-        }
-        
-        .plan-badge {
-          font-size: 10px;
-          font-weight: 600;
-          padding: 2px 8px;
-          border-radius: 10px;
-          text-transform: uppercase;
-        }
-        
-        .refund-meta {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        
-        .meta-item {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 12px;
-          color: #94a3b8;
-        }
-        
-        .eligibility {
-          font-size: 11px;
-          font-weight: 600;
-        }
-        
-        .status-badge {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 12px;
-          font-weight: 600;
-          padding: 6px 12px;
-          border-radius: 20px;
-          text-transform: capitalize;
-        }
-        
-        :global(.expand-icon) {
-          color: #64748b;
-          transition: transform 0.2s;
-        }
-        
-        :global(.expand-icon.expanded) {
-          transform: rotate(90deg);
-        }
-        
-        .card-details {
-          padding: 0 20px 20px;
-          border-top: 1px solid rgba(148, 163, 184, 0.1);
-        }
-        
-        .details-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 16px;
-          padding: 16px 0;
-        }
-        
-        .detail-item {
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .detail-label {
-          font-size: 11px;
-          color: #64748b;
-          margin-bottom: 4px;
-        }
-        
-        .detail-value {
-          font-size: 13px;
-          font-weight: 500;
-          color: #f1f5f9;
-        }
-        
-        .reason-section,
-        .notes-section {
-          padding: 12px 16px;
-          background: rgba(30, 41, 59, 0.4);
-          border-radius: 10px;
-          margin-bottom: 12px;
-        }
-        
-        .reason-label,
-        .notes-label {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #94a3b8;
-          margin-bottom: 8px;
-        }
-        
-        .reason-text,
-        .notes-text {
-          font-size: 13px;
-          color: #f1f5f9;
-          line-height: 1.5;
-        }
-        
-        .notes-section {
-          background: rgba(249, 115, 22, 0.1);
-        }
-        
-        .action-buttons {
-          display: flex;
-          gap: 12px;
-          padding-top: 12px;
-        }
-        
-        .btn-approve,
-        .btn-reject {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 12px 20px;
-          border-radius: 10px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .btn-approve {
-          background: rgba(16, 185, 129, 0.15);
-          border: 1px solid rgba(16, 185, 129, 0.3);
-          color: #10b981;
-        }
-        
-        .btn-approve:hover {
-          background: #10b981;
-          color: white;
-        }
-        
-        .btn-reject {
-          background: rgba(239, 68, 68, 0.15);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          color: #ef4444;
-        }
-        
-        .btn-reject:hover {
-          background: #ef4444;
-          color: white;
-        }
-      `}</style>
         </motion.div>
     );
 }
 
+// === Скелетон списка ===
+function RefundListSkeleton() {
+    return (
+        <div className="flex flex-col gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                    key={i}
+                    className="bg-[rgba(15,23,42,0.65)] border border-slate-400/20 rounded-2xl p-5 flex items-center gap-5"
+                >
+                    <div className="w-10 h-10 rounded-[10px] bg-slate-700/30 animate-pulse" />
+                    <div className="flex flex-col gap-2 flex-1">
+                        <div className="w-32 h-4 bg-slate-700/30 rounded animate-pulse" />
+                        <div className="w-48 h-3 bg-slate-700/30 rounded animate-pulse" />
+                    </div>
+                    <div className="w-16 h-5 bg-slate-700/30 rounded animate-pulse" />
+                    <div className="w-20 h-6 bg-slate-700/30 rounded-full animate-pulse" />
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// === Главная страница ===
 export default function RefundsPage() {
-    const [refunds, setRefunds] = useState(mockRefunds);
+    const [refunds, setRefunds] = useState<RefundRequest[]>([]);
+    const [stats, setStats] = useState<RefundStatsData | null>(null);
     const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
     const [search, setSearch] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-    const handleAction = (id: string, action: 'approve' | 'reject') => {
-        setRefunds(prev => prev.map(r =>
-            r.id === id
-                ? { ...r, status: action === 'approve' ? 'approved' : 'rejected', reviewedAt: new Date().toISOString() }
-                : r
-        ));
+    // Загрузка данных с API
+    const fetchRefunds = useCallback(async () => {
+        try {
+            setError(null);
+            setLoading(true);
+            const data = await adminApi.monetization.refunds.list(
+                filter !== 'all' ? filter : undefined
+            );
+            setRefunds(data.refunds ?? []);
+            setStats(data.stats ?? null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Не удалось загрузить данные о возвратах');
+        } finally {
+            setLoading(false);
+        }
+    }, [filter]);
+
+    useEffect(() => {
+        fetchRefunds();
+    }, [fetchRefunds]);
+
+    // Обработка approve/reject
+    const handleAction = async (id: string, action: 'approve' | 'reject') => {
+        try {
+            setActionLoading(id);
+            await adminApi.monetization.refunds.action(id, action);
+            // Перезагружаем список после действия
+            await fetchRefunds();
+        } catch (err) {
+            console.error('Refund action failed:', err);
+        } finally {
+            setActionLoading(null);
+        }
     };
 
+    // Фильтрация по поиску (клиентская)
     const filteredRefunds = refunds.filter(r => {
-        if (filter !== 'all' && r.status !== filter) return false;
-        if (search && !r.userName.toLowerCase().includes(search.toLowerCase()) &&
-            !r.userEmail.toLowerCase().includes(search.toLowerCase())) return false;
-        return true;
+        if (!search) return true;
+        const q = search.toLowerCase();
+        return r.user_name.toLowerCase().includes(q) || r.user_email.toLowerCase().includes(q);
     });
 
     return (
-        <div className="refunds-page">
-            {/* Header */}
-            <div className="page-header">
-                <div>
-                    <h1>Refund Processing</h1>
-                    <p>Review and process refund requests</p>
+        <div className={styles.pageContainer}>
+            {/* Заголовок */}
+            <div className={styles.headerSection}>
+                <div className={styles.headerContent}>
+                    <h1 className={styles.headerTitle}>Refund Processing</h1>
+                    <p className={styles.headerDescription}>Review and process refund requests</p>
                 </div>
             </div>
 
-            {/* Stats */}
-            <RefundStats />
+            {/* Статистика */}
+            <RefundStats stats={stats} loading={loading} />
 
-            {/* Filters */}
-            <div className="filters-bar">
-                <div className="filter-tabs">
+            {/* Фильтры + поиск */}
+            <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+                <div className="flex gap-2">
                     {(['pending', 'approved', 'rejected', 'all'] as const).map((f) => (
                         <button
                             key={f}
-                            className={`filter-tab ${filter === f ? 'active' : ''}`}
+                            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-[10px] text-[13px] cursor-pointer transition-all duration-200 border ${
+                                filter === f
+                                    ? 'bg-purple-500/20 border-purple-500/40 text-purple-400'
+                                    : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:bg-slate-800'
+                            }`}
                             onClick={() => setFilter(f)}
                         >
                             {f === 'pending' && <Clock size={14} />}
                             {f === 'approved' && <CheckCircle size={14} />}
                             {f === 'rejected' && <XCircle size={14} />}
                             {f.charAt(0).toUpperCase() + f.slice(1)}
-                            <span className="count">
-                                {f === 'all'
-                                    ? refunds.length
-                                    : refunds.filter(r => r.status === f).length}
-                            </span>
                         </button>
                     ))}
                 </div>
 
-                <div className="search-box">
-                    <Search size={16} />
+                <div className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-800/50 border border-slate-700/50 rounded-[10px] min-w-[300px]">
+                    <Search size={16} className="text-slate-500" />
                     <input
                         type="text"
                         placeholder="Search by name or email..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
+                        className="flex-1 bg-transparent border-none outline-none text-[var(--admin-text-primary)] text-sm placeholder:text-slate-500"
                     />
                 </div>
             </div>
 
-            {/* Refund List */}
-            <div className="refunds-list">
-                {filteredRefunds.map((refund) => (
-                    <RefundCard
-                        key={refund.id}
-                        refund={refund}
-                        onAction={handleAction}
-                    />
-                ))}
+            {/* Состояние ошибки */}
+            {error && (
+                <div className={styles.errorContainer}>
+                    <AlertTriangle size={48} className={styles.errorIcon} />
+                    <h3 className={styles.errorTitle}>Ошибка загрузки</h3>
+                    <p className={styles.errorMessage}>{error}</p>
+                    <button className={styles.retryButton} onClick={fetchRefunds}>
+                        <RefreshCw size={16} />
+                        Повторить
+                    </button>
+                </div>
+            )}
 
-                {filteredRefunds.length === 0 && (
-                    <div className="empty-state">
-                        <CheckCircle size={48} />
-                        <h3>All caught up!</h3>
-                        <p>No refund requests matching your filters</p>
-                    </div>
-                )}
-            </div>
+            {/* Скелетон загрузки */}
+            {loading && !error && <RefundListSkeleton />}
 
-            <style jsx>{`
-        .refunds-page {
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-        
-        .page-header {
-          margin-bottom: 24px;
-        }
-        
-        .page-header h1 {
-          font-size: 28px;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin-bottom: 4px;
-        }
-        
-        .page-header p {
-          font-size: 15px;
-          color: #94a3b8;
-        }
-        
-        .filters-bar {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 24px;
-          flex-wrap: wrap;
-          gap: 16px;
-        }
-        
-        .filter-tabs {
-          display: flex;
-          gap: 8px;
-        }
-        
-        .filter-tab {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 10px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #94a3b8;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .filter-tab.active {
-          background: rgba(168, 85, 247, 0.2);
-          border-color: rgba(168, 85, 247, 0.4);
-          color: #a855f7;
-        }
-        
-        .filter-tab .count {
-          padding: 2px 8px;
-          background: rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          font-size: 11px;
-        }
-        
-        .search-box {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 10px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          min-width: 300px;
-        }
-        
-        .search-box svg {
-          color: #64748b;
-        }
-        
-        .search-box input {
-          flex: 1;
-          background: transparent;
-          border: none;
-          outline: none;
-          color: #f1f5f9;
-          font-size: 14px;
-        }
-        
-        .refunds-list {
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .empty-state {
-          text-align: center;
-          padding: 60px 20px;
-          color: #64748b;
-        }
-        
-        .empty-state h3 {
-          font-size: 20px;
-          font-weight: 600;
-          color: #f1f5f9;
-          margin: 16px 0 8px;
-        }
-      `}</style>
+            {/* Список возвратов */}
+            {!loading && !error && (
+                <div className="flex flex-col">
+                    {filteredRefunds.map((refund) => (
+                        <RefundCard
+                            key={refund.id}
+                            refund={refund}
+                            onAction={handleAction}
+                            actionLoading={actionLoading}
+                        />
+                    ))}
+
+                    {filteredRefunds.length === 0 && (
+                        <div className="text-center py-16 text-slate-500">
+                            <CheckCircle size={48} className="mx-auto mb-4 opacity-50" />
+                            <h3 className="text-xl font-semibold text-[var(--admin-text-primary)] mb-2">All caught up!</h3>
+                            <p>No refund requests matching your filters</p>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

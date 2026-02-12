@@ -1,94 +1,275 @@
 'use client';
 
-import { Users, DollarSign, Share2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Users,
+  DollarSign,
+  Share2,
+  TrendingUp,
+  Loader2,
+  AlertTriangle,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
+import { adminApi } from '@/services/adminApi';
+import { GlassCard } from '@/components/ui/GlassCard';
+import styles from '../../admin.module.css';
+
+// Типы данных реферальной программы
+interface Referral {
+  id: string;
+  referrer_name: string;
+  referred_name: string;
+  date: string;
+  status: 'converted' | 'pending' | 'expired';
+  reward: string;
+}
+
+interface ReferralStats {
+  total_refers: number;
+  rewards_paid: number;
+  conversion_rate: number;
+}
+
+interface ReferralsResponse {
+  referrals: Referral[];
+  stats: ReferralStats;
+  total: number;
+  page: number;
+}
+
+const PAGE_SIZE = 10;
+
+// Конфиг статус-бейджей
+const statusConfig: Record<Referral['status'], { label: string; className: string }> = {
+  converted: {
+    label: 'Converted',
+    className: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20',
+  },
+  pending: {
+    label: 'Pending',
+    className: 'bg-orange-500/15 text-orange-400 border border-orange-500/20',
+  },
+  expired: {
+    label: 'Expired',
+    className: 'bg-slate-500/15 text-slate-400 border border-slate-500/20',
+  },
+};
+
+// Карточка статистики
+function StatCard({
+  icon,
+  color,
+  label,
+  value,
+  loading,
+}: {
+  icon: React.ReactNode;
+  color: string;
+  label: string;
+  value: string;
+  loading: boolean;
+}) {
+  return (
+    <GlassCard className="p-5 flex items-center gap-4" hover={false}>
+      <div
+        className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+        style={{ background: `${color}20`, color }}
+      >
+        {loading ? <Loader2 className="animate-spin" size={20} /> : icon}
+      </div>
+      <div className="flex flex-col">
+        <span className="text-xs text-[var(--admin-text-muted)] uppercase tracking-wide">
+          {label}
+        </span>
+        <span className="text-2xl font-bold text-[var(--admin-text-primary)]">
+          {loading ? '...' : value}
+        </span>
+      </div>
+    </GlassCard>
+  );
+}
 
 export default function ReferralsPage() {
+  const [data, setData] = useState<ReferralsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+
+  // Загрузка данных с API
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await adminApi.marketing.getReferrals(page);
+      setData(res);
+    } catch (err) {
+      console.error('Ошибка загрузки рефералов:', err);
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить данные');
+    } finally {
+      setLoading(false);
+    }
+  }, [page]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 1;
+
   return (
-    <div className="referrals-page">
-      <h1 className="page-title">Referral Program</h1>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="iconbox blue"><Users size={20} /></div>
-          <div>
-            <div className="label">Total Refers</div>
-            <div className="value">1,245</div>
-          </div>
+    <div className={styles.pageContainer}>
+      {/* Заголовок страницы */}
+      <div className={styles.headerSection}>
+        <div className={styles.headerContent}>
+          <h1 className={styles.headerTitle}>Referral Program</h1>
+          <p className={styles.headerDescription}>
+            Track referrals, conversions and rewards
+          </p>
         </div>
-        <div className="stat-card">
-          <div className="iconbox green"><DollarSign size={20} /></div>
-          <div>
-            <div className="label">Rewards Paid</div>
-            <div className="value">$5,200</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="iconbox purple"><Share2 size={20} /></div>
-          <div>
-            <div className="label">Conversion Rate</div>
-            <div className="value">18.5%</div>
-          </div>
-        </div>
+        <button className={styles.secondaryButton} onClick={fetchData} disabled={loading}>
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
       </div>
 
-      <div className="referral-list">
-        <h3>Recent Referrals</h3>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Referrer</th>
-              <th>Referred User</th>
-              <th>Date</th>
-              <th>Status</th>
-              <th>Reward</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>john_doe</td>
-              <td>jane_smith</td>
-              <td>2 mins ago</td>
-              <td><span className="badge success">Converted</span></td>
-              <td>1 Month Gold</td>
-            </tr>
-            <tr>
-              <td>alex_k</td>
-              <td>mike_r</td>
-              <td>1 hour ago</td>
-              <td><span className="badge pending">Pending</span></td>
-              <td>-</td>
-            </tr>
-            <tr>
-              <td>sarah_c</td>
-              <td>emily_w</td>
-              <td>3 hours ago</td>
-              <td><span className="badge success">Converted</span></td>
-              <td>$10 Credit</td>
-            </tr>
-          </tbody>
-        </table>
+      {/* Ошибка */}
+      {error && (
+        <GlassCard className="flex items-center gap-3 p-4 mb-6 border-primary-red/30 text-primary-red">
+          <AlertTriangle size={20} />
+          <span>{error}</span>
+          <button
+            onClick={fetchData}
+            className="ml-auto px-3 py-1.5 bg-primary-red/10 border border-primary-red/20 rounded-lg text-sm hover:bg-primary-red/20 transition-colors"
+          >
+            Retry
+          </button>
+        </GlassCard>
+      )}
+
+      {/* Карточки статистики */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+        <StatCard
+          icon={<Users size={20} />}
+          color="#3b82f6"
+          label="Total Refers"
+          value={(data?.stats.total_refers ?? 0).toLocaleString()}
+          loading={loading}
+        />
+        <StatCard
+          icon={<DollarSign size={20} />}
+          color="#10b981"
+          label="Rewards Paid"
+          value={`$${(data?.stats.rewards_paid ?? 0).toLocaleString()}`}
+          loading={loading}
+        />
+        <StatCard
+          icon={<TrendingUp size={20} />}
+          color="#a855f7"
+          label="Conversion Rate"
+          value={`${(data?.stats.conversion_rate ?? 0).toFixed(1)}%`}
+          loading={loading}
+        />
       </div>
 
-      <style jsx>{`
-                .referrals-page { padding: 32px; color: #f1f5f9; }
-                .page-title { margin-bottom: 24px; }
-                .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 32px; }
-                .stat-card { background: rgba(30, 41, 59, 0.5); padding: 20px; border-radius: 12px; display: flex; align-items: center; gap: 16px; border: 1px solid rgba(148, 163, 184, 0.2); }
-                .iconbox { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-                .iconbox.blue { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-                .iconbox.green { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-                .iconbox.purple { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
-                .label { font-size: 12px; color: #94a3b8; }
-                .value { font-size: 24px; font-weight: 700; color: white; }
-                
-                .referral-list { background: rgba(30, 41, 59, 0.5); padding: 24px; border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.2); }
-                .table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-                .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); color: #cbd5e1; font-size: 14px; }
-                .table th { color: #94a3b8; font-size: 12px; text-transform: uppercase; }
-                .badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-                .badge.success { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-                .badge.pending { background: rgba(249, 115, 22, 0.2); color: #f97316; }
-            `}</style>
+      {/* Таблица рефералов */}
+      <GlassCard className="p-6 overflow-hidden" hover={false}>
+        <div className="flex items-center gap-3 mb-5">
+          <Share2 size={20} className="text-[var(--admin-text-muted)]" />
+          <h3 className="text-lg font-semibold text-[var(--admin-text-primary)]">
+            Recent Referrals
+          </h3>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="text-left border-b border-[var(--admin-glass-border)] text-[var(--admin-text-muted)] text-sm">
+                <th className="p-3 font-medium">Referrer</th>
+                <th className="p-3 font-medium">Referred User</th>
+                <th className="p-3 font-medium">Date</th>
+                <th className="p-3 font-medium">Status</th>
+                <th className="p-3 font-medium">Reward</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                // Скелетон загрузки — 5 строк
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b border-[var(--admin-glass-border)]">
+                    {Array.from({ length: 5 }).map((_, j) => (
+                      <td key={j} className="p-3">
+                        <div className="h-4 w-24 rounded bg-slate-700/50 animate-pulse" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : data?.referrals.length ? (
+                data.referrals.map((ref) => {
+                  const status = statusConfig[ref.status];
+                  return (
+                    <tr
+                      key={ref.id}
+                      className="border-b border-[var(--admin-glass-border)] text-sm text-[var(--admin-text-secondary)] hover:bg-slate-800/30 transition-colors"
+                    >
+                      <td className="p-3 font-medium text-[var(--admin-text-primary)]">
+                        {ref.referrer_name}
+                      </td>
+                      <td className="p-3">{ref.referred_name}</td>
+                      <td className="p-3">
+                        {new Date(ref.date).toLocaleDateString()}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase ${status.className}`}
+                        >
+                          {status.label}
+                        </span>
+                      </td>
+                      <td className="p-3">{ref.reward || '—'}</td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="p-8 text-center text-[var(--admin-text-muted)]"
+                  >
+                    No referrals found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Пагинация */}
+        {!loading && data && totalPages > 1 && (
+          <div className="flex items-center justify-between mt-5 pt-4 border-t border-[var(--admin-glass-border)]">
+            <span className="text-sm text-[var(--admin-text-muted)]">
+              Page {page} of {totalPages} · {data.total} total
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="p-2 rounded-lg border border-[var(--admin-glass-border)] text-[var(--admin-text-secondary)] hover:bg-slate-800/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="p-2 rounded-lg border border-[var(--admin-glass-border)] text-[var(--admin-text-secondary)] hover:bg-slate-800/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+      </GlassCard>
     </div>
   );
 }

@@ -682,15 +682,21 @@ export const adminApi = {
         exportData: exportAnalyticsData,
     },
     marketing: {
-        sendPush: async (title: string, message: string) => {
-            const params = new URLSearchParams({ title, message });
-            return httpClient.post(`/admin/marketing/push?${params.toString()}`);
+        sendPush: async (title: string, message: string, segment?: string) => {
+            return httpClient.post('/admin/marketing/push', { title, message, segment });
         },
-        getReferrals: async () => {
-            return httpClient.get('/admin/marketing/referrals');
+        getReferrals: async (page?: number) => {
+            const params = page ? `?page=${page}` : '';
+            return httpClient.get(`/admin/marketing/referrals${params}`);
         },
         getCampaigns: async () => {
             return httpClient.get('/admin/marketing/campaigns');
+        },
+        createCampaign: async (data: Record<string, unknown>) => {
+            return httpClient.post('/admin/marketing/campaigns', data);
+        },
+        updateCampaign: async (id: string, action: string) => {
+            return httpClient.post(`/admin/marketing/campaigns/${id}/${action}`);
         },
         getChannels: async () => {
             return httpClient.get('/admin/marketing/channels');
@@ -719,15 +725,54 @@ export const adminApi = {
             create: createPlan,
             update: updatePlan,
             delete: deletePlan,
-        }
+        },
+        promoCodes: {
+            list: async (filter?: string) => {
+                const params = filter && filter !== 'all' ? `?status=${filter}` : '';
+                return httpClient.get(`/admin/monetization/promo-codes${params}`);
+            },
+            create: async (data: Record<string, unknown>) => {
+                return httpClient.post('/admin/monetization/promo-codes', data);
+            },
+            toggle: async (id: string) => {
+                return httpClient.post(`/admin/monetization/promo-codes/${id}/toggle`);
+            },
+        },
+        refunds: {
+            list: async (status?: string) => {
+                const params = status && status !== 'all' ? `?status=${status}` : '';
+                return httpClient.get(`/admin/monetization/refunds${params}`);
+            },
+            action: async (id: string, action: 'approve' | 'reject', notes?: string) => {
+                return httpClient.post(`/admin/monetization/refunds/${id}/${action}`, { notes });
+            },
+        },
+        payments: {
+            getGateways: async () => {
+                return httpClient.get('/admin/monetization/payments/gateways');
+            },
+            getFailedPayments: async () => {
+                return httpClient.get('/admin/monetization/payments/failed');
+            },
+            retryPayment: async (id: string) => {
+                return httpClient.post(`/admin/monetization/payments/${id}/retry`);
+            },
+        },
     },
     system: {
         getHealth: getSystemHealth,
         getFeatureFlags: getFeatureFlags,
         updateFeatureFlag: updateFeatureFlag,
-        getLogs: async () => {
-            return httpClient.get('/admin/system/logs');
-        }
+        getLogs: async (page?: number, level?: string) => {
+            const params = new URLSearchParams();
+            if (page) params.append('page', page.toString());
+            if (level && level !== 'all') params.append('level', level);
+            return httpClient.get(`/admin/system/logs?${params.toString()}`);
+        },
+        getAuditLogs: async (page?: number) => {
+            const params = page ? `?page=${page}` : '';
+            return httpClient.get(`/admin/system/audit${params}`);
+        },
     }
 };
 

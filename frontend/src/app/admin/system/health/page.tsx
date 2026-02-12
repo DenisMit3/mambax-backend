@@ -1,546 +1,300 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
     Server,
-    Database,
-    Wifi,
-    HardDrive,
-    Cpu,
-    MemoryStick,
     Activity,
     CheckCircle,
     AlertTriangle,
     XCircle,
-    Zap,
     Clock,
-    TrendingUp,
-    BarChart3,
     RefreshCw,
+    Loader2,
 } from 'lucide-react';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { adminApi, SystemHealthService } from '@/services/adminApi';
+import styles from '../../admin.module.css';
 
-interface Service {
-    name: string;
-    status: 'healthy' | 'degraded' | 'down';
-    responseTime: number;
-    uptime: string;
-    metrics?: Record<string, number | string>;
-}
+// Конфигурация цветов по статусу сервиса
+const statusConfig = {
+    healthy: {
+        icon: <CheckCircle size={16} />,
+        color: '#10b981',
+        label: 'Healthy',
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-500/20',
+        text: 'text-emerald-400',
+    },
+    warning: {
+        icon: <AlertTriangle size={16} />,
+        color: '#f97316',
+        label: 'Warning',
+        bg: 'bg-orange-500/10',
+        border: 'border-orange-500/20',
+        text: 'text-orange-400',
+    },
+    error: {
+        icon: <XCircle size={16} />,
+        color: '#ef4444',
+        label: 'Error',
+        bg: 'bg-red-500/10',
+        border: 'border-red-500/20',
+        text: 'text-red-400',
+    },
+};
 
-const mockServices: Service[] = [
-    {
-        name: 'API Server',
-        status: 'healthy',
-        responseTime: 45,
-        uptime: '99.99%',
-        metrics: { cpu: 23.5, memory: 45.2, rps: 1250 }
-    },
-    {
-        name: 'PostgreSQL',
-        status: 'healthy',
-        responseTime: 12,
-        uptime: '99.99%',
-        metrics: { connections: 45, queryAvg: 8.5 }
-    },
-    {
-        name: 'Redis Cache',
-        status: 'healthy',
-        responseTime: 2,
-        uptime: '99.99%',
-        metrics: { hitRate: 94.5, memoryMb: 256 }
-    },
-    {
-        name: 'WebSocket Server',
-        status: 'healthy',
-        responseTime: 8,
-        uptime: '99.95%',
-        metrics: { connections: 8456, msgPerSec: 234 }
-    },
-    {
-        name: 'File Storage (S3)',
-        status: 'healthy',
-        responseTime: 85,
-        uptime: '99.99%',
-        metrics: { usedGb: 234.5, limitGb: 500 }
-    },
-    {
-        name: 'Push Service',
-        status: 'degraded',
-        responseTime: 320,
-        uptime: '98.5%',
-        metrics: { queueSize: 1250, deliveryRate: 96.2 }
+// Конфигурация для overall_status
+const overallConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
+    healthy: { icon: <CheckCircle size={32} />, color: '#10b981', label: 'Все системы работают' },
+    warning: { icon: <AlertTriangle size={32} />, color: '#f97316', label: 'Некоторые системы с предупреждениями' },
+    degraded: { icon: <AlertTriangle size={32} />, color: '#f97316', label: 'Некоторые системы деградированы' },
+    error: { icon: <XCircle size={32} />, color: '#ef4444', label: 'Есть проблемы с системами' },
+};
+
+// === Общий статус ===
+function OverallStatus({
+    overallStatus,
+    lastChecked,
+    services,
+    loading,
+}: {
+    overallStatus: string;
+    lastChecked: string;
+    services: SystemHealthService[];
+    loading: boolean;
+}) {
+    // Скелетон
+    if (loading) {
+        return (
+            <GlassCard className="flex items-center gap-5 p-6 mb-6" hover={false}>
+                <div className="w-16 h-16 rounded-2xl bg-slate-700/30 animate-pulse" />
+                <div className="flex-1 flex flex-col gap-2">
+                    <div className="w-64 h-6 bg-slate-700/30 rounded animate-pulse" />
+                    <div className="w-40 h-4 bg-slate-700/30 rounded animate-pulse" />
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                    <div className="w-20 h-8 bg-slate-700/30 rounded animate-pulse" />
+                    <div className="w-24 h-3 bg-slate-700/30 rounded animate-pulse" />
+                </div>
+            </GlassCard>
+        );
     }
-];
 
-function OverallStatus() {
-    const healthyCount = mockServices.filter(s => s.status === 'healthy').length;
-    const isAllHealthy = healthyCount === mockServices.length;
+    const config = overallConfig[overallStatus] || overallConfig.error;
+    const healthyCount = services.filter(s => s.status === 'healthy').length;
 
     return (
-        <div className="overall-status">
-            <div className={`status-indicator ${isAllHealthy ? 'healthy' : 'degraded'}`}>
-                {isAllHealthy ? <CheckCircle size={32} /> : <AlertTriangle size={32} />}
+        <GlassCard className="flex items-center gap-5 p-6 mb-6" hover={false}>
+            <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0"
+                style={{ background: `${config.color}15`, color: config.color }}
+            >
+                {config.icon}
             </div>
-            <div className="status-text">
-                <h2>{isAllHealthy ? 'All Systems Operational' : 'Some Systems Degraded'}</h2>
-                <p>{healthyCount} of {mockServices.length} services healthy</p>
+            <div className="flex-1">
+                <h2 className="text-xl font-bold text-slate-100 mb-1">{config.label}</h2>
+                <p className="text-sm text-slate-400">
+                    {healthyCount} из {services.length} сервисов работают нормально
+                </p>
             </div>
-            <div className="uptime-display">
-                <span className="uptime-value">99.97%</span>
-                <span className="uptime-label">30-day Uptime</span>
+            <div className="text-right">
+                <span className="block text-3xl font-extrabold" style={{ color: config.color }}>
+                    {services.length > 0
+                        ? Math.round((healthyCount / services.length) * 100)
+                        : 0}%
+                </span>
+                <span className="text-xs text-slate-500">
+                    Проверено: {lastChecked ? new Date(lastChecked).toLocaleTimeString() : '—'}
+                </span>
             </div>
-
-            <style jsx>{`
-        .overall-status {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-          padding: 24px 32px;
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 20px;
-          margin-bottom: 24px;
-        }
-        
-        .status-indicator {
-          width: 64px;
-          height: 64px;
-          border-radius: 16px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .status-indicator.healthy {
-          background: rgba(16, 185, 129, 0.15);
-          color: #10b981;
-        }
-        
-        .status-indicator.degraded {
-          background: rgba(249, 115, 22, 0.15);
-          color: #f97316;
-        }
-        
-        .status-text {
-          flex: 1;
-        }
-        
-        .status-text h2 {
-          font-size: 22px;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin-bottom: 4px;
-        }
-        
-        .status-text p {
-          font-size: 14px;
-          color: #94a3b8;
-        }
-        
-        .uptime-display {
-          text-align: right;
-        }
-        
-        .uptime-value {
-          display: block;
-          font-size: 36px;
-          font-weight: 800;
-          color: #10b981;
-        }
-        
-        .uptime-label {
-          font-size: 13px;
-          color: #64748b;
-        }
-      `}</style>
-        </div>
+        </GlassCard>
     );
 }
 
-function ServiceCard({ service }: { service: Service }) {
-    const statusConfig = {
-        healthy: { icon: <CheckCircle size={16} />, color: '#10b981', label: 'Healthy' },
-        degraded: { icon: <AlertTriangle size={16} />, color: '#f97316', label: 'Degraded' },
-        down: { icon: <XCircle size={16} />, color: '#ef4444', label: 'Down' }
-    };
-
-    const status = statusConfig[service.status];
-
-    // Simulating live response time updates
-    const [responseTime, setResponseTime] = useState(service.responseTime);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setResponseTime(service.responseTime + Math.floor(Math.random() * 20) - 10);
-        }, 2000);
-        return () => clearInterval(interval);
-    }, [service.responseTime]);
+// === Карточка сервиса ===
+function ServiceCard({ service }: { service: SystemHealthService }) {
+    const status = statusConfig[service.status] || statusConfig.error;
 
     return (
-        <motion.div
-            className="service-card"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            whileHover={{ y: -4 }}
-        >
-            <div className="card-header">
+        <GlassCard className="p-5" hover>
+            {/* Заголовок */}
+            <div className="flex items-center gap-2.5 mb-4 text-slate-400">
                 <Server size={20} />
-                <h3>{service.name}</h3>
-                <div className="status-badge" style={{ background: `${status.color}20`, color: status.color }}>
+                <h3 className="flex-1 text-[15px] font-semibold text-slate-100">{service.name}</h3>
+                <span className={`flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${status.bg} ${status.border} ${status.text}`}>
                     {status.icon}
                     {status.label}
-                </div>
-            </div>
-
-            <div className="response-time">
-                <Activity size={16} className="pulse" />
-                <span className="rt-value">{Math.max(1, responseTime)}ms</span>
-                <span className="rt-status" style={{ color: responseTime < 100 ? '#10b981' : responseTime < 300 ? '#f59e0b' : '#ef4444' }}>
-                    {responseTime < 100 ? 'Fast' : responseTime < 300 ? 'Normal' : 'Slow'}
                 </span>
             </div>
 
-            <div className="metrics-grid">
-                <div className="metric">
-                    <Clock size={14} />
-                    <span className="metric-value">{service.uptime}</span>
-                    <span className="metric-label">Uptime</span>
-                </div>
-                {service.metrics && Object.entries(service.metrics).slice(0, 2).map(([key, value]) => (
-                    <div key={key} className="metric">
-                        <Zap size={14} />
-                        <span className="metric-value">
-                            {typeof value === 'number' ? value.toLocaleString() : value}
-                            {key.includes('Rate') || key.includes('cpu') || key.includes('memory') ? '%' : ''}
-                        </span>
-                        <span className="metric-label">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                    </div>
-                ))}
+            {/* Время ответа */}
+            <div className="flex items-center gap-2.5 px-4 py-3 bg-slate-800/50 rounded-xl mb-4">
+                <Activity size={16} className="text-emerald-400" />
+                <span className="text-lg font-bold text-slate-100">{service.response}</span>
+                <span className="ml-auto text-xs font-semibold" style={{ color: status.color }}>
+                    {status.label}
+                </span>
             </div>
 
-            <style jsx>{`
-        .service-card {
-          padding: 20px;
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 16px;
-          transition: all 0.3s ease;
-        }
-        
-        .service-card:hover {
-          border-color: rgba(59, 130, 246, 0.3);
-        }
-        
-        .card-header {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 16px;
-          color: #94a3b8;
-        }
-        
-        .card-header h3 {
-          flex: 1;
-          font-size: 15px;
-          font-weight: 600;
-          color: #f1f5f9;
-        }
-        
-        .status-badge {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 11px;
-          font-weight: 600;
-          padding: 4px 10px;
-          border-radius: 20px;
-        }
-        
-        .response-time {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 16px;
-          background: rgba(30, 41, 59, 0.5);
-          border-radius: 12px;
-          margin-bottom: 16px;
-        }
-        
-        :global(.response-time .pulse) {
-          color: #10b981;
-          animation: pulse 1.5s ease-in-out infinite;
-        }
-        
-        @keyframes pulse {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
-        }
-        
-        .rt-value {
-          font-size: 18px;
-          font-weight: 700;
-          color: #f1f5f9;
-        }
-        
-        .rt-status {
-          margin-left: auto;
-          font-size: 12px;
-          font-weight: 600;
-        }
-        
-        .metrics-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 10px;
-        }
-        
-        .metric {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 4px;
-          padding: 10px;
-          background: rgba(30, 41, 59, 0.4);
-          border-radius: 10px;
-          color: #64748b;
-        }
-        
-        .metric-value {
-          font-size: 14px;
-          font-weight: 700;
-          color: #f1f5f9;
-        }
-        
-        .metric-label {
-          font-size: 9px;
-          text-transform: capitalize;
-          text-align: center;
-        }
-      `}</style>
-        </motion.div>
+            {/* Метрики */}
+            <div className="grid grid-cols-2 gap-2.5">
+                <div className="flex flex-col items-center gap-1 p-2.5 bg-slate-800/40 rounded-xl">
+                    <Clock size={14} className="text-slate-500" />
+                    <span className="text-sm font-bold text-slate-100">{service.uptime}</span>
+                    <span className="text-[9px] text-slate-500 uppercase">Uptime</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 p-2.5 bg-slate-800/40 rounded-xl">
+                    <Activity size={14} className="text-slate-500" />
+                    <span className="text-sm font-bold text-slate-100">{service.response}</span>
+                    <span className="text-[9px] text-slate-500 uppercase">Response</span>
+                </div>
+            </div>
+        </GlassCard>
     );
 }
 
-function QuickStats() {
-    const stats = [
-        { label: 'Requests/24h', value: '1.85M', icon: <TrendingUp size={18} />, color: '#3b82f6' },
-        { label: 'Error Rate', value: '0.12%', icon: <AlertTriangle size={18} />, color: '#10b981' },
-        { label: 'Avg Response', value: '52ms', icon: <Zap size={18} />, color: '#a855f7' },
-        { label: 'Active Users', value: '12.5K', icon: <Activity size={18} />, color: '#f59e0b' },
-        { label: 'CPU Usage', value: '23.5%', icon: <Cpu size={18} />, color: '#ec4899' },
-        { label: 'Memory', value: '45.2%', icon: <MemoryStick size={18} />, color: '#14b8a6' },
-    ];
-
-    return (
-        <div className="quick-stats">
-            {stats.map((stat, index) => (
-                <motion.div
-                    key={stat.label}
-                    className="stat-card"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                >
-                    <div className="stat-icon" style={{ background: `${stat.color}20`, color: stat.color }}>
-                        {stat.icon}
-                    </div>
-                    <div className="stat-content">
-                        <span className="stat-value">{stat.value}</span>
-                        <span className="stat-label">{stat.label}</span>
-                    </div>
-                </motion.div>
-            ))}
-
-            <style jsx>{`
-        .quick-stats {
-          display: grid;
-          grid-template-columns: repeat(6, 1fr);
-          gap: 16px;
-          margin-bottom: 24px;
-        }
-        
-        @media (max-width: 1400px) {
-          .quick-stats {
-            grid-template-columns: repeat(3, 1fr);
-          }
-        }
-        
-        @media (max-width: 800px) {
-          .quick-stats {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        
-        .stat-card {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 16px 18px;
-          background: rgba(15, 23, 42, 0.65);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 14px;
-        }
-        
-        .stat-icon {
-          width: 42px;
-          height: 42px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .stat-content {
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .stat-value {
-          font-size: 18px;
-          font-weight: 700;
-          color: #f1f5f9;
-        }
-        
-        .stat-label {
-          font-size: 11px;
-          color: #94a3b8;
-        }
-      `}</style>
-        </div>
-    );
-}
-
+// === Главная страница ===
 export default function SystemHealthPage() {
-    const [services] = useState(mockServices);
-    const [lastRefresh, setLastRefresh] = useState(new Date());
+    const [services, setServices] = useState<SystemHealthService[]>([]);
+    const [overallStatus, setOverallStatus] = useState('healthy');
+    const [lastChecked, setLastChecked] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
 
+    // Загрузка данных с API
+    const fetchHealth = useCallback(async (isRefresh = false) => {
+        if (isRefresh) setRefreshing(true);
+        else setLoading(true);
+        setError(null);
+
+        try {
+            const data = await adminApi.system.getHealth();
+            setServices(data.services || []);
+            setOverallStatus(data.overall_status || 'healthy');
+            setLastChecked(data.last_checked || new Date().toISOString());
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Не удалось загрузить состояние системы');
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchHealth();
+    }, [fetchHealth]);
+
+    // Обработчик обновления
     const handleRefresh = () => {
-        setLastRefresh(new Date());
+        fetchHealth(true);
     };
 
-    return (
-        <div className="health-page">
-            {/* Header */}
-            <div className="page-header">
-                <div>
-                    <h1>System Health</h1>
-                    <p>Real-time infrastructure monitoring</p>
+    // Состояние ошибки
+    if (error && !loading && services.length === 0) {
+        return (
+            <div className={styles.pageContainer}>
+                <div className={styles.headerSection}>
+                    <div>
+                        <h1 className={styles.headerTitle}>Состояние системы</h1>
+                        <p className={styles.headerDescription}>Мониторинг инфраструктуры в реальном времени</p>
+                    </div>
                 </div>
-                <div className="header-actions">
-                    <span className="last-update">
-                        Last updated: {lastRefresh.toLocaleTimeString()}
-                    </span>
-                    <button className="btn-refresh" onClick={handleRefresh}>
+                <div className={styles.errorContainer}>
+                    <AlertTriangle size={48} className={styles.errorIcon} />
+                    <h3 className={styles.errorTitle}>Ошибка загрузки</h3>
+                    <p className={styles.errorMessage}>{error}</p>
+                    <button className={styles.retryButton} onClick={() => fetchHealth()}>
                         <RefreshCw size={16} />
-                        Refresh
+                        Повторить
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className={styles.pageContainer}>
+            {/* Заголовок */}
+            <div className={styles.headerSection}>
+                <div>
+                    <h1 className={styles.headerTitle}>Состояние системы</h1>
+                    <p className={styles.headerDescription}>Мониторинг инфраструктуры в реальном времени</p>
+                </div>
+                <div className="flex items-center gap-4">
+                    <span className="text-xs text-slate-500">
+                        Обновлено: {lastChecked ? new Date(lastChecked).toLocaleTimeString() : '—'}
+                    </span>
+                    <button
+                        className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border border-slate-600/20 rounded-xl text-slate-100 text-sm cursor-pointer transition-all hover:bg-blue-500/20 hover:border-blue-500/30 disabled:opacity-50"
+                        onClick={handleRefresh}
+                        disabled={refreshing || loading}
+                    >
+                        {refreshing ? (
+                            <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                            <RefreshCw size={16} />
+                        )}
+                        Обновить
                     </button>
                 </div>
             </div>
 
-            {/* Overall Status */}
-            <OverallStatus />
+            {/* Общий статус */}
+            <OverallStatus
+                overallStatus={overallStatus}
+                lastChecked={lastChecked}
+                services={services}
+                loading={loading}
+            />
 
-            {/* Quick Stats */}
-            <QuickStats />
-
-            {/* Services Grid */}
-            <h2 className="section-title">
+            {/* Заголовок секции сервисов */}
+            <h2 className="flex items-center gap-2.5 text-lg font-semibold text-slate-100 mb-4">
                 <Server size={20} />
-                Services Status
+                Статус сервисов
             </h2>
-            <div className="services-grid">
-                {services.map((service) => (
-                    <ServiceCard key={service.name} service={service} />
-                ))}
-            </div>
 
-            <style jsx>{`
-        .health-page {
-          max-width: 1600px;
-          margin: 0 auto;
-        }
-        
-        .page-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 24px;
-        }
-        
-        .page-header h1 {
-          font-size: 28px;
-          font-weight: 700;
-          color: #f1f5f9;
-          margin-bottom: 4px;
-        }
-        
-        .page-header p {
-          font-size: 15px;
-          color: #94a3b8;
-        }
-        
-        .header-actions {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-        
-        .last-update {
-          font-size: 13px;
-          color: #64748b;
-        }
-        
-        .btn-refresh {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 18px;
-          background: rgba(30, 41, 59, 0.5);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 10px;
-          color: #f1f5f9;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .btn-refresh:hover {
-          background: rgba(59, 130, 246, 0.2);
-          border-color: rgba(59, 130, 246, 0.3);
-        }
-        
-        .section-title {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 18px;
-          font-weight: 600;
-          color: #f1f5f9;
-          margin-bottom: 16px;
-        }
-        
-        .services-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 20px;
-        }
-        
-        @media (max-width: 1200px) {
-          .services-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        
-        @media (max-width: 800px) {
-          .services-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
+            {/* Скелетон загрузки сервисов */}
+            {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <GlassCard key={i} className="p-5" hover={false}>
+                            <div className="flex items-center gap-2.5 mb-4">
+                                <div className="w-5 h-5 bg-slate-700/30 rounded animate-pulse" />
+                                <div className="flex-1 h-4 bg-slate-700/30 rounded animate-pulse" />
+                                <div className="w-16 h-5 bg-slate-700/30 rounded-full animate-pulse" />
+                            </div>
+                            <div className="h-12 bg-slate-700/30 rounded-xl animate-pulse mb-4" />
+                            <div className="grid grid-cols-2 gap-2.5">
+                                <div className="h-16 bg-slate-700/30 rounded-xl animate-pulse" />
+                                <div className="h-16 bg-slate-700/30 rounded-xl animate-pulse" />
+                            </div>
+                        </GlassCard>
+                    ))}
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {services.map((service, index) => (
+                        <motion.div
+                            key={service.name}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                        >
+                            <ServiceCard service={service} />
+                        </motion.div>
+                    ))}
+
+                    {services.length === 0 && (
+                        <div className="col-span-full text-center py-16 text-slate-500">
+                            <Server size={48} className="mx-auto mb-4 opacity-50" />
+                            <h3 className="text-lg font-semibold text-slate-100 mb-2">Нет данных о сервисах</h3>
+                            <p>Попробуйте обновить страницу</p>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

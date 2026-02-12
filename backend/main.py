@@ -237,12 +237,11 @@ from backend.api.ux_features import router as ux_features_router
 from backend.api.notification import router as notification_router
 from backend.api.safety import router as safety_router
 from backend.api.admin import router as admin_router
-from backend.api.monetization import router as monetization_router, gifts_router, dev_router
+from backend.api.monetization import router as monetization_router, gifts_router, dev_router, payments_router
 from backend.api.marketing import router as marketing_router
 from backend.api.system import router as system_router
 from backend.api.advanced import router as advanced_router
 from backend.api.debug import router as debug_router
-from backend.api.payments import router as payments_router
 
 
 app.include_router(health_router, tags=["Health"])

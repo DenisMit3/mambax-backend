@@ -437,9 +437,9 @@ export const authService = {
     // ============================================
 
     async createInvoice(amount: number, label: string) {
-        // httpClient добавляет baseUrl (/api_proxy), поэтому путь должен быть /api/payments/invoice
-        return httpClient.post<{ invoice_link: string; transaction_id: string; amount: number; currency: string }>(
-            "/api/payments/invoice",
+        // Используем основной payments endpoint из monetization router
+        return httpClient.post<{ invoice_link: string; transaction_id: string; amount: number }>(
+            "/payments/top-up",
             { amount, label }
         );
     },
