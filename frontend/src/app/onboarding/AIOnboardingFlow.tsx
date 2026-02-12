@@ -78,48 +78,21 @@ export default function AIOnboardingFlow() {
         if (initialMessageSent.current) return;
         
         const initOnboarding = async () => {
-            console.log("[Onboarding] Starting initialization...");
-            // #region agent log
-            const sendLog = (msg: string, data: any, hId?: string) => { try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg, data, hId, t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){} console.log('[DEBUG]', msg, data); };
-            // Clear old logs on fresh init
-            localStorage.setItem('__debug_logs__', '[]');
-            const tgWebApp = (window as any).Telegram?.WebApp;
-            const tgInitData = tgWebApp?.initData;
-            const existingToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
-            sendLog('ONBOARDING_START', {url: window.location.href, hasTgSDK: !!tgWebApp, initDataLen: tgInitData?.length || 0, initDataEmpty: !tgInitData, hasExistingToken: !!existingToken, userAgent: navigator.userAgent}, 'H1');
-            // #endregion
             setIsInitializing(true);
             setInitError(null);
             
             // Step 1: Check for existing token
             let token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') || localStorage.getItem('token')) : null;
-            console.log("[Onboarding] Existing token:", !!token);
-            // #region agent log
-            sendLog('STEP1_TOKEN_CHECK', {hasToken: !!token, tokenPreview: token ? token.substring(0,20)+'...' : null}, 'H1');
-            // #endregion
             
             // Step 2: If no token, try Telegram auth
             if (!token) {
                 const initData = window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '';
                 if (initData && initData.trim()) {
-                    console.log("[Onboarding] No token, attempting Telegram auth...");
-                    console.log("[Onboarding] initData length:", initData.length);
-                    // #region agent log
-                    sendLog('STEP2_TG_AUTH_ATTEMPT', {initDataLen: initData.length}, 'H2');
-                    // #endregion
                     try {
                         const result = await authService.telegramLogin(initData);
-                        console.log("[Onboarding] Telegram auth success, has_profile:", result.has_profile);
-                        // #region agent log
-                        sendLog('STEP2_TG_AUTH_SUCCESS', {has_profile: result.has_profile}, 'H2');
-                        // #endregion
                         token = localStorage.getItem('accessToken');
                     } catch (err: any) {
-                        console.error("[Onboarding] Telegram auth failed:", err);
                         const errorMsg = err?.message || err?.data?.detail || 'Unknown error';
-                        // #region agent log
-                        sendLog('STEP2_TG_AUTH_FAILED', {error: errorMsg, status: err?.status}, 'H2');
-                        // #endregion
                         setInitError(`Ошибка авторизации: ${errorMsg}`);
                         setIsInitializing(false);
                         return;
@@ -127,24 +100,15 @@ export default function AIOnboardingFlow() {
                 }
             }
             
-            // Step 3: Still no token and no Telegram data - show error instead of redirect
+            // Step 3: Still no token - redirect or show error
             if (!token) {
                 const hasTelegramData = typeof window !== 'undefined' && !!(window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data'));
-                console.warn("[Onboarding] No auth available, hasTelegramData:", hasTelegramData);
-                // #region agent log
-                sendLog('STEP3_NO_TOKEN', {hasTelegramData}, 'H1');
-                // #endregion
                 
                 if (!hasTelegramData) {
-                    // Not in Telegram Mini App - redirect to login
-                    // #region agent log
-                    sendLog('STEP3_REDIRECT_AUTH', {reason: 'no telegram data'}, 'H1');
-                    // #endregion
                     window.location.href = '/auth/phone';
                     return;
                 }
                 
-                // In Telegram but auth failed - show error
                 setInitError("Не удалось авторизоваться. Попробуйте перезапустить бот командой /start");
                 setIsInitializing(false);
                 return;
@@ -152,53 +116,29 @@ export default function AIOnboardingFlow() {
             
             // Step 4: Check profile status
             try {
-                // #region agent log
-                sendLog('STEP4_PROFILE_CHECK_START', {}, 'H4');
-                // #endregion
                 const me = await authService.getMe();
-                console.log("[Onboarding] Profile check - is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
-                // #region agent log
-                sendLog('STEP4_PROFILE_DATA', {is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender, name: me.name, id: me.id}, 'H4');
-                // #endregion
                 
-                // Only redirect if profile is TRULY complete (has photos AND real gender)
                 const hasPhotos = me.photos && me.photos.length > 0;
                 const hasRealGender = me.gender && me.gender !== 'other';
                 
-                // #region agent log
-                sendLog('STEP4_COMPLETE_CHECK', {hasPhotos, hasRealGender, willRedirect: me.is_complete === true && hasPhotos && hasRealGender}, 'H4');
-                // #endregion
-                
                 if (me.is_complete === true && hasPhotos && hasRealGender) {
-                    console.log("[Onboarding] Profile complete, redirecting to home");
-                    // #region agent log
-                    sendLog('STEP4_REDIRECT_HOME', {reason: 'profile complete'}, 'H4');
-                    // #endregion
                     window.location.href = '/';
                     return;
                 }
                 
                 // Profile incomplete - start onboarding
-                console.log("[Onboarding] Profile incomplete, starting onboarding flow");
-                // #region agent log
-                sendLog('STEP4_START_ONBOARDING', {reason: 'profile incomplete'}, 'H4');
-                // #endregion
                 initialMessageSent.current = true;
                 setIsInitializing(false);
                 addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
                 
             } catch (e: any) {
-                console.error("[Onboarding] Profile check failed:", e);
-                
                 // On 401, try re-auth via Telegram
                 if (e?.status === 401 || e?.message?.includes('Unauthorized')) {
                     if (typeof window !== 'undefined') {
                         const initData = window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '';
                         if (initData && initData.trim()) {
-                            console.log("[Onboarding] Session expired, re-authenticating...");
                             try {
                                 await authService.telegramLogin(initData);
-                                // Retry - but don't loop infinitely
                                 const me = await authService.getMe();
                                 const hasPhotos = me.photos && me.photos.length > 0;
                                 const hasRealGender = me.gender && me.gender !== 'other';
@@ -213,20 +153,17 @@ export default function AIOnboardingFlow() {
                                 addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
                                 return;
                             } catch (reAuthErr: any) {
-                                console.error("[Onboarding] Re-auth failed:", reAuthErr);
                                 setInitError(`Ошибка повторной авторизации: ${reAuthErr?.message || 'Unknown'}`);
                                 setIsInitializing(false);
                                 return;
                             }
                         }
                     }
-                    // No Telegram data for re-auth
                     window.location.href = '/auth/phone';
                     return;
                 }
                 
                 // On other errors, still allow onboarding
-                console.log("[Onboarding] Starting onboarding despite error");
                 initialMessageSent.current = true;
                 setIsInitializing(false);
                 addAIMessage(FLOW_STEPS[0].q, FLOW_STEPS[0].type as any, FLOW_STEPS[0].options, (FLOW_STEPS[0] as any).multiSelect, (FLOW_STEPS[0] as any).layoutType);
@@ -505,7 +442,6 @@ export default function AIOnboardingFlow() {
 
     return (
         <div className="fixed inset-0 bg-[#0f0f11] flex items-center justify-center z-[100] font-sans text-white">
-            <DebugOverlay />
             <div className="w-full h-full sm:h-[90vh] sm:max-w-[420px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-[#1c1c1e] sm:shadow-2xl relative flex flex-col overflow-hidden">
                 {/* Loading State */}
                 {isInitializing && (
@@ -748,39 +684,6 @@ export default function AIOnboardingFlow() {
                     </>
                 )}
             </div>
-        </div>
-    );
-}
-
-// Debug overlay component - shows logs on screen
-function DebugOverlay() {
-    const [logs, setLogs] = React.useState<any[]>([]);
-    const [show, setShow] = React.useState(true);
-    React.useEffect(() => {
-        const interval = setInterval(() => {
-            try {
-                const raw = localStorage.getItem('__debug_logs__');
-                if (raw) setLogs(JSON.parse(raw));
-            } catch(e){}
-        }, 500);
-        return () => clearInterval(interval);
-    }, []);
-    if (!show) return <button onClick={() => setShow(true)} style={{position:'fixed',bottom:4,right:4,zIndex:99999,background:'red',color:'#fff',border:'none',borderRadius:4,padding:'2px 8px',fontSize:10,opacity:0.7}}>DBG</button>;
-    return (
-        <div style={{position:'fixed',bottom:0,left:0,right:0,zIndex:99999,background:'rgba(0,0,0,0.9)',color:'#0f0',fontSize:10,fontFamily:'monospace',maxHeight:'40vh',overflowY:'auto',padding:4}}>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:2}}>
-                <span>DEBUG LOGS ({logs.length})</span>
-                <button onClick={() => setShow(false)} style={{color:'red',background:'none',border:'none',fontSize:10,cursor:'pointer'}}>X</button>
-            </div>
-            {logs.length === 0 && <div style={{color:'yellow'}}>No logs yet...</div>}
-            {logs.map((l: any, i: number) => (
-                <div key={i} style={{borderBottom:'1px solid #333',padding:'1px 0'}}>
-                    <span style={{color:'#888'}}>{new Date(l.t).toLocaleTimeString()}</span>{' '}
-                    <span style={{color:'#ff0'}}>[{l.hId}]</span>{' '}
-                    <span>{l.msg}</span>{' '}
-                    <span style={{color:'#aaa'}}>{JSON.stringify(l.data)}</span>
-                </div>
-            ))}
         </div>
     );
 }
