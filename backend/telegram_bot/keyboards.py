@@ -6,7 +6,7 @@ from aiogram.types import (
 import os
 
 # Frontend URL
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://frontend-two-brown-70.vercel.app")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://frontend-two-brown-70.vercel.app").rstrip("/")
 
 def get_main_keyboard() -> InlineKeyboardMarkup:
     """Главная клавиатура с WebApp"""

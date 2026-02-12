@@ -96,6 +96,9 @@ class HttpClient {
         // Only clear token in browser context to avoid side effects on server
         if (typeof window !== 'undefined') {
             console.warn('Unauthorized access detected. Clearing token.');
+            // #region agent log
+            try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'H3_UNAUTHORIZED_TRIGGERED',data:{currentPath:window.location.pathname,hasToken:!!(localStorage.getItem('accessToken')||localStorage.getItem('token'))},hId:'H3',t:Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){} console.log('[DEBUG] H3_UNAUTHORIZED_TRIGGERED', window.location.pathname);
+            // #endregion
             localStorage.removeItem('token');
             localStorage.removeItem('accessToken'); // Clear both just in case
             

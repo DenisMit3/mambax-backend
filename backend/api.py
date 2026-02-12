@@ -202,6 +202,20 @@ class UserUpdate(BaseModel):
     interests: Optional[list] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    city: Optional[str] = None
+    height: Optional[int] = None
+    smoking: Optional[str] = None
+    drinking: Optional[str] = None
+    education: Optional[str] = None
+    looking_for: Optional[str] = None
+    children: Optional[str] = None
+    job: Optional[str] = None
+    zodiac: Optional[str] = None
+    personality_type: Optional[str] = None
+    love_language: Optional[str] = None
+    pets: Optional[str] = None
+    ideal_date: Optional[str] = None
+    intent: Optional[str] = None
 
 
 class SwipeRequest(BaseModel):
@@ -401,6 +415,48 @@ async def update_current_user(
     if data.longitude is not None:
         updates.append("longitude = :longitude")
         params["longitude"] = data.longitude
+    if data.city is not None:
+        updates.append("city = :city")
+        params["city"] = data.city
+    if data.height is not None:
+        updates.append("height = :height")
+        params["height"] = data.height
+    if data.smoking is not None:
+        updates.append("smoking = :smoking")
+        params["smoking"] = data.smoking
+    if data.drinking is not None:
+        updates.append("drinking = :drinking")
+        params["drinking"] = data.drinking
+    if data.education is not None:
+        updates.append("education = :education")
+        params["education"] = data.education
+    if data.looking_for is not None:
+        updates.append("looking_for = :looking_for")
+        params["looking_for"] = data.looking_for
+    if data.children is not None:
+        updates.append("children = :children")
+        params["children"] = data.children
+    if data.job is not None:
+        updates.append("job = :job")
+        params["job"] = data.job
+    if data.zodiac is not None:
+        updates.append("zodiac = :zodiac")
+        params["zodiac"] = data.zodiac
+    if data.personality_type is not None:
+        updates.append("personality_type = :personality_type")
+        params["personality_type"] = data.personality_type
+    if data.love_language is not None:
+        updates.append("love_language = :love_language")
+        params["love_language"] = data.love_language
+    if data.pets is not None:
+        updates.append("pets = :pets")
+        params["pets"] = data.pets
+    if data.ideal_date is not None:
+        updates.append("ideal_date = :ideal_date")
+        params["ideal_date"] = data.ideal_date
+    if data.intent is not None:
+        updates.append("intent = :intent")
+        params["intent"] = data.intent
     
     # Check if profile is complete
     updates.append("is_complete = (name IS NOT NULL AND age IS NOT NULL AND age >= 18)")

@@ -25,9 +25,9 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: FRONTEND_URL
-        value: https://mambax-frontend.vercel.app
+        value: https://frontend-two-brown-70.vercel.app
       - key: ALLOWED_ORIGINS
-        value: https://mambax-frontend.vercel.app,https://web.telegram.org
+        value: https://frontend-two-brown-70.vercel.app,https://web.telegram.org
       - key: REDIS_URL
         sync: false
       - key: GEMINI_API_KEY

@@ -80,6 +80,7 @@ declare global {
         Telegram?: {
             WebApp: TelegramWebApp;
         };
+        __h5LogDone?: boolean;
     }
 }
 
@@ -90,9 +91,17 @@ export const useTelegram = () => {
     const [webApp, setWebApp] = useState<TelegramWebApp | null>(null);
 
     useEffect(() => {
+        // #region agent log
+        if (!window.__h5LogDone) { window.__h5LogDone = true; try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'H5_TELEGRAM_HOOK_INIT',data:{hasTelegramObj:typeof window!=='undefined'&&!!window.Telegram,hasWebApp:typeof window!=='undefined'&&!!window.Telegram?.WebApp,initDataLen:typeof window!=='undefined'&&window.Telegram?.WebApp?.initData?.length||0,initDataEmpty:typeof window!=='undefined'&&!window.Telegram?.WebApp?.initData},hId:'H5',t:Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){} console.log('[DEBUG] H5_TELEGRAM_HOOK_INIT'); }
+        // #endregion
         if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
             const tg = window.Telegram.WebApp;
             setWebApp(tg);
+
+            // Save initData to sessionStorage so it survives page navigations
+            if (tg.initData && tg.initData.length > 0) {
+                try { sessionStorage.setItem('tg_init_data', tg.initData); } catch(e) {}
+            }
 
             // Only call ready/expand once across all hook instances
             if (!telegramHookInitialized) {
@@ -136,7 +145,7 @@ export const useTelegram = () => {
         webApp,
         hapticFeedback,
         user: webApp?.initDataUnsafe?.user,
-        initData: webApp?.initData,
+        initData: webApp?.initData || (typeof window !== 'undefined' ? sessionStorage.getItem('tg_init_data') : null) || '',
         isReady: !!webApp,
         version: webApp?.version,
         isVersionAtLeast,

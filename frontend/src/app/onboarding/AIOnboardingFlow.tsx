@@ -80,11 +80,13 @@ export default function AIOnboardingFlow() {
         const initOnboarding = async () => {
             console.log("[Onboarding] Starting initialization...");
             // #region agent log
-            const debugLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('debug_logs') || '[]'); logs.push({t: Date.now(), m: msg, d: data}); localStorage.setItem('debug_logs', JSON.stringify(logs.slice(-50))); console.log('[DEBUG]', msg, data); } catch(e){} };
-            debugLog('Onboarding init', {url: window.location.href});
+            const sendLog = (msg: string, data: any, hId?: string) => { try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg, data, hId, t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){} console.log('[DEBUG]', msg, data); };
+            // Clear old logs on fresh init
+            localStorage.setItem('__debug_logs__', '[]');
             const tgWebApp = (window as any).Telegram?.WebApp;
             const tgInitData = tgWebApp?.initData;
-            alert('[DEBUG] Onboarding loaded!\nURL: ' + window.location.href + '\nTelegram SDK: ' + (tgWebApp ? 'LOADED' : 'NOT LOADED') + '\ninitData: ' + (tgInitData ? tgInitData.substring(0, 50) + '...' : 'EMPTY'));
+            const existingToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+            sendLog('ONBOARDING_START', {url: window.location.href, hasTgSDK: !!tgWebApp, initDataLen: tgInitData?.length || 0, initDataEmpty: !tgInitData, hasExistingToken: !!existingToken, userAgent: navigator.userAgent}, 'H1');
             // #endregion
             setIsInitializing(true);
             setInitError(null);
@@ -93,26 +95,31 @@ export default function AIOnboardingFlow() {
             let token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') || localStorage.getItem('token')) : null;
             console.log("[Onboarding] Existing token:", !!token);
             // #region agent log
-            debugLog('Token check', {hasToken: !!token});
-            alert('[DEBUG] Step 1 - Token: ' + (token ? 'EXISTS' : 'NO TOKEN'));
+            sendLog('STEP1_TOKEN_CHECK', {hasToken: !!token, tokenPreview: token ? token.substring(0,20)+'...' : null}, 'H1');
             // #endregion
             
             // Step 2: If no token, try Telegram auth
-            if (!token && typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
-                const initData = window.Telegram.WebApp.initData;
+            if (!token) {
+                const initData = window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '';
                 if (initData && initData.trim()) {
                     console.log("[Onboarding] No token, attempting Telegram auth...");
                     console.log("[Onboarding] initData length:", initData.length);
-                    alert('[DEBUG] Step 2 - Trying Telegram auth...');
+                    // #region agent log
+                    sendLog('STEP2_TG_AUTH_ATTEMPT', {initDataLen: initData.length}, 'H2');
+                    // #endregion
                     try {
                         const result = await authService.telegramLogin(initData);
                         console.log("[Onboarding] Telegram auth success, has_profile:", result.has_profile);
-                        alert('[DEBUG] Step 2 - Telegram auth SUCCESS');
+                        // #region agent log
+                        sendLog('STEP2_TG_AUTH_SUCCESS', {has_profile: result.has_profile}, 'H2');
+                        // #endregion
                         token = localStorage.getItem('accessToken');
                     } catch (err: any) {
                         console.error("[Onboarding] Telegram auth failed:", err);
                         const errorMsg = err?.message || err?.data?.detail || 'Unknown error';
-                        alert('[DEBUG] Step 2 - Telegram auth FAILED: ' + errorMsg);
+                        // #region agent log
+                        sendLog('STEP2_TG_AUTH_FAILED', {error: errorMsg, status: err?.status}, 'H2');
+                        // #endregion
                         setInitError(`Ошибка авторизации: ${errorMsg}`);
                         setIsInitializing(false);
                         return;
@@ -122,13 +129,17 @@ export default function AIOnboardingFlow() {
             
             // Step 3: Still no token and no Telegram data - show error instead of redirect
             if (!token) {
-                const hasTelegramData = typeof window !== 'undefined' && !!window.Telegram?.WebApp?.initData;
+                const hasTelegramData = typeof window !== 'undefined' && !!(window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data'));
                 console.warn("[Onboarding] No auth available, hasTelegramData:", hasTelegramData);
-                alert('[DEBUG] Step 3 - NO TOKEN, hasTelegramData: ' + hasTelegramData);
+                // #region agent log
+                sendLog('STEP3_NO_TOKEN', {hasTelegramData}, 'H1');
+                // #endregion
                 
                 if (!hasTelegramData) {
                     // Not in Telegram Mini App - redirect to login
-                    alert('[DEBUG] Step 3 - Redirecting to /auth/phone');
+                    // #region agent log
+                    sendLog('STEP3_REDIRECT_AUTH', {reason: 'no telegram data'}, 'H1');
+                    // #endregion
                     window.location.href = '/auth/phone';
                     return;
                 }
@@ -141,12 +152,13 @@ export default function AIOnboardingFlow() {
             
             // Step 4: Check profile status
             try {
-                alert('[DEBUG] Step 4 - Checking profile...');
+                // #region agent log
+                sendLog('STEP4_PROFILE_CHECK_START', {}, 'H4');
+                // #endregion
                 const me = await authService.getMe();
                 console.log("[Onboarding] Profile check - is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
                 // #region agent log
-                debugLog('Profile check', {is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender, name: me.name});
-                alert('[DEBUG] Step 4 - Profile: is_complete=' + me.is_complete + ', photos=' + (me.photos?.length || 0) + ', gender=' + me.gender);
+                sendLog('STEP4_PROFILE_DATA', {is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender, name: me.name, id: me.id}, 'H4');
                 // #endregion
                 
                 // Only redirect if profile is TRULY complete (has photos AND real gender)
@@ -154,14 +166,13 @@ export default function AIOnboardingFlow() {
                 const hasRealGender = me.gender && me.gender !== 'other';
                 
                 // #region agent log
-                debugLog('Profile complete check', {hasPhotos, hasRealGender, willRedirect: me.is_complete === true && hasPhotos && hasRealGender});
+                sendLog('STEP4_COMPLETE_CHECK', {hasPhotos, hasRealGender, willRedirect: me.is_complete === true && hasPhotos && hasRealGender}, 'H4');
                 // #endregion
                 
                 if (me.is_complete === true && hasPhotos && hasRealGender) {
                     console.log("[Onboarding] Profile complete, redirecting to home");
                     // #region agent log
-                    debugLog('REDIRECT TO HOME', {reason: 'profile complete'});
-                    alert('[DEBUG] Step 4 - Profile COMPLETE, redirecting to /');
+                    sendLog('STEP4_REDIRECT_HOME', {reason: 'profile complete'}, 'H4');
                     // #endregion
                     window.location.href = '/';
                     return;
@@ -170,8 +181,7 @@ export default function AIOnboardingFlow() {
                 // Profile incomplete - start onboarding
                 console.log("[Onboarding] Profile incomplete, starting onboarding flow");
                 // #region agent log
-                debugLog('Starting onboarding', {reason: 'profile incomplete'});
-                alert('[DEBUG] Step 4 - Profile INCOMPLETE, starting onboarding!');
+                sendLog('STEP4_START_ONBOARDING', {reason: 'profile incomplete'}, 'H4');
                 // #endregion
                 initialMessageSent.current = true;
                 setIsInitializing(false);
@@ -182,8 +192,8 @@ export default function AIOnboardingFlow() {
                 
                 // On 401, try re-auth via Telegram
                 if (e?.status === 401 || e?.message?.includes('Unauthorized')) {
-                    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
-                        const initData = window.Telegram.WebApp.initData;
+                    if (typeof window !== 'undefined') {
+                        const initData = window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '';
                         if (initData && initData.trim()) {
                             console.log("[Onboarding] Session expired, re-authenticating...");
                             try {
@@ -387,47 +397,55 @@ export default function AIOnboardingFlow() {
         // Check Auth Token
         const token = typeof window !== 'undefined' ? (localStorage.getItem('accessToken') || localStorage.getItem('token')) : null;
         if (!token) {
-            // fail silently and redirect
             window.location.href = '/auth/phone';
             return;
         }
 
         setIsSubmitting(true);
         try {
-            // 1. Prepare Data
+            // 1. Prepare bio text
             let compositeBio = userData.bio;
-            const detailsList = Object.entries(userData.details).map(([key, val]) => `${val}`).filter(Boolean).join(' • ');
-            if (detailsList) compositeBio = compositeBio ? `${compositeBio}\n\n${detailsList}` : detailsList;
 
-            // 2. Submit Profile Info (First)
-            // Use createProfile (internally PUT /users/me) without photos
-            console.log("Submitting Profile Data...", userData);
-            await authService.createProfile({
+            // 2. Submit all profile fields structurally
+            const profileData: any = {
                 name: userData.name,
                 age: userData.age,
                 gender: userData.gender,
                 interests: userData.interests,
-                photos: undefined // Explicitly do NOT send base64 photos here
-            });
+                bio: compositeBio,
+            };
 
-            // 3. Update Bio separately if needed (redundant but safe)
-            await authService.updateProfile({ bio: compositeBio });
+            // Map details to structured fields
+            const d = userData.details;
+            if (d.city) profileData.city = d.city;
+            if (d.height) profileData.height = parseInt(d.height) || undefined;
+            if (d.education) profileData.education = d.education;
+            if (d.job) profileData.job = d.job;
+            if (d.children_clean) profileData.children = d.children_clean;
+            if (d.smoking) profileData.smoking = d.smoking;
+            if (d.alcohol) profileData.drinking = d.alcohol;
+            if (d.zodiac) profileData.zodiac = d.zodiac;
+            if (d.personality_type) profileData.personality_type = d.personality_type;
+            if (d.love_language) profileData.love_language = d.love_language;
+            if (d.pets) profileData.pets = d.pets;
+            if (d.ideal_date) profileData.ideal_date = d.ideal_date;
+            if (d.intent) profileData.intent = d.intent;
+            if (d.looking_for) profileData.looking_for = d.looking_for;
 
-            // 4. Upload Photos (PARALLEL for speed!)
+            console.log("Submitting Profile Data...", profileData);
+            await authService.updateProfile(profileData);
 
-            // FIX (PERF): Upload all photos in parallel instead of sequentially
-            // This reduces 8s (4 × 2s) to ~2s total
-            // Now using File objects directly (no more base64 conversion needed!)
+            // 3. Upload Photos (PARALLEL for speed!)
             const uploadPromises = userData.photos.map((photoData, i) => {
                 return authService.uploadPhoto(photoData.file).catch(e => {
                     console.error(`Photo upload ${i} failed:`, e);
-                    return null; // Don't fail entire upload if one photo fails
+                    return null;
                 });
             });
 
             await Promise.allSettled(uploadPromises);
 
-            // 5. Success
+            // 4. Success
             hapticFeedback.notificationOccurred('success');
             window.location.href = '/';
 
@@ -487,6 +505,7 @@ export default function AIOnboardingFlow() {
 
     return (
         <div className="fixed inset-0 bg-[#0f0f11] flex items-center justify-center z-[100] font-sans text-white">
+            <DebugOverlay />
             <div className="w-full h-full sm:h-[90vh] sm:max-w-[420px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-[#1c1c1e] sm:shadow-2xl relative flex flex-col overflow-hidden">
                 {/* Loading State */}
                 {isInitializing && (
@@ -729,6 +748,39 @@ export default function AIOnboardingFlow() {
                     </>
                 )}
             </div>
+        </div>
+    );
+}
+
+// Debug overlay component - shows logs on screen
+function DebugOverlay() {
+    const [logs, setLogs] = React.useState<any[]>([]);
+    const [show, setShow] = React.useState(true);
+    React.useEffect(() => {
+        const interval = setInterval(() => {
+            try {
+                const raw = localStorage.getItem('__debug_logs__');
+                if (raw) setLogs(JSON.parse(raw));
+            } catch(e){}
+        }, 500);
+        return () => clearInterval(interval);
+    }, []);
+    if (!show) return <button onClick={() => setShow(true)} style={{position:'fixed',bottom:4,right:4,zIndex:99999,background:'red',color:'#fff',border:'none',borderRadius:4,padding:'2px 8px',fontSize:10,opacity:0.7}}>DBG</button>;
+    return (
+        <div style={{position:'fixed',bottom:0,left:0,right:0,zIndex:99999,background:'rgba(0,0,0,0.9)',color:'#0f0',fontSize:10,fontFamily:'monospace',maxHeight:'40vh',overflowY:'auto',padding:4}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:2}}>
+                <span>DEBUG LOGS ({logs.length})</span>
+                <button onClick={() => setShow(false)} style={{color:'red',background:'none',border:'none',fontSize:10,cursor:'pointer'}}>X</button>
+            </div>
+            {logs.length === 0 && <div style={{color:'yellow'}}>No logs yet...</div>}
+            {logs.map((l: any, i: number) => (
+                <div key={i} style={{borderBottom:'1px solid #333',padding:'1px 0'}}>
+                    <span style={{color:'#888'}}>{new Date(l.t).toLocaleTimeString()}</span>{' '}
+                    <span style={{color:'#ff0'}}>[{l.hId}]</span>{' '}
+                    <span>{l.msg}</span>{' '}
+                    <span style={{color:'#aaa'}}>{JSON.stringify(l.data)}</span>
+                </div>
+            ))}
         </div>
     );
 }

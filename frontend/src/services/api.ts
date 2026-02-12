@@ -205,6 +205,20 @@ export const authService = {
         gender?: string;
         interests?: string[];
         photos?: string[];
+        city?: string;
+        height?: number;
+        smoking?: string;
+        drinking?: string;
+        education?: string;
+        looking_for?: string;
+        children?: string;
+        job?: string;
+        zodiac?: string;
+        personality_type?: string;
+        love_language?: string;
+        pets?: string;
+        ideal_date?: string;
+        intent?: string;
         ux_preferences?: {
             sounds_enabled: boolean;
             haptic_enabled: boolean;

@@ -259,6 +259,41 @@ class User(Base):
         nullable=True,
         comment="User's full location string"
     )
+    job: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="User's job/occupation"
+    )
+    zodiac: Mapped[Optional[str]] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="Zodiac sign"
+    )
+    personality_type: Mapped[Optional[str]] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="Introvert, extrovert, ambivert"
+    )
+    love_language: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Love language(s), comma-separated"
+    )
+    pets: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Pets info, comma-separated"
+    )
+    ideal_date: Mapped[Optional[str]] = mapped_column(
+        String(200),
+        nullable=True,
+        comment="Ideal date description, comma-separated"
+    )
+    intent: Mapped[Optional[str]] = mapped_column(
+        String(200),
+        nullable=True,
+        comment="What user is looking for, comma-separated"
+    )
 
     # Telegram Stars balance for in-app purchases (gifts, boosts, etc.)
     stars_balance: Mapped[Decimal] = mapped_column(

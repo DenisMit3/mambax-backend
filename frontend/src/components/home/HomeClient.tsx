@@ -11,6 +11,21 @@ import { useTelegram } from '@/lib/telegram';
 import { MatchModal } from '@/components/discovery/MatchModal';
 import { TelegramAuthError } from '@/components/auth/TelegramAuthError';
 
+// Debug overlay component for runtime diagnostics
+function DebugOverlay() {
+    const [logs, setLogs] = useState<any[]>([]);
+    useEffect(() => {
+        const interval = setInterval(() => {
+            try { setLogs(JSON.parse(localStorage.getItem('__debug_logs__') || '[]')); } catch(e){}
+        }, 500);
+        return () => clearInterval(interval);
+    }, []);
+    if (logs.length === 0) return null;
+    return (<div style={{position:'fixed',bottom:60,left:0,right:0,maxHeight:'40vh',overflow:'auto',background:'rgba(0,0,0,0.9)',color:'#0f0',fontSize:10,fontFamily:'monospace',zIndex:99999,padding:4}}>
+        {logs.map((l: any,i: number) => <div key={i}>[{l.hId||''}] {l.msg}: {JSON.stringify(l.data).slice(0,200)}</div>)}
+    </div>);
+}
+
 // FIX: Move API_BASE outside component to avoid recreation
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
@@ -59,9 +74,8 @@ export function HomeClient() {
     const checkAuth = useCallback(async () => {
         console.log("[Home] checkAuth started");
         // #region agent log
-        const debugLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('debug_logs') || '[]'); logs.push({t: Date.now(), m: msg, d: data}); localStorage.setItem('debug_logs', JSON.stringify(logs.slice(-50))); console.log('[DEBUG]', msg, data); } catch(e){} };
-        debugLog('HomeClient checkAuth', {url: typeof window !== 'undefined' ? window.location.href : 'ssr'});
-        alert('[DEBUG] HomeClient loaded! URL: ' + window.location.href);
+        const sendLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg, data, hId:'HOME', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){} console.log('[DEBUG]', msg, data); };
+        sendLog('HOME_CHECK_AUTH_START', {url: typeof window !== 'undefined' ? window.location.href : 'ssr'});
         // #endregion
         
         // Helper to check if profile is complete
@@ -75,7 +89,7 @@ export function HomeClient() {
         const hasToken = httpClient.isAuthenticated();
         console.log("[Home] Token check:", hasToken);
         // #region agent log
-        debugLog('HomeClient token', {hasToken});
+        sendLog('HOME_TOKEN_CHECK', {hasToken});
         // #endregion
         
         if (hasToken) {
@@ -83,20 +97,20 @@ export function HomeClient() {
                 const me = await authService.getMe();
                 console.log("[Home] Token valid, is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
                 // #region agent log
-                debugLog('HomeClient getMe', {is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender, name: me.name});
+                sendLog('HOME_PROFILE_DATA', {is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender, name: me.name, id: me.id});
                 // #endregion
                 
                 if (!isProfileComplete(me)) {
                     console.log("[Home] Profile incomplete, redirecting to onboarding...");
                     // #region agent log
-                    debugLog('HomeClient REDIRECT to onboarding', {reason: 'profile incomplete'});
+                    sendLog('HOME_REDIRECT_ONBOARDING', {reason: 'profile incomplete', is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender});
                     // #endregion
                     router.replace('/onboarding');
                     return;
                 }
                 
                 // #region agent log
-                debugLog('HomeClient staying on home', {reason: 'profile complete'});
+                sendLog('HOME_STAYING', {reason: 'profile complete'});
                 // #endregion
                 setIsAuth(true);
                 setAuthError(null);
@@ -109,14 +123,9 @@ export function HomeClient() {
         }
 
         // Priority 2: No token - try Telegram Init Data (Native Flow)
-        if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
-            const initData = window.Telegram.WebApp.initData;
-            if (!initData || !initData.trim()) {
-                console.error("[Home] Empty initData from Telegram");
-                setAuthError("Telegram данные отсутствуют. Попробуйте перезапустить бот командой /start");
-                setIsRetrying(false);
-                return;
-            }
+        const initData = window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '';
+        try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'HOME_INITDATA_CHECK', data:{fromTg: (window.Telegram?.WebApp?.initData || '').length, fromSession: (sessionStorage.getItem('tg_init_data') || '').length, final: initData.length}, hId:'HOME', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
+        if (initData && initData.trim()) {
             
             try {
                 console.log("[Home] Attempting Telegram login, retry:", retryCount);
@@ -166,12 +175,16 @@ export function HomeClient() {
 
         // No token and no Telegram data - redirect to login
         console.log("[Home] No auth method available, redirecting to login...");
+        try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'HOME_NO_AUTH_REDIRECT', data:{initData: window?.Telegram?.WebApp?.initData?.length || 0, initDataRaw: (window?.Telegram?.WebApp?.initData || '').substring(0,50), hasTg: !!window?.Telegram, hasWA: !!window?.Telegram?.WebApp}, hId:'HOME', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
         router.replace('/auth/phone');
     }, [retryCount, router]);
 
     // Check authentication on mount
     useEffect(() => {
-        checkAuth();
+        try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'HOME_MOUNT_EFFECT', data:{isAuth, hasCheckAuth: typeof checkAuth === 'function'}, hId:'HOME', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
+        checkAuth().catch((err: any) => {
+            try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'HOME_CHECKAUTH_CRASH', data:{err: String(err), msg: err?.message, stack: err?.stack?.slice(0,200)}, hId:'HOME', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
+        });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
     
     // Handler for retry button
@@ -264,12 +277,18 @@ export function HomeClient() {
         queryKey: ['feed', filters],
         queryFn: async () => {
             try {
+                // Debug log
+                try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'FEED_FETCH_START', data:{filters}, hId:'FEED', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
+                
                 // In a real scenario, passing filters to getProfiles would be ideal.
                 // Currently API definition in services/api.ts might need update to support all filters.
                 // We pass what we can or rely on default backend logic for now.
                 const res = await authService.getProfiles({
                     limit: 50 // Increased for better UX
                 });
+
+                // Debug log
+                try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'FEED_FETCH_OK', data:{type: typeof res, isArray: Array.isArray(res), keys: res ? Object.keys(res as any).slice(0,5) : null, itemsLen: (res as any)?.items?.length}, hId:'FEED', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
 
                 // API returns paginated response: { items: [...], next_cursor, has_more }
                 const apiRes = res as any;
@@ -303,6 +322,7 @@ export function HomeClient() {
                 }));
             } catch (err) {
                 console.error("Feed fetch error", err);
+                try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'FEED_FETCH_ERR', data:{err: String(err), msg: (err as any)?.message, status: (err as any)?.response?.status || (err as any)?.status}, hId:'FEED', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
                 throw err;
             }
         },
@@ -395,12 +415,15 @@ export function HomeClient() {
     // Show Telegram Auth Error screen
     if (authError) {
         return (
+            <>
+            <DebugOverlay />
             <TelegramAuthError 
                 error={authError}
                 onRetry={handleRetry}
                 retryCount={retryCount}
                 isRetrying={isRetrying}
             />
+            </>
         );
     }
 
@@ -408,6 +431,7 @@ export function HomeClient() {
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-black p-6">
+                <DebugOverlay />
                 <div className="relative">
                     <motion.div
                         className="w-20 h-20 border-2 border-primary-red/20 rounded-full border-t-primary-red"
@@ -430,6 +454,7 @@ export function HomeClient() {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-black text-white p-6 text-center">
+                <DebugOverlay />
                 <h2 className="text-xl font-bold mb-2">Ошибка подключения</h2>
                 <p className="text-gray-400 mb-6">Не удалось загрузить анкеты. Проверьте интернет.</p>
                 <button
@@ -447,6 +472,7 @@ export function HomeClient() {
     if (!profiles || profiles.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-black text-white p-6 text-center">
+                <DebugOverlay />
                 <motion.div
                     className="w-16 h-16 border-2 border-blue-500/30 rounded-full border-t-blue-500"
                     animate={{ rotate: 360 }}
@@ -459,6 +485,7 @@ export function HomeClient() {
 
     return (
         <>
+            <DebugOverlay />
             <SmartDiscoveryEngine
                 users={profiles}
                 filters={filters}
