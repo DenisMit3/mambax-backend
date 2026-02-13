@@ -189,8 +189,8 @@ function ReportCard({
 // --- Основная страница ---
 
 export default function ReportsPage() {
-  const [reports, setReports] = useState<ModerationQueueItem[]>([]);
-  const [loading, setLoading] = useState(true);
+    const [reports, setReports] = useState<ModerationQueueItem[]>([]);
+    const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -210,14 +210,14 @@ export default function ReportsPage() {
         currentPage,
         PAGE_SIZE,
       );
-      setReports(res.items);
+                setReports(res.items);
       setTotalItems(res.total);
     } catch (err) {
       console.error('Ошибка загрузки репортов:', err);
       setError(err instanceof Error ? err.message : 'Не удалось загрузить жалобы');
-    } finally {
-      setLoading(false);
-    }
+            } finally {
+                setLoading(false);
+            }
   }, [currentPage]);
 
   useEffect(() => {
@@ -238,7 +238,7 @@ export default function ReportsPage() {
     }
   };
 
-  return (
+    return (
     <div className={styles.pageContainer}>
       {/* Заголовок */}
       <div className={styles.headerSection}>
@@ -247,7 +247,7 @@ export default function ReportsPage() {
           <p className={styles.headerDescription}>
             Review and manage reported content and users
           </p>
-        </div>
+                                </div>
         <button
           className={styles.secondaryButton}
           onClick={fetchReports}
@@ -256,15 +256,15 @@ export default function ReportsPage() {
           <RotateCcw size={16} className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
-      </div>
+                                </div>
 
       {/* Состояние загрузки */}
       {loading && (
         <div className="flex flex-col items-center justify-center py-24 text-[var(--admin-text-muted)]">
           <Loader2 className="animate-spin mb-4 text-[var(--neon-purple)]" size={32} />
           <span className="text-sm">Loading reports...</span>
-        </div>
-      )}
+                </div>
+            )}
 
       {/* Ошибка с кнопкой повтора */}
       {error && !loading && (
@@ -341,6 +341,6 @@ export default function ReportsPage() {
           )}
         </>
       )}
-    </div>
-  );
+        </div>
+    );
 }

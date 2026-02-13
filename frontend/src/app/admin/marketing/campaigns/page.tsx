@@ -3,26 +3,26 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Megaphone,
-  Mail,
-  Bell,
-  MessageSquare,
-  MousePointerClick,
-  Target,
-  Calendar,
-  Plus,
-  Play,
-  Pause,
-  Copy,
-  BarChart3,
-  ChevronRight,
-  Send,
-  Clock,
-  CheckCircle,
+    Megaphone,
+    Mail,
+    Bell,
+    MessageSquare,
+    MousePointerClick,
+    Target,
+    Calendar,
+    Plus,
+    Play,
+    Pause,
+    Copy,
+    BarChart3,
+    ChevronRight,
+    Send,
+    Clock,
+    CheckCircle,
   Users,
   X,
   RefreshCw,
-  AlertCircle,
+    AlertCircle,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { adminApi } from '@/services/adminApi';
@@ -31,18 +31,18 @@ import styles from '../../admin.module.css';
 // === Интерфейсы (snake_case от API) ===
 
 interface Campaign {
-  id: string;
-  name: string;
-  type: 'push' | 'email' | 'sms' | 'in_app';
-  status: 'draft' | 'scheduled' | 'active' | 'paused' | 'completed';
+    id: string;
+    name: string;
+    type: 'push' | 'email' | 'sms' | 'in_app';
+    status: 'draft' | 'scheduled' | 'active' | 'paused' | 'completed';
   target_segment: string;
-  sent?: number;
-  delivered?: number;
-  opened?: number;
-  clicked?: number;
-  converted?: number;
+    sent?: number;
+    delivered?: number;
+    opened?: number;
+    clicked?: number;
+    converted?: number;
   open_rate?: number;
-  ctr?: number;
+    ctr?: number;
   conversion_rate?: number;
   created_at: string;
   scheduled_at?: string;
@@ -124,24 +124,24 @@ function CampaignStats({ stats, loading }: { stats: CampaignStatsData | null; lo
           </div>
         </GlassCard>
       ))}
-    </div>
-  );
+        </div>
+    );
 }
 
 // === Карточка кампании ===
 
-const typeConfig = {
-  push: { icon: <Bell size={16} />, label: 'Push', color: '#a855f7' },
-  email: { icon: <Mail size={16} />, label: 'Email', color: '#3b82f6' },
-  sms: { icon: <MessageSquare size={16} />, label: 'SMS', color: '#10b981' },
+    const typeConfig = {
+        push: { icon: <Bell size={16} />, label: 'Push', color: '#a855f7' },
+        email: { icon: <Mail size={16} />, label: 'Email', color: '#3b82f6' },
+        sms: { icon: <MessageSquare size={16} />, label: 'SMS', color: '#10b981' },
   in_app: { icon: <Megaphone size={16} />, label: 'In-App', color: '#f59e0b' },
-};
+    };
 
 const statusConfig: Record<string, { color: string; bg: string }> = {
-  draft: { color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)' },
-  scheduled: { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
-  active: { color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' },
-  paused: { color: '#f97316', bg: 'rgba(249, 115, 22, 0.15)' },
+        draft: { color: '#64748b', bg: 'rgba(100, 116, 139, 0.15)' },
+        scheduled: { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
+        active: { color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' },
+        paused: { color: '#f97316', bg: 'rgba(249, 115, 22, 0.15)' },
   completed: { color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)' },
 };
 
@@ -154,11 +154,11 @@ function CampaignCard({
   onAction: (id: string, action: string) => void;
   actionLoading: string | null;
 }) {
-  const type = typeConfig[campaign.type];
-  const status = statusConfig[campaign.status];
+    const type = typeConfig[campaign.type];
+    const status = statusConfig[campaign.status];
   const isLoading = actionLoading === campaign.id;
 
-  return (
+    return (
     <GlassCard className={`p-6 ${isLoading ? 'opacity-60 pointer-events-none' : ''}`} hover>
       {/* Тип + статус */}
       <div className="flex justify-between items-center mb-4">
@@ -166,8 +166,8 @@ function CampaignCard({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
           style={{ backgroundColor: `${type.color}20`, color: type.color }}
         >
-          {type.icon}
-          {type.label}
+                    {type.icon}
+                    {type.label}
         </span>
         <span
           className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold capitalize"
@@ -176,18 +176,18 @@ function CampaignCard({
           {campaign.status === 'active' && (
             <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
           )}
-          {campaign.status}
+                    {campaign.status}
         </span>
-      </div>
+            </div>
 
       {/* Название */}
       <h3 className="text-lg font-semibold text-[var(--admin-text-primary)] mb-2">{campaign.name}</h3>
 
       {/* Сегмент */}
       <div className="flex items-center gap-2 text-sm text-slate-500 capitalize mb-4">
-        <Users size={14} />
+                <Users size={14} />
         <span>{campaign.target_segment.replace(/_/g, ' ')}</span>
-      </div>
+            </div>
 
       {/* Метрики */}
       {campaign.sent != null && (
@@ -197,77 +197,77 @@ function CampaignCard({
               {formatNumber(campaign.sent)}
             </span>
             <span className="text-[10px] text-slate-500">Sent</span>
-          </div>
+                    </div>
           <div className="text-center">
             <span className="block text-base font-bold text-[var(--admin-text-primary)]">
               {campaign.open_rate ?? 0}%
             </span>
             <span className="text-[10px] text-slate-500">Open Rate</span>
-          </div>
+                    </div>
           <div className="text-center">
             <span className="block text-base font-bold text-[var(--admin-text-primary)]">
               {campaign.ctr ?? 0}%
             </span>
             <span className="text-[10px] text-slate-500">CTR</span>
-          </div>
+                    </div>
           <div className="text-center">
             <span className="block text-base font-bold text-[var(--admin-text-primary)]">
               {campaign.converted ?? 0}
             </span>
             <span className="text-[10px] text-slate-500">Converted</span>
-          </div>
-        </div>
-      )}
+                    </div>
+                </div>
+            )}
 
       {/* Запланировано */}
       {campaign.scheduled_at && (
         <div className="flex items-center gap-2 px-3 py-2.5 bg-blue-500/10 rounded-xl text-blue-400 text-sm mb-4">
-          <Calendar size={14} />
+                    <Calendar size={14} />
           <span>Scheduled: {new Date(campaign.scheduled_at).toLocaleString()}</span>
-        </div>
-      )}
+                </div>
+            )}
 
       {/* Действия */}
       <div className="flex gap-2 flex-wrap">
-        {campaign.status === 'draft' && (
+                {campaign.status === 'draft' && (
           <button
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800/50 border border-slate-700/50 text-slate-300 hover:bg-slate-700/50 transition-colors"
             onClick={() => onAction(campaign.id, 'send')}
           >
-            <Send size={14} /> Send Now
-          </button>
-        )}
-        {campaign.status === 'active' && (
+                            <Send size={14} /> Send Now
+                        </button>
+                )}
+                {campaign.status === 'active' && (
           <button
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500/25 transition-colors"
             onClick={() => onAction(campaign.id, 'pause')}
           >
-            <Pause size={14} /> Pause
-          </button>
-        )}
-        {campaign.status === 'paused' && (
+                        <Pause size={14} /> Pause
+                    </button>
+                )}
+                {campaign.status === 'paused' && (
           <button
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors"
             onClick={() => onAction(campaign.id, 'resume')}
           >
-            <Play size={14} /> Resume
-          </button>
-        )}
-        {campaign.status === 'completed' && (
+                        <Play size={14} /> Resume
+                    </button>
+                )}
+                {campaign.status === 'completed' && (
           <button
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-purple-500/15 border border-purple-500/30 text-purple-400 hover:bg-purple-500/25 transition-colors"
             onClick={() => onAction(campaign.id, 'duplicate')}
           >
-            <Copy size={14} /> Duplicate
-          </button>
-        )}
+                        <Copy size={14} /> Duplicate
+                    </button>
+                )}
         <button
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:bg-slate-700/50 hover:text-slate-200 transition-colors"
           onClick={() => onAction(campaign.id, 'view')}
         >
-          <BarChart3 size={14} /> Analytics
-        </button>
-      </div>
+                    <BarChart3 size={14} /> Analytics
+                </button>
+            </div>
     </GlassCard>
   );
 }
@@ -325,19 +325,19 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
 
   const inputClass = 'w-full px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-sm text-[var(--admin-text-primary)] focus:outline-none focus:border-purple-500 placeholder:text-slate-600';
 
-  return (
-    <motion.div
+    return (
+        <motion.div
       className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/80 backdrop-blur-sm"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+        >
+            <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
         className="w-full max-w-[600px]"
       >
         <GlassCard className="w-full max-h-[90vh] overflow-y-auto">
@@ -347,7 +347,7 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
             <button className={styles.iconButton} onClick={onClose}>
               <X size={20} />
             </button>
-          </div>
+                </div>
 
           {/* Тело */}
           <div className="p-6">
@@ -359,7 +359,7 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
             )}
 
             {/* Шаг 1: Выбор типа */}
-            {step === 1 && (
+                    {step === 1 && (
               <div>
                 <h4 className="text-base text-slate-400 mb-4">Select Campaign Type</h4>
                 <div className="grid grid-cols-2 gap-3">
@@ -378,14 +378,14 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
                       </div>
                       <span className="block text-sm font-semibold text-[var(--admin-text-primary)] mb-1">{t.label}</span>
                       <span className="text-xs text-slate-500">{t.desc}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
             {/* Шаг 2: Детали кампании */}
-            {step === 2 && (
+                    {step === 2 && (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-xs text-[var(--admin-text-muted)]">Campaign Name</label>
@@ -396,7 +396,7 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
                     onChange={(e) => update({ name: e.target.value })}
                     placeholder="e.g. Spring Sale Push"
                   />
-                </div>
+                            </div>
 
                 {formData.type === 'push' && (
                   <>
@@ -409,7 +409,7 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
                         onChange={(e) => update({ title: e.target.value })}
                         placeholder="You have a new match! 💕"
                       />
-                    </div>
+                                    </div>
                     <div className="space-y-2">
                       <label className="text-xs text-[var(--admin-text-muted)]">Message Body</label>
                       <textarea
@@ -419,9 +419,9 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
                         onChange={(e) => update({ body: e.target.value })}
                         placeholder="Someone special is waiting..."
                       />
-                    </div>
-                  </>
-                )}
+                                    </div>
+                                </>
+                            )}
 
                 {formData.type === 'email' && (
                   <>
@@ -434,7 +434,7 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
                         onChange={(e) => update({ subject: e.target.value })}
                         placeholder="Don't miss out!"
                       />
-                    </div>
+                                    </div>
                     <div className="space-y-2">
                       <label className="text-xs text-[var(--admin-text-muted)]">Preview Text</label>
                       <input
@@ -444,9 +444,9 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
                         onChange={(e) => update({ preview_text: e.target.value })}
                         placeholder="Special offer inside..."
                       />
-                    </div>
-                  </>
-                )}
+                                    </div>
+                                </>
+                            )}
 
                 {(formData.type === 'sms' || formData.type === 'in_app') && (
                   <div className="space-y-2">
@@ -468,44 +468,44 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
                     value={formData.target_segment}
                     onChange={(e) => update({ target_segment: e.target.value })}
                   >
-                    <option value="all">All Users</option>
-                    <option value="active">Active Users (7d)</option>
-                    <option value="inactive">Inactive Users (30d+)</option>
-                    <option value="premium">Premium Users</option>
-                    <option value="free">Free Users</option>
-                    <option value="high_activity">High Activity Free Users</option>
-                  </select>
+                                    <option value="all">All Users</option>
+                                    <option value="active">Active Users (7d)</option>
+                                    <option value="inactive">Inactive Users (30d+)</option>
+                                    <option value="premium">Premium Users</option>
+                                    <option value="free">Free Users</option>
+                                    <option value="high_activity">High Activity Free Users</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
                 </div>
-              </div>
-            )}
-          </div>
 
           {/* Футер */}
           <div className="flex justify-end gap-3 p-5 border-t border-[var(--admin-glass-border)]">
-            {step > 1 && (
+                    {step > 1 && (
               <button className={styles.secondaryButton} onClick={() => setStep(1)} disabled={submitting}>
-                Back
-              </button>
-            )}
+                            Back
+                        </button>
+                    )}
             {step === 1 && formData.type && (
               <button className={styles.primaryButton} onClick={() => setStep(2)}>
-                Continue <ChevronRight size={16} />
-              </button>
-            )}
-            {step === 2 && (
+                            Continue <ChevronRight size={16} />
+                        </button>
+                    )}
+                    {step === 2 && (
               <button
                 className={styles.primaryButton}
                 onClick={handleSubmit}
                 disabled={submitting || !formData.name}
               >
                 {submitting ? 'Creating...' : 'Create Campaign'}
-              </button>
-            )}
-          </div>
+                        </button>
+                    )}
+                </div>
         </GlassCard>
-      </motion.div>
-    </motion.div>
-  );
+            </motion.div>
+        </motion.div>
+    );
 }
 
 // === Главная страница ===
@@ -516,7 +516,7 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
+    const [showCreate, setShowCreate] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
 
@@ -555,24 +555,24 @@ export default function CampaignsPage() {
 
   // Фильтрация на клиенте
   const filteredCampaigns = campaigns.filter((c) => {
-    if (filterStatus !== 'all' && c.status !== filterStatus) return false;
-    if (filterType !== 'all' && c.type !== filterType) return false;
-    return true;
-  });
+        if (filterStatus !== 'all' && c.status !== filterStatus) return false;
+        if (filterType !== 'all' && c.type !== filterType) return false;
+        return true;
+    });
 
-  return (
+    return (
     <div className={styles.pageContainer}>
       {/* Заголовок */}
       <div className={styles.headerSection}>
         <div className={styles.headerContent}>
           <h1 className={styles.headerTitle}>Campaign Manager</h1>
           <p className={styles.headerDescription}>Create and manage marketing campaigns</p>
-        </div>
+                </div>
         <button className={styles.primaryButton} onClick={() => setShowCreate(true)}>
-          <Plus size={16} />
-          New Campaign
-        </button>
-      </div>
+                    <Plus size={16} />
+                    New Campaign
+                </button>
+            </div>
 
       {/* Статистика */}
       <CampaignStats stats={stats} loading={loading} />
@@ -586,14 +586,14 @@ export default function CampaignsPage() {
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
-            <option value="all">All</option>
-            <option value="draft">Draft</option>
-            <option value="scheduled">Scheduled</option>
-            <option value="active">Active</option>
+                        <option value="all">All</option>
+                        <option value="draft">Draft</option>
+                        <option value="scheduled">Scheduled</option>
+                        <option value="active">Active</option>
             <option value="paused">Paused</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
+                        <option value="completed">Completed</option>
+                    </select>
+                </div>
         <div className="flex items-center gap-2">
           <label className="text-sm text-slate-400">Type:</label>
           <select
@@ -601,14 +601,14 @@ export default function CampaignsPage() {
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
           >
-            <option value="all">All Types</option>
-            <option value="push">Push</option>
-            <option value="email">Email</option>
-            <option value="in_app">In-App</option>
-            <option value="sms">SMS</option>
-          </select>
-        </div>
-      </div>
+                        <option value="all">All Types</option>
+                        <option value="push">Push</option>
+                        <option value="email">Email</option>
+                        <option value="in_app">In-App</option>
+                        <option value="sms">SMS</option>
+                    </select>
+                </div>
+            </div>
 
       {/* Ошибка */}
       {error && (
@@ -634,14 +634,14 @@ export default function CampaignsPage() {
       {/* Сетка кампаний */}
       {!loading && !error && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filteredCampaigns.map((campaign) => (
-            <CampaignCard
-              key={campaign.id}
-              campaign={campaign}
-              onAction={handleAction}
+                {filteredCampaigns.map((campaign) => (
+                    <CampaignCard
+                        key={campaign.id}
+                        campaign={campaign}
+                        onAction={handleAction}
               actionLoading={actionLoading}
-            />
-          ))}
+                    />
+                ))}
           {filteredCampaigns.length === 0 && (
             <div className="col-span-full text-center py-16 text-[var(--admin-text-muted)]">
               Кампании не найдены
@@ -659,6 +659,6 @@ export default function CampaignsPage() {
           />
         )}
       </AnimatePresence>
-    </div>
-  );
+        </div>
+    );
 }
