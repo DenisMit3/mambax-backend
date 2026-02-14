@@ -34,10 +34,8 @@ const nextConfig: NextConfig = {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
           },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY', // We use CSP frame-ancestors for finer control
-          },
+          // X-Frame-Options intentionally omitted — Telegram WebApp runs in iframe.
+          // Security is handled by CSP frame-ancestors directive below.
           {
             key: 'X-XSS-Protection',
             value: '1; mode=block',

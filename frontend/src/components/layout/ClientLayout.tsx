@@ -10,6 +10,7 @@ import { BadgeEarnedToast } from '@/components/ui/BadgeEarnedToast';
 import { UserProvider } from '@/context/UserContext';
 import { useTelegram } from '@/lib/telegram';
 import { measurePerformance } from '@/lib/performance';
+import { initRemoteLogger } from '@/utils/remoteLogger';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -33,6 +34,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     // PERF: Register Service Worker and measure performance
     useEffect(() => {
+        // Enable remote logging for production debugging
+        initRemoteLogger();
+        
         // Register PWA Service Worker
         let intervalId: ReturnType<typeof setInterval> | undefined;
 

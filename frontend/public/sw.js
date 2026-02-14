@@ -1,6 +1,12 @@
 // PERF: API Response Caching with Auth Segmentation
 // SECURITY: Cache is segmented by user to prevent cross-user data leakage
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
+
+// CRITICAL: Activate new SW immediately without waiting for tabs to close
+// Without this, Telegram WebApp users NEVER get updates
+self.addEventListener('install', () => {
+    self.skipWaiting();
+});
 const API_CACHE = `api-cache-${CACHE_VERSION}`;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 

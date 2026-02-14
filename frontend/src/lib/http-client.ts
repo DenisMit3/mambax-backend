@@ -68,6 +68,40 @@ class HttpClient {
             const response = await fetch(url, mergedConfig);
 
             if (response.status === 401) {
+                console.error('[HTTP] 401 on', endpoint, '- token present:', !!this.token);
+                
+                // If inside Telegram WebApp, try to re-authenticate before giving up
+                const initData = typeof window !== 'undefined' 
+                    ? (window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '')
+                    : '';
+                
+                if (initData && initData.trim() && !endpoint.includes('/auth/')) {
+                    console.log('[HTTP] 401 but have Telegram initData, attempting re-auth...');
+                    try {
+                        const reAuthRes = await fetch(`${this.baseUrl}/api/auth/telegram`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ init_data: initData }),
+                        });
+                        if (reAuthRes.ok) {
+                            const reAuthData = await reAuthRes.json();
+                            if (reAuthData.access_token) {
+                                this.setToken(reAuthData.access_token);
+                                console.log('[HTTP] Re-auth success, retrying original request');
+                                // Retry original request with new token
+                                reqHeaders.set('Authorization', `Bearer ${reAuthData.access_token}`);
+                                const retryResponse = await fetch(url, { ...mergedConfig, headers: reqHeaders });
+                                if (retryResponse.ok) {
+                                    if (retryResponse.status === 204) return {} as T;
+                                    return await retryResponse.json();
+                                }
+                            }
+                        }
+                    } catch (reAuthErr) {
+                        console.error('[HTTP] Re-auth failed:', reAuthErr);
+                    }
+                }
+                
                 this.handleUnauthorized();
                 throw new Error('Unauthorized');
             }

@@ -252,7 +252,9 @@ app.include_router(missing_router, prefix="/api")
 # Debug/Dev routes only in non-production
 if not settings.is_production:
     app.include_router(dev_router)
-    app.include_router(debug_router)
+
+# Debug router always enabled (remote logging needed in production for Telegram WebApp debugging)
+app.include_router(debug_router)
 
 # Simple test endpoint
 @app.get("/ping")

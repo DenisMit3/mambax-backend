@@ -63,6 +63,7 @@ export function HomeClient() {
 
     // Check authentication function - extracted for reuse
     const checkAuth = useCallback(async () => {
+        console.log('[AUTH] checkAuth started, retryCount:', retryCount);
         
         // Helper to check if profile is complete
         const isProfileComplete = (profile: { photos?: string[]; gender?: string; is_complete?: boolean }): boolean => {
@@ -73,20 +74,25 @@ export function HomeClient() {
         
         // Priority 1: Check for existing valid token FIRST
         const hasToken = httpClient.isAuthenticated();
+        console.log('[AUTH] hasToken:', hasToken);
         
         if (hasToken) {
             try {
                 const me = await authService.getMe();
+                console.log('[AUTH] getMe success, is_complete:', me.is_complete, 'photos:', me.photos?.length, 'gender:', me.gender);
                 
                 if (!isProfileComplete(me)) {
+                    console.log('[AUTH] profile incomplete, redirecting to onboarding');
                     router.replace('/onboarding');
                     return;
                 }
                 
+                console.log('[AUTH] authenticated with token');
                 setIsAuth(true);
                 setAuthError(null);
                 return;
             } catch (e: unknown) {
+                console.error('[AUTH] getMe failed, clearing token:', e);
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('token');
             }
@@ -94,17 +100,19 @@ export function HomeClient() {
 
         // Priority 2: No token - try Telegram Init Data (Native Flow)
         const initData = window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '';
+        console.log('[AUTH] initData present:', !!initData, 'length:', initData.length);
         if (initData && initData.trim()) {
             
             try {
                 setIsRetrying(true);
+                console.log('[AUTH] attempting Telegram login...');
                 const loginResult = await authService.telegramLogin(initData);
+                console.log('[AUTH] Telegram login success, has_profile:', loginResult.has_profile);
                 
                 // FIX: Always verify actual profile state, not just has_profile flag
                 const me = await authService.getMe();
                 
                 if (!isProfileComplete(me)) {
-                    router.replace('/onboarding');
                     router.replace('/onboarding');
                     return;
                 }
@@ -144,6 +152,7 @@ export function HomeClient() {
 
     // Check authentication on mount
     useEffect(() => {
+        console.log('[HOME] mounted, build:', '2026-02-14-v2', 'path:', window.location.pathname);
         checkAuth().catch((err: unknown) => {
             console.error('[Home] checkAuth crash:', err);
         });
@@ -257,7 +266,7 @@ export function HomeClient() {
         queryKey: ['feed', filters],
         queryFn: async () => {
             try {
-                // In a real scenario, passing filters to getProfiles would be ideal.
+                console.log('[FEED] fetching profiles with filters:', JSON.stringify(filters));
                 // Currently API definition in services/api.ts might need update to support all filters.
                 // We pass what we can or rely on default backend logic for now.
                 const res = await authService.getProfiles({
@@ -267,6 +276,7 @@ export function HomeClient() {
                 // API returns paginated response: { items: [...], next_cursor, has_more }
                 const apiRes = res as { items?: UserProfile[] };
                 const profiles = apiRes?.items || (Array.isArray(res) ? res : []);
+                console.log('[FEED] got', profiles.length, 'profiles, raw type:', typeof res, Array.isArray(res) ? 'array' : 'object');
 
                 // Helper to resolve photo URLs (uses API_BASE constant from top of file)
                 const resolvePhotoUrl = (url: string): string => {

@@ -20,8 +20,13 @@ from backend.config.settings import settings
 
 router = APIRouter(prefix="/debug", tags=["debug"])
 
-# Log file path
+# Log file path (fallback for local dev)
 LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "frontend_logs.txt")
+
+# In-memory log storage for serverless (Vercel has no persistent filesystem)
+# Stores last 200 log lines
+_in_memory_logs: list[str] = []
+_MAX_MEMORY_LOGS = 200
 
 # Const for mock match
 MOCK_MATCH_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
@@ -64,19 +69,32 @@ def format_log_entry(entry: LogEntry) -> str:
 @router.post("/logs")
 async def receive_logs(batch: LogBatch, request: Request):
     """
-    Receive logs from frontend and save to file
+    Receive logs from frontend and save to memory + file
     """
     try:
-        # Use utf-8 explicitly and ensure newline
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            for entry in batch.logs:
-                formatted = format_log_entry(entry)
-                f.write(formatted + "\n")
-                # Also print to console for immediate visibility
-                try:
-                    print(formatted)
-                except UnicodeEncodeError:
-                    print(formatted.encode('utf-8'))
+        formatted_lines = []
+        for entry in batch.logs:
+            formatted = format_log_entry(entry)
+            formatted_lines.append(formatted)
+            # Print to stdout for Vercel logs
+            try:
+                print(formatted)
+            except UnicodeEncodeError:
+                print(formatted.encode('utf-8'))
+        
+        # Store in memory (for GET /debug/logs on serverless)
+        _in_memory_logs.extend(formatted_lines)
+        # Trim to max size
+        if len(_in_memory_logs) > _MAX_MEMORY_LOGS:
+            del _in_memory_logs[:len(_in_memory_logs) - _MAX_MEMORY_LOGS]
+        
+        # Also try file (works locally, silently fails on Vercel)
+        try:
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                for line in formatted_lines:
+                    f.write(line + "\n")
+        except (OSError, IOError):
+            pass  # Expected on Vercel - no writable filesystem
         
         return {"status": "ok", "received": len(batch.logs)}
     except Exception as e:
@@ -86,16 +104,22 @@ async def receive_logs(batch: LogBatch, request: Request):
 @router.get("/logs")
 async def get_logs(lines: int = 50):
     """
-    Get the last N lines of logs
+    Get the last N lines of logs (from memory on serverless, file locally)
     """
     try:
-        if not os.path.exists(LOG_FILE):
-            return {"logs": [], "message": "No logs yet"}
+        # First try in-memory logs (works on Vercel)
+        if _in_memory_logs:
+            last_lines = _in_memory_logs[-lines:] if len(_in_memory_logs) > lines else _in_memory_logs[:]
+            return {"logs": last_lines, "source": "memory", "total": len(_in_memory_logs)}
         
-        with open(LOG_FILE, "r", encoding="utf-8") as f:
-            all_lines = f.readlines()
-            last_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
-            return {"logs": [line.strip() for line in last_lines]}
+        # Fallback to file (local dev)
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, "r", encoding="utf-8") as f:
+                all_lines = f.readlines()
+                last_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+                return {"logs": [line.strip() for line in last_lines], "source": "file"}
+        
+        return {"logs": [], "message": "No logs yet"}
     except Exception as e:
         return {"logs": [], "error": str(e)}
 
