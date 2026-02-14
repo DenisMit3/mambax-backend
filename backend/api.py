@@ -6889,13 +6889,22 @@ async def auth_login_email(
     db: AsyncSession = Depends(get_db)
 ):
     """Admin login with email"""
-    # Placeholder for admin auth
+    result = await db.execute(text("SELECT id, hashed_password, role, is_active FROM users WHERE email = :email"), {"email": email})
+    user = result.fetchone()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    user_id, hashed_password, role, is_active = user
+    if not is_active:
+        raise HTTPException(status_code=401, detail="Account disabled")
+    if not pwd_context.verify(password, hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    access_token = create_access_token(str(user_id))
     return {
-        "access_token": None,
+        "access_token": access_token,
         "token_type": "bearer",
-        "has_profile": False,
+        "has_profile": True,
         "is_new_user": False,
-        "message": "Email auth not implemented - use Telegram auth"
+        "role": str(role) if role else "user"
     }
 
 

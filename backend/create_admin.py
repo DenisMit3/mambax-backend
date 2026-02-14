@@ -18,8 +18,8 @@ from backend.models.user import User, UserRole, Gender, UserStatus, Subscription
 from backend.core.security import hash_password
 
 # Default admin credentials (change in production!)
-ADMIN_EMAIL = "admin@mambax.app"
-ADMIN_PASSWORD = "Admin123!"  # Change this in production!
+ADMIN_EMAIL = "mit333@list.ru"
+ADMIN_PASSWORD = "0236"
 ADMIN_NAME = "Admin"
 
 
