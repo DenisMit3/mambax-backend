@@ -133,8 +133,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-if settings.is_production:
-    app.add_middleware(HTTPSRedirectMiddleware)
+# Note: HTTPSRedirectMiddleware removed — Vercel/Render handle HTTPS at CDN level.
+# Adding it causes redirect loops on serverless platforms.
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
@@ -271,4 +271,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 @app.get("/")
 async def read_root():
-    return FileResponse("static/index.html")
+    static_index = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "static", "index.html")))
+    if static_index.exists():
+        return FileResponse(str(static_index))
+    return {"status": "ok", "service": "MambaX API", "docs": "/docs"}
