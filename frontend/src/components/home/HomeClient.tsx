@@ -92,9 +92,8 @@ export function HomeClient() {
                 setAuthError(null);
                 return;
             } catch (e: unknown) {
-                console.error('[AUTH] getMe failed, clearing token:', e);
-                localStorage.removeItem('accessToken');
-                localStorage.removeItem('token');
+                console.error('[AUTH] getMe failed:', e);
+                // Don't clear token here — http-client handles 401 re-auth automatically
             }
         }
 
@@ -241,8 +240,8 @@ export function HomeClient() {
         if (meError) {
             const e = meError as Error & { response?: { status?: number }; status?: number; statusCode?: number };
             if (e?.response?.status === 401 || e?.status === 401 || e?.statusCode === 401) {
-                localStorage.removeItem('accessToken');
-                router.replace('/auth/phone');
+                // Don't clear token here — http-client handles 401 re-auth automatically
+                console.warn('[Home] meError 401 — http-client should have handled re-auth');
             }
         }
     }, [meError, router]);
@@ -319,8 +318,8 @@ export function HomeClient() {
             const e = error as Error & { response?: { status?: number }; status?: number; statusCode?: number; message?: string };
             // Check various common error structures
             if (e?.response?.status === 401 || e?.status === 401 || e?.statusCode === 401 || e?.message?.includes('401')) {
-                localStorage.removeItem('accessToken');
-                router.replace('/auth/phone');
+                // Don't clear token here — http-client handles 401 re-auth automatically
+                console.warn('[Home] feed error 401 — http-client should have handled re-auth');
             }
         }
     }, [error, router]);

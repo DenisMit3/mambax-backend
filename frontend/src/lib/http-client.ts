@@ -95,9 +95,20 @@ class HttpClient {
                                     if (retryResponse.status === 204) return {} as T;
                                     return await retryResponse.json();
                                 }
+                                // Re-auth worked but retry failed with non-401 — don't clear the new valid token
+                                if (retryResponse.status !== 401) {
+                                    const retryError = await retryResponse.json().catch(() => ({}));
+                                    const err = new Error((retryError as Record<string, string>).detail || 'Retry failed') as Error & { status: number };
+                                    err.status = retryResponse.status;
+                                    throw err;
+                                }
                             }
                         }
                     } catch (reAuthErr) {
+                        // If it's a rethrown retry error (not a network error), propagate it
+                        if (reAuthErr instanceof Error && (reAuthErr as Error & { status?: number }).status) {
+                            throw reAuthErr;
+                        }
                         console.error('[HTTP] Re-auth failed:', reAuthErr);
                     }
                 }
@@ -129,17 +140,9 @@ class HttpClient {
     private handleUnauthorized() {
         // Only clear token in browser context to avoid side effects on server
         if (typeof window !== 'undefined') {
-            console.warn('[HTTP] handleUnauthorized called! Stack:', new Error().stack?.split('\n').slice(0, 5).join(' | '));
+            console.warn('[HTTP] handleUnauthorized: clearing token (no redirect — let React handle it)');
             localStorage.removeItem('token');
-            localStorage.removeItem('accessToken'); // Clear both just in case
-            
-            // FIX: Prevent redirect loop - only redirect if not already on auth page
-            const currentPath = window.location.pathname;
-            if (!currentPath.startsWith('/auth/')) {
-                // Set flag to prevent Telegram auto-login loop
-                sessionStorage.setItem('auth_redirect_reason', 'unauthorized');
-                window.location.href = '/auth/phone';
-            }
+            localStorage.removeItem('accessToken');
         }
         this.customToken = null;
     }
