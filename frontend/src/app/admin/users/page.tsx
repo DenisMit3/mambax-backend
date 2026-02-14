@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
+import { Users, RefreshCw, Loader2, AlertTriangle, UserPlus, Trash2 } from 'lucide-react';
 import { adminApi, UserListItem, UserFilters } from '@/services/adminApi';
 import { GlassCard } from '@/components/ui/GlassCard';
 import styles from '../admin.module.css';
@@ -13,6 +13,7 @@ import { UsersTable } from './UsersTable';
 import { UsersFilters } from './UsersFilters';
 import { UsersBulkActions } from './UsersBulkActions';
 import { UsersPagination } from './UsersPagination';
+import { CreateUserModal } from './CreateUserModal';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -33,6 +34,8 @@ export default function UsersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   // Загрузка списка пользователей
   const fetchUsers = useCallback(async () => {
@@ -83,6 +86,22 @@ export default function UsersPage() {
   const handleAction = async (action: string, user: UserListItem) => {
     if (action === 'view') {
       router.push(`/admin/users/${user.id}`);
+      return;
+    }
+    if (action === 'delete') {
+      if (!confirm(`Вы уверены, что хотите ПОЛНОСТЬЮ удалить пользователя "${user.name}" из базы данных? Это действие необратимо.`)) {
+        return;
+      }
+      setDeletingUserId(user.id);
+      try {
+        await adminApi.users.delete(user.id);
+        fetchUsers();
+      } catch (err) {
+        console.error('Failed to delete user:', err);
+        alert(err instanceof Error ? err.message : 'Ошибка удаления пользователя');
+      } finally {
+        setDeletingUserId(null);
+      }
       return;
     }
     const actionMap: Record<string, 'verify' | 'suspend' | 'ban' | 'activate' | 'unverify'> = {
@@ -141,6 +160,13 @@ export default function UsersPage() {
           <button className={styles.secondaryButton} onClick={fetchUsers}>
             <RefreshCw size={16} />
             Обновить
+          </button>
+          <button
+            className={styles.primaryButton}
+            onClick={() => setShowCreateModal(true)}
+          >
+            <UserPlus size={16} />
+            Добавить
           </button>
         </div>
       </div>
@@ -206,6 +232,13 @@ export default function UsersPage() {
           />
         </>
       )}
+
+      {/* Модалка создания пользователя */}
+      <CreateUserModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreated={fetchUsers}
+      />
     </div>
   );
 }

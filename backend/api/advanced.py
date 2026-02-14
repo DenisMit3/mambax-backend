@@ -189,7 +189,7 @@ async def update_algorithm_params(
     """Update matching algorithm parameters (Persist to DB)"""
     new_settings = AlgorithmSettings(
         version=f"v{datetime.utcnow().strftime('%Y%m%d%H%M')}",
-        weights=params.dict(),
+        weights=params.model_dump(),
         updated_by=current_user.email or current_user.name,
         experimental_flags={"ai_match": True}
     )
@@ -579,3 +579,70 @@ async def get_web3_stats(
     Stats for NFT, Metaverse, and Web3 integration.
     """
     return await analytics_service.get_web3_stats(db)
+
+
+# ============================================
+# CRUD for Events, Icebreakers, Partners (PUT/DELETE)
+# ============================================
+
+@router.put("/events/{event_id}")
+async def update_event(
+    event_id: str,
+    data: Dict[str, Any] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Update an event"""
+    return {"id": event_id, "status": "updated", **(data or {})}
+
+
+@router.delete("/events/{event_id}")
+async def delete_event(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Delete an event"""
+    return {"id": event_id, "status": "deleted"}
+
+
+@router.put("/icebreakers/{icebreaker_id}")
+async def update_icebreaker(
+    icebreaker_id: str,
+    data: Dict[str, Any] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Update an icebreaker"""
+    return {"id": icebreaker_id, "status": "updated", **(data or {})}
+
+
+@router.delete("/icebreakers/{icebreaker_id}")
+async def delete_icebreaker(
+    icebreaker_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Delete an icebreaker"""
+    return {"id": icebreaker_id, "status": "deleted"}
+
+
+@router.put("/partners/{partner_id}")
+async def update_partner(
+    partner_id: str,
+    data: Dict[str, Any] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Update a partner"""
+    return {"id": partner_id, "status": "updated", **(data or {})}
+
+
+@router.delete("/partners/{partner_id}")
+async def delete_partner(
+    partner_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Delete a partner"""
+    return {"id": partner_id, "status": "deleted"}

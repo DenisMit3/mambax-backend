@@ -9,7 +9,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# Create fake backend module
+# Create backend module reference for imports like "from backend.xxx"
 import types
 backend_module = types.ModuleType('backend')
 backend_module.__path__ = [current_dir]
@@ -19,7 +19,7 @@ sys.modules['backend'] = backend_module
 from dotenv import load_dotenv
 load_dotenv()
 
-# Try to import main app
+# Import the app
 app = None
 import_error = None
 
@@ -30,7 +30,7 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 
-# Fallback app if import failed
+# Fallback if main import fails — at least show the error
 if app is None:
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
@@ -56,6 +56,7 @@ if app is None:
     @app.get("/api/health")
     async def api_health():
         return {"status": "fallback", "error": import_error}
-
-# IMPORTANT: Vercel expects 'app' variable, not 'handler'
-# The @vercel/python runtime looks for 'app' by default
+    
+    @app.get("/ping")
+    async def ping():
+        return {"status": "fallback", "error": import_error}

@@ -49,7 +49,7 @@ interface MatchesResponse {
     matches: Match[];
 }
 
-export interface VirtualGift {
+export interface VirtualGiftTransaction {
     id: string;
     from_user_id: string;
     from_user_name?: string;
@@ -65,7 +65,7 @@ export interface VirtualGift {
 }
 
 interface GiftListResponse {
-    gifts: VirtualGift[];
+    gifts: VirtualGiftTransaction[];
     total: number;
     page?: number;
     pages?: number;
@@ -466,7 +466,7 @@ export const authService = {
     },
 
     async sendGiftDirectPurchase(giftId: string, receiverId: string, message?: string, isAnonymous?: boolean) {
-        return httpClient.post<GiftPurchaseResponse>("/api/admin/monetization/payments/gift", {
+        return httpClient.post<GiftPurchaseResponse>("/admin/monetization/payments/gift", {
             gift_id: giftId,
             receiver_id: receiverId,
             message,
@@ -481,7 +481,7 @@ export const authService = {
     async createInvoice(amount: number, label: string) {
         // Используем основной payments endpoint из monetization router
         return httpClient.post<{ invoice_link: string; transaction_id: string; amount: number }>(
-            "/payments/top-up",
+            "/api/payments/top-up",
             { amount, label }
         );
     },

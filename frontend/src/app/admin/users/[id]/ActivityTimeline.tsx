@@ -6,6 +6,7 @@ import {
     Heart, MessageCircle, Flag, DollarSign,
     Shield, User, Edit, Activity, RefreshCw,
 } from 'lucide-react';
+import { httpClient } from '@/lib/http-client';
 import { TimelineEvent } from './types';
 
 interface ActivityTimelineProps {
@@ -46,30 +47,27 @@ const formatTime = (ts: string | null) => {
 export default function ActivityTimeline({ userId }: ActivityTimelineProps) {
     const [events, setEvents] = useState<TimelineEvent[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [total, setTotal] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
         const fetchTimeline = async () => {
             setLoading(true);
+            setError(false);
             try {
-                const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-                const token = (() => { try { return localStorage.getItem('token'); } catch { return null; } })();
-                const response = await fetch(`${API_BASE}/admin/users/${userId}/activity-timeline?limit=50`, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (!cancelled) {
-                        setEvents(data.events || []);
-                        setTotal(data.total || 0);
-                    }
+                const data = await httpClient.get<{ events: TimelineEvent[]; total: number }>(
+                    `/admin/users/${userId}/activity-timeline?limit=50`
+                );
+                if (!cancelled) {
+                    setEvents(data.events || []);
+                    setTotal(data.total || 0);
                 }
             } catch (err) {
-                if (!cancelled) console.error('Failed to load timeline:', err);
+                if (!cancelled) {
+                    console.error('Failed to load timeline:', err);
+                    setError(true);
+                }
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -83,6 +81,14 @@ export default function ActivityTimeline({ userId }: ActivityTimelineProps) {
             <div className="text-slate-500" style={{ padding: '40px', textAlign: 'center' }}>
                 <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite' }} />
                 <p style={{ marginTop: 8 }}>Загрузка активности...</p>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="text-red-500" style={{ padding: '40px', textAlign: 'center' }}>
+                Не удалось загрузить активность.
             </div>
         );
     }

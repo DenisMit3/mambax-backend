@@ -1,8 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-const WS_BASE = API_BASE.replace(/^http/, 'ws').replace(/\/$/, '');
-
 interface AdminMetrics {
     total_users?: number;
     active_users?: number;
@@ -40,9 +37,8 @@ export function useAdminSocket(): AdminSocketHook {
     const wsRef = useRef<WebSocket | null>(null);
 
     useEffect(() => {
-        // Get token from local storage (simplified for this task)
         let token: string | null = null;
-        try { token = localStorage.getItem('token'); } catch { /* SSR/private browsing */ }
+        try { token = localStorage.getItem('accessToken') || localStorage.getItem('token'); } catch { /* SSR/private browsing */ }
 
         if (!token) {
             setError('No authentication token found');
@@ -51,7 +47,7 @@ export function useAdminSocket(): AdminSocketHook {
 
         // Use relative URL to leverage Next.js proxy and avoid CORS/Origin issues
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        let wsUrl = `${protocol}//${window.location.host}/admin/ws?token=${token}`;
+        const wsUrl = `${protocol}//${window.location.host}/admin/ws`;
 
         try {
             const ws = new WebSocket(wsUrl);
@@ -60,6 +56,8 @@ export function useAdminSocket(): AdminSocketHook {
             ws.onopen = () => {
                 setIsConnected(true);
                 setError(null);
+                // Send token via first message instead of query param (security)
+                ws.send(JSON.stringify({ type: 'auth', token }));
             };
 
             ws.onmessage = (event) => {
@@ -78,7 +76,7 @@ export function useAdminSocket(): AdminSocketHook {
                 }
             };
 
-            ws.onclose = (event) => {
+            ws.onclose = () => {
                 setIsConnected(false);
             };
 

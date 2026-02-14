@@ -182,10 +182,8 @@ export default function ChatPage() {
 
         // Use correct protocol (ws:// or wss://)
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        // Use standard API URL or relative if proxied. Assuming process.env or fallback.
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'localhost:8001';
-        // FIX (SEC-005): Token is now sent via first message, not in URL
-        const wsUrl = `${protocol}//${apiUrl.replace('http://', '').replace('https://', '')}/chat/ws`;
+        // Use relative URL via Next.js proxy to avoid exposing backend
+        const wsUrl = `${protocol}//${window.location.host}/api_proxy/chat/ws`;
 
         const socket = new WebSocket(wsUrl);
 

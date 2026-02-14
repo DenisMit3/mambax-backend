@@ -33,7 +33,7 @@ export default function UserDetailPage() {
 
     const onUpdateStars = async () => {
         const ok = await handleUpdateStars(starsAmount, starsAction, starsReason);
-        setShowStarsModal(false);
+                setShowStarsModal(false);
         setToast({ message: ok ? 'Stars updated successfully' : 'Failed to update stars', type: ok ? 'success' : 'error' });
     };
 
@@ -114,7 +114,7 @@ export default function UserDetailPage() {
                 {activeTab === 'photos' && <UserPhotosTab photos={user.photos} />}
                 {activeTab === 'payments' && <PaymentHistory userId={userId} />}
                 {activeTab === 'notes' && <UserNotesTab />}
-            </div>
+                        </div>
 
             {showStarsModal && (
                 <StarsModal
@@ -131,6 +131,6 @@ export default function UserDetailPage() {
 
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
             <style jsx>{userDetailStyles}</style>
-        </div>
+                    </div>
     );
 }

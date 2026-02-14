@@ -1,10 +1,18 @@
+"""Check user data in database.
+NOTE: Set DATABASE_URL environment variable before running.
+"""
 import asyncio
 import asyncpg
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+if not DATABASE_URL:
+    print("[ERROR] Set DATABASE_URL environment variable")
+    exit(1)
 
 async def check_user():
-    conn = await asyncpg.connect(
-        'postgresql://neondb_owner:npg_vjOPMFZV5K9n@ep-still-band-agqygsk6-pooler.c-2.eu-central-1.aws.neon.tech/neondb?ssl=require'
-    )
+    conn = await asyncpg.connect(DATABASE_URL)
     
     # Check all tables
     tables = await conn.fetch(

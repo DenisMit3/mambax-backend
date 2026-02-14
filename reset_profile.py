@@ -1,17 +1,21 @@
 """
-Простой скрипт сброса профиля через asyncpg напрямую
+Простой скрипт сброса профиля через asyncpg напрямую.
+NOTE: Set DATABASE_URL environment variable before running.
 """
 import asyncio
 import asyncpg
 import ssl
+import os
 
-# Neon PostgreSQL connection string (из backend/.env)
-DATABASE_URL = "postgresql://neondb_owner:npg_vjOPMFZV5K9n@ep-still-band-agqygsk6-pooler.c-2.eu-central-1.aws.neon.tech/neondb"
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+if not DATABASE_URL:
+    print("[ERROR] Set DATABASE_URL environment variable")
+    exit(1)
 
 async def main():
-    print("[*] Connecting to Neon PostgreSQL...")
+    print("[*] Connecting to PostgreSQL...")
     
-    # SSL context
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE

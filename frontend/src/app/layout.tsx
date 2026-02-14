@@ -108,7 +108,7 @@ export default function RootLayout({
                         document.body.style.background = '#0f0f11';
 
                         // DEBUG OVERLAY: Only in development builds
-                        if (${"`${process.env.NODE_ENV}`"} === 'development') {
+                        if ('${process.env.NODE_ENV}' === 'development') {
                             var d = document.createElement('div');
                             d.id = '__boot_debug';
                             d.style.cssText = 'position:fixed;bottom:60px;left:0;right:0;z-index:9999;background:rgba(0,0,0,0.95);color:#0f0;font:9px monospace;padding:4px;max-height:40vh;overflow:auto;white-space:pre-wrap;word-break:break-all;';

@@ -339,6 +339,28 @@ export async function getLiveActivity(limit = 10): Promise<ActivityItem[]> {
 // USER MANAGEMENT API
 // ============================================
 
+export interface AdminCreateUserData {
+    name: string;
+    email?: string;
+    phone?: string;
+    age: number;
+    gender: string;
+    password?: string;
+    role?: string;
+    status?: string;
+    subscription_tier?: string;
+    bio?: string;
+    city?: string;
+}
+
+export async function createUser(data: AdminCreateUserData): Promise<{ status: string; message: string; user_id: string }> {
+    return httpClient.post('/admin/users', data);
+}
+
+export async function deleteUser(userId: string): Promise<{ status: string; message: string }> {
+    return httpClient.delete(`/admin/users/${userId}`);
+}
+
 export async function getUsers(filters: UserFilters = {}): Promise<UserListResponse> {
     const params = new URLSearchParams();
 
@@ -482,19 +504,12 @@ export async function exportAnalyticsData(
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
 
-    // For CSV, we need to trigger a direct download
-    const token = typeof window !== 'undefined' ? (() => { try { return localStorage.getItem('token'); } catch { return null; } })() : null;
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+    // For file downloads we use httpClient.download which handles auth via proxy
+    const data = await httpClient.get<Blob>(`/admin/analytics/export?${params.toString()}`, {
+        responseType: 'blob',
+    } as Record<string, unknown>);
 
-    const response = await fetch(`${baseUrl}/admin/analytics/export?${params.toString()}`, {
-        headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
-        }
-    });
-
-    if (!response.ok) throw new Error('Export failed');
-
-    const blob = await response.blob();
+    const blob = data instanceof Blob ? data : new Blob([JSON.stringify(data)]);
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -653,7 +668,7 @@ export async function refundTransaction(transactionId: string, reason: string): 
 }
 
 export async function getGiftCatalog(includePremium = true): Promise<{ categories: GiftCategory[]; gifts: VirtualGift[] }> {
-    return httpClient.get(`/gifts/catalog?include_premium=${includePremium}`);
+    return httpClient.get(`/api/gifts/catalog?include_premium=${includePremium}`);
 }
 
 export async function createGift(giftData: Partial<VirtualGift>): Promise<VirtualGift> {
@@ -729,6 +744,8 @@ export const adminApi = {
         getDetails: getUserDetails,
         action: performUserAction,
         bulkAction: performBulkUserAction,
+        create: createUser,
+        delete: deleteUser,
         getVerificationQueue: getVerificationQueue,
         reviewVerification: reviewVerificationRequest,
         getSegments: getSegments,
@@ -790,12 +807,7 @@ export const adminApi = {
             delete: deleteGift,
             uploadImage: uploadGiftImage,
         },
-        plans: {
-            get: getPlans,
-            create: createPlan,
-            update: updatePlan,
-            delete: deletePlan,
-        },
+        // plans duplicated above as getPlans/createPlan/updatePlan/deletePlan
         promoCodes: {
             list: async (filter?: string) => {
                 const params = filter && filter !== 'all' ? `?status=${filter}` : '';

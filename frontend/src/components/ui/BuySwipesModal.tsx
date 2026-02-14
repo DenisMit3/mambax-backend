@@ -72,7 +72,7 @@ export function BuySwipesModal({
         setError(null);
 
         try {
-            const token = localStorage.getItem("token");
+            const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
             const endpoint = mode === 'swipes'
                 ? '/api_proxy/payments/buy-swipes'
                 : mode === 'superlike'

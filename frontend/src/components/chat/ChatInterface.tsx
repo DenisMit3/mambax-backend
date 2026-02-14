@@ -12,8 +12,6 @@ import { ConversationPromptsModal } from './ConversationPromptsModal';
 import { useChatLogic } from './useChatLogic';
 import type { Chat } from './ChatTypes';
 
-const getToken = () => { try { return localStorage.getItem('token'); } catch { return null; } };
-
 interface ChatInterfaceProps {
     chat: Chat;
     currentUserId: string;
@@ -63,9 +61,10 @@ export const ChatInterface = ({
         setLoadingPrompts(true);
         setShowConversationPrompts(true);
         try {
-            const token = getToken();
             const res = await fetch(`/api_proxy/api/chat/conversation-prompts?match_id=${chat.matchId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: {
+                    'Authorization': `Bearer ${(() => { try { return localStorage.getItem('accessToken') || localStorage.getItem('token'); } catch { return ''; } })()}`
+                }
             });
             if (res.ok) { const data = await res.json(); setConversationPrompts(data.prompts || []); }
         } catch (e) { console.error('Failed to fetch conversation prompts:', e); }

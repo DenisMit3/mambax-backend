@@ -48,10 +48,10 @@ export const GeoMapRadar = ({ users = [], loading = false }: GeoMapRadarProps) =
                 return {
                     id: u.id,
                     name: u.name,
-                    photo: u.photos?.[0] || FALLBACK_AVATAR,
-                    distance: u.distance || ((userHash % 50) / 10).toFixed(1),  // 0-5km based on hash
-                    angle: (idx * (360 / users.length)) + (userHash % 20),  // Stable angle offset
-                    isOnline: u.is_online
+                    photo: u.photo || FALLBACK_AVATAR,
+                    distance: u.distance || Number(((userHash % 50) / 10).toFixed(1)),
+                    angle: (idx * (360 / users.length)) + (userHash % 20),
+                    isOnline: u.isOnline
                 };
             });
             setDiscoveredUsers(radialUsers);

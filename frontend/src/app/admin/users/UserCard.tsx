@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import {
-  Eye, Edit, UserCheck, UserX, Ban,
+  Eye, Edit, UserCheck, UserX, Ban, Trash2,
   MapPin, Calendar, Heart, MessageCircle,
   Shield, Crown, CheckCircle,
 } from 'lucide-react';
@@ -96,8 +96,11 @@ export function UserCard({ user, onAction }: UserCardProps) {
             <UserCheck size={16} />
           </button>
         )}
-        <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition-all" onClick={() => onAction('ban', user)}>
+        <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition-all" onClick={() => onAction('ban', user)} title="Забанить">
           <Ban size={16} />
+        </button>
+        <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition-all" onClick={() => onAction('delete', user)} title="Удалить из базы">
+          <Trash2 size={16} />
         </button>
       </div>
     </GlassCard>

@@ -12,8 +12,8 @@ import { MatchModal } from '@/components/discovery/MatchModal';
 import { TelegramAuthError } from '@/components/auth/TelegramAuthError';
 import { FALLBACK_AVATAR } from '@/lib/constants';
 import { Toast } from '@/components/ui/Toast';
-// outside component to avoid recreation
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+// Photo URL prefix — uses Next.js proxy to avoid exposing backend URL
+const PHOTO_BASE = '/api_proxy';
 
 // FIX (UX): Deterministic hash function for stable compatibility scores
 // Instead of random(), use hash of user ID for consistency between re-renders
@@ -271,9 +271,9 @@ export function HomeClient() {
                 // Helper to resolve photo URLs (uses API_BASE constant from top of file)
                 const resolvePhotoUrl = (url: string): string => {
                     if (!url) return FALLBACK_AVATAR;
-                    // If it's a relative path to static files, prepend backend URL
+                    // If it's a relative path to static files, prepend proxy URL
                     if (url.startsWith('/static/') || url.startsWith('/uploads/')) {
-                        return `${API_BASE}${url}`;
+                        return `${PHOTO_BASE}${url}`;
                     }
                     // Already absolute URL (http:// or https://)
                     return url;

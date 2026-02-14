@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import {
   CreditCard, ArrowLeft, Star, Gift, Crown,
-  Check, Clock, XCircle, Filter
+  Check, Clock, XCircle
 } from 'lucide-react';
 import { authService } from '@/services/api';
 import { useHaptic } from '@/hooks/useHaptic';

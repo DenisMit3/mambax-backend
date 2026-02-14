@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { DollarSign } from 'lucide-react';
+import { httpClient } from '@/lib/http-client';
 import { PaymentRecord } from './types';
 
 interface PaymentHistoryProps {
@@ -38,13 +39,7 @@ export default function PaymentHistory({ userId }: PaymentHistoryProps) {
         setLoading(true);
         setError(false);
         try {
-            const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-            const token = (() => { try { return localStorage.getItem('token'); } catch { return null; } })();
-            const response = await fetch(`${API_BASE}/admin/users/${userId}/payments`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!response.ok) throw new Error('Failed');
-            const data = await response.json();
+            const data = await httpClient.get<{ payments: PaymentRecord[] }>(`/admin/users/${userId}/payments`);
             setPayments(data.payments || []);
         } catch {
             setError(true);

@@ -68,7 +68,7 @@ async def get_system_health(
     # 1. System Stats
     cpu_usage = psutil.cpu_percent() if psutil else 0
     memory = psutil.virtual_memory() if psutil else None
-    disk = shutil.disk_usage("/")
+    disk = shutil.disk_usage("/" if os.name != "nt" else "C:\\")
     
     uptime_seconds = int(time.time() - START_TIME)
     
@@ -534,3 +534,31 @@ async def get_system_config(
             "email_enabled": bool(settings.SMTP_SERVER) or bool(os.getenv("SMTP_SERVER")),
         }
     }
+
+
+# ============================================
+# ALIASES for frontend compatibility
+# ============================================
+
+@router.get("/audit")
+async def get_audit_alias(
+    page: int = 1,
+    page_size: int = 50,
+    admin_id: Optional[str] = None,
+    action: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Alias for /audit-logs — frontend calls /admin/system/audit"""
+    return await get_audit_logs(page, page_size, admin_id, action, db, current_user)
+
+
+@router.post("/feature-flags/{flag_key}")
+async def update_feature_flag_post(
+    flag_key: str,
+    update: FeatureFlagUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """POST alias for PUT /feature-flags/{flag_key} - frontend sends POST"""
+    return await update_feature_flag(flag_key, update, db, current_user)

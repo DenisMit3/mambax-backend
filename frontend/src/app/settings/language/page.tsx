@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Globe, Search, Check, ArrowLeft } from 'lucide-react';
-import { httpClient } from '@/lib/http-client';
 import { useHaptic } from '@/hooks/useHaptic';
 import { authService } from '@/services/api';
 

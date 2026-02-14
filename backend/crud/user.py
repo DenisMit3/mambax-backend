@@ -126,6 +126,17 @@ async def add_user_photo(db: AsyncSession, user: User, photo_url: str) -> User:
     photo = UserPhoto(user_id=user.id, url=photo_url)
     db.add(photo)
     
+    # Пересчитать is_complete после добавления фото
+    if not user.is_complete:
+        has_name = bool(user.name and len(user.name) > 1)
+        has_age = bool(user.age and user.age >= 18)
+        has_real_gender = bool(user.gender and user.gender != Gender.OTHER)
+        # +1 потому что новое фото ещё не в photos_rel до commit
+        has_photos = True  # мы только что добавили фото
+        
+        if has_name and has_age and has_real_gender and has_photos:
+            user.is_complete = True
+    
     await db.commit()
     # Expire user to force reload of relationships on next access
     await db.refresh(user)
@@ -232,7 +243,8 @@ async def delete_user(db: AsyncSession, user_id: UUID) -> bool:
             from backend.services.geo import geo_service
             await geo_service.remove_user(user_id_str)
     except Exception as e:
-        print(f"Redis cleanup failed for user {user_id}: {e}")
+        import logging
+        logging.getLogger(__name__).warning(f"Redis cleanup failed for user {user_id}: {e}")
 
     await db.delete(user)
     await db.commit()

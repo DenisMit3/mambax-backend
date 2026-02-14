@@ -6,7 +6,7 @@ import { useHaptic } from '@/hooks/useHaptic';
 import { useSoundService } from '@/hooks/useSoundService';
 import type { Message, Chat, ChatParticipant } from './ChatTypes';
 
-const getToken = () => { try { return localStorage.getItem('token'); } catch { return null; } };
+const getToken = () => { try { return localStorage.getItem('accessToken') || localStorage.getItem('token'); } catch { return null; } };
 
 /**
  * Хук, инкапсулирующий всю логику чата:
@@ -26,8 +26,8 @@ export function useChatLogic(chat: Chat, currentUserId: string, otherParticipant
     const [isPartnerTyping, setIsPartnerTyping] = useState(false);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
-    const [typingDebounce, setTypingDebounce] = useState<NodeJS.Timeout | null>(null);
+    const typingTimeoutTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const typingDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
     const inputRef = useRef<HTMLInputElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -108,7 +108,7 @@ export function useChatLogic(chat: Chat, currentUserId: string, otherParticipant
     const handleVoiceSend = useCallback(async (audioBlob: Blob, _duration: number) => {
         const formData = new FormData();
         formData.append('file', audioBlob, 'voice.webm');
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
         try {
             const response = await fetch('/api_proxy/api/chat/voice', {
                 method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData
@@ -146,22 +146,20 @@ export function useChatLogic(chat: Chat, currentUserId: string, otherParticipant
 
     const handleMessageChange = useCallback((val: string) => {
         setMessage(val);
-        if (val.length > 0 && !typingDebounce) {
+        if (val.length > 0 && !typingDebounceRef.current) {
             wsService.send({ type: 'typing', match_id: chat.matchId, is_typing: true, recipient_id: otherParticipant?.id });
         }
-        if (typingDebounce) clearTimeout(typingDebounce);
-        const newDebounce = setTimeout(() => {
+        if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+        typingDebounceRef.current = setTimeout(() => {
             wsService.send({ type: 'typing', match_id: chat.matchId, is_typing: false, recipient_id: otherParticipant?.id });
-            setTypingDebounce(null);
+            typingDebounceRef.current = null;
         }, 300);
-        setTypingDebounce(newDebounce);
-        if (typingTimeout) clearTimeout(typingTimeout);
-        const newTimeout = setTimeout(() => {
+        if (typingTimeoutTimerRef.current) clearTimeout(typingTimeoutTimerRef.current);
+        typingTimeoutTimerRef.current = setTimeout(() => {
             wsService.send({ type: 'typing', match_id: chat.matchId, is_typing: false, recipient_id: otherParticipant?.id });
-            setTypingTimeout(null);
+            typingTimeoutTimerRef.current = null;
         }, 10000);
-        setTypingTimeout(newTimeout);
-    }, [chat.matchId, otherParticipant?.id, typingDebounce, typingTimeout]);
+    }, [chat.matchId, otherParticipant?.id]);
 
     return {
         message, setMessage, allMessages, showReactions, setShowReactions,

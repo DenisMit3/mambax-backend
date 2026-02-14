@@ -304,8 +304,8 @@ export function useOnboardingFlow() {
             if (d.intent) profileData.intent = d.intent;
             if (d.looking_for) profileData.looking_for = d.looking_for;
 
-            await authService.updateProfile(profileData);
-
+            // Сначала загружаем фото, чтобы они были на сервере
+            // до обновления профиля (иначе is_complete не станет true)
             const uploadPromises = userData.photos.map((photoData, i) => {
                 return authService.uploadPhoto(photoData.file).catch(e => {
                     console.error(`Photo upload ${i} failed:`, e);
@@ -313,6 +313,9 @@ export function useOnboardingFlow() {
                 });
             });
             await Promise.allSettled(uploadPromises);
+
+            // Теперь обновляем профиль - бэкенд увидит фото и выставит is_complete = true
+            await authService.updateProfile(profileData);
 
             hapticFeedback.notificationOccurred('success');
             router.push('/');

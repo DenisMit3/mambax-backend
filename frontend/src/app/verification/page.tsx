@@ -43,7 +43,7 @@ export default function VerificationPage() {
 
     const checkStatus = async () => {
         try {
-            const token = localStorage.getItem("token");
+            const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
             const res = await fetch(`${API_URL}/verification/status`, {
                 headers: { "Authorization": `Bearer ${token}` }
             });
@@ -68,7 +68,7 @@ export default function VerificationPage() {
     const startVerification = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem("token");
+            const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
             const res = await fetch(`${API_URL}/verification/start`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${token}` }
@@ -101,7 +101,7 @@ export default function VerificationPage() {
             // reuse authService logic if possible, or implement simple upload
             const formData = new FormData();
             formData.append("file", file);
-            const token = localStorage.getItem("token");
+            const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
 
             // Use existing upload endpoint
             const upRes = await fetch(`${API_URL}/users/me/photo`, {

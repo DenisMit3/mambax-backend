@@ -13,7 +13,7 @@ from typing import Optional
 from urllib.parse import parse_qsl, unquote
 from uuid import UUID
 
-from fastapi import FastAPI, Depends, HTTPException, status, Header, Query, Body
+from fastapi import FastAPI, Depends, HTTPException, status, Header, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -6884,21 +6884,58 @@ async def auth_login(
 
 @app.post("/api/auth/login/email")
 async def auth_login_email(
-    email: str = Body(...),
-    password: str = Body(...),
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """Admin login with email"""
+    # region agent log
+    import json as _json
+    def _dbg(msg, data=None):
+        print(f"[DEBUG_LOGIN] {msg}: {_json.dumps(data) if data else ''}", flush=True)
+    # endregion agent log
+
+    # region agent log - hypothesis A/E: parse body
+    try:
+        raw_body = await request.body()
+        _dbg("H-A: raw_body", {"body": raw_body.decode("utf-8", errors="replace"), "content_type": request.headers.get("content-type")})
+        body_json = _json.loads(raw_body)
+        email = body_json.get("email", "")
+        password = body_json.get("password", "")
+        _dbg("H-A: parsed", {"email": email, "password_len": len(password) if password else 0})
+    except Exception as e:
+        _dbg("H-A: body parse error", {"error": str(e)})
+        raise HTTPException(status_code=422, detail=f"Invalid body: {e}")
+    # endregion agent log
+
+    # region agent log - hypothesis C: user lookup
     result = await db.execute(text("SELECT id, hashed_password, role, is_active FROM users WHERE email = :email"), {"email": email})
     user = result.fetchone()
+    _dbg("H-C: user_lookup", {"email": email, "found": user is not None})
+    # endregion agent log
+
     if not user:
+        _dbg("H-C: user not found", {"email": email})
         raise HTTPException(status_code=401, detail="Invalid email or password")
     user_id, hashed_password, role, is_active = user
+
+    # region agent log - hypothesis B: password verify
+    _dbg("H-B: verify_start", {"user_id": str(user_id), "hash_prefix": hashed_password[:20] if hashed_password else "NONE", "is_active": is_active})
+    # endregion agent log
+
     if not is_active:
+        _dbg("H-B: account disabled", {"user_id": str(user_id)})
         raise HTTPException(status_code=401, detail="Account disabled")
-    if not pwd_context.verify(password, hashed_password):
+    try:
+        pw_ok = pwd_context.verify(password, hashed_password)
+    except Exception as e:
+        _dbg("H-B: verify exception", {"error": str(e)})
+        pw_ok = False
+    _dbg("H-B: verify_result", {"pw_ok": pw_ok})
+
+    if not pw_ok:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     access_token = create_access_token(str(user_id))
+    _dbg("H-ALL: success", {"user_id": str(user_id), "role": str(role)})
     return {
         "access_token": access_token,
         "token_type": "bearer",

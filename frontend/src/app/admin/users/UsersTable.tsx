@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Eye, Edit, Ban } from 'lucide-react';
+import { Eye, Edit, Ban, Trash2 } from 'lucide-react';
 import { UserListItem } from '@/services/adminApi';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { STATUS_COLORS } from './types';
@@ -102,9 +102,10 @@ export function UsersTable({ users, onAction, selectedUsers, onSelectUser, onSel
               <td className="p-4 text-sm text-[var(--admin-text-secondary)]">{user.last_active ? new Date(user.last_active).toLocaleDateString() : 'Никогда'}</td>
               <td className="p-4">
                 <div className="flex gap-1.5">
-                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-blue-500/20 hover:text-blue-500 transition-colors" onClick={() => router.push(`/admin/users/${user.id}`)}><Eye size={14} /></button>
-                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-blue-500/20 hover:text-blue-500 transition-colors" onClick={() => onAction('edit', user)}><Edit size={14} /></button>
-                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 transition-colors" onClick={() => onAction('ban', user)}><Ban size={14} /></button>
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-blue-500/20 hover:text-blue-500 transition-colors" onClick={() => router.push(`/admin/users/${user.id}`)} title="Просмотр"><Eye size={14} /></button>
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-blue-500/20 hover:text-blue-500 transition-colors" onClick={() => onAction('edit', user)} title="Редактировать"><Edit size={14} /></button>
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 transition-colors" onClick={() => onAction('ban', user)} title="Забанить"><Ban size={14} /></button>
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 transition-colors" onClick={() => onAction('delete', user)} title="Удалить из базы"><Trash2 size={14} /></button>
                 </div>
               </td>
             </motion.tr>

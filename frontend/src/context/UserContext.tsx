@@ -49,7 +49,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const { data: user = null, isLoading, refetch } = useQuery({
         queryKey: ['user', 'me'],
         queryFn: async () => {
-            const token = localStorage.getItem("token");
+            const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
             if (!token) {
                 return null;
             }

@@ -8,7 +8,7 @@ import { useTelegram } from '@/lib/telegram';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+import { httpClient } from '@/lib/http-client';
 
 interface VerificationScannerProps {
     onSuccess: () => void;
@@ -52,19 +52,9 @@ export const VerificationScanner = ({ onSuccess, onCancel }: VerificationScanner
 
     const uploadVerificationPhoto = async (blob: Blob) => {
         try {
-            const token = localStorage.getItem('token');
             const formData = new FormData();
             formData.append('file', blob, 'verification_selfie.jpg');
-
-            const res = await fetch(`${API_URL}/users/me/verification-photo`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formData
-            });
-
-            if (!res.ok) throw new Error('Upload failed');
+            await httpClient.post('/users/me/verification-photo', formData);
             return true;
         } catch (e) {
             console.error(e);

@@ -54,7 +54,7 @@ const nextConfig: NextConfig = {
               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
               img-src 'self' blob: data: https:;
               font-src 'self' data: https://fonts.gstatic.com;
-              connect-src 'self' https://*.sentry.io https://app.posthog.com wss://*.onrender.com wss://*.railway.app wss://*.fly.dev wss://*.vercel.app ws://localhost:* ws://192.168.1.136:* http://localhost:* http://192.168.1.136:* https://*.railway.app https://*.fly.dev; 
+              connect-src 'self' https://*.sentry.io https://app.posthog.com wss://*.vercel.app https://*.vercel.app; 
               frame-ancestors 'self' https://web.telegram.org https://*.telegram.org;
               form-action 'self';
             `.replace(/\s{2,}/g, ' ').trim(),
@@ -65,39 +65,39 @@ const nextConfig: NextConfig = {
   },
 
   async rewrites() {
+    const backendUrl = process.env.BACKEND_URL;
+    if (!backendUrl) {
+      console.warn('BACKEND_URL not set — API proxy will not work');
+      return [];
+    }
     return [
-      // Proxy all API requests through a specific prefix to avoid conflicts with frontend pages
       {
         source: '/api_proxy/:path*',
-        destination: `${process.env.BACKEND_URL || 'http://127.0.0.1:8001'}/:path*`, // Proxy to Backend
+        destination: `${backendUrl}/:path*`,
       },
-      // Support for direct /debug access (if client cached)
       {
         source: '/debug/:path*',
-        destination: `${process.env.BACKEND_URL || 'http://127.0.0.1:8001'}/debug/:path*`,
+        destination: `${backendUrl}/debug/:path*`,
       },
-      // Special case for WebSocket upgrade endpoint (if accessed via HTTP initially)
       {
         source: '/chat/ws',
-        destination: `${process.env.BACKEND_URL || 'http://127.0.0.1:8001'}/chat/ws`,
+        destination: `${backendUrl}/chat/ws`,
       },
       {
         source: '/chat/ws/:path*',
-        destination: `${process.env.BACKEND_URL || 'http://127.0.0.1:8001'}/chat/ws/:path*`,
+        destination: `${backendUrl}/chat/ws/:path*`,
       },
-      // Admin WebSocket
       {
         source: '/admin/ws',
-        destination: `${process.env.BACKEND_URL || 'http://127.0.0.1:8001'}/admin/ws`,
+        destination: `${backendUrl}/admin/ws`,
       },
-      // Proxy static files from backend
       {
         source: '/static/:path*',
-        destination: `${process.env.BACKEND_URL || 'http://127.0.0.1:8001'}/static/:path*`,
+        destination: `${backendUrl}/static/:path*`,
       },
       {
         source: '/uploads/:path*',
-        destination: `${process.env.BACKEND_URL || 'http://127.0.0.1:8001'}/static/uploads/:path*`,
+        destination: `${backendUrl}/static/uploads/:path*`,
       }
     ];
   },

@@ -8,7 +8,7 @@ All endpoints use AsyncSession for database operations and require admin privile
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, desc, and_, or_, select, delete, cast, case, Date
+from sqlalchemy import func, desc, and_, or_, select, delete, cast, case, Date, text
 from sqlalchemy.orm import aliased
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -418,6 +418,64 @@ async def get_users_list(
 ):
     """Get paginated list of users with filters including real fraud scores and activity counts"""
     
+    try:
+        return await _get_users_list_impl(
+            page, page_size, status, subscription, verified,
+            verification_pending, search, fraud_risk, sort_by, sort_order, db
+        )
+    except Exception as e:
+        # Rollback broken session before fallback
+        await db.rollback()
+        import traceback
+        print(f"[ADMIN] get_users_list main query failed: {e}")
+        traceback.print_exc()
+        # Fallback: simple query without JOINs if complex query fails
+        try:
+            count_q = select(func.count()).select_from(User)
+            result = await db.execute(count_q)
+            total = result.scalar() or 0
+            
+            simple_q = select(User).order_by(desc(User.created_at)).offset((page - 1) * page_size).limit(page_size)
+            result = await db.execute(simple_q)
+            rows = result.scalars().all()
+            
+            return {
+                "users": [
+                    {
+                        "id": str(u.id),
+                        "name": u.name,
+                        "email": u.email,
+                        "age": u.age,
+                        "gender": u.gender.value if u.gender else None,
+                        "location": u.location or u.city,
+                        "status": u.status.value if u.status else "active",
+                        "subscription": u.subscription_tier.value if u.subscription_tier else "free",
+                        "verified": u.is_verified,
+                        "fraud_score": 0,
+                        "registered_at": u.created_at.isoformat(),
+                        "last_active": u.updated_at.isoformat() if u.updated_at else None,
+                        "matches": 0,
+                        "messages": 0
+                    }
+                    for u in rows
+                ],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": (total + page_size - 1) // page_size
+            }
+        except Exception as fallback_err:
+            import traceback
+            print(f"[ADMIN] get_users_list FALLBACK also failed: {fallback_err}")
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Ошибка загрузки пользователей: {str(fallback_err)}")
+
+
+async def _get_users_list_impl(
+    page, page_size, status, subscription, verified,
+    verification_pending, search, fraud_risk, sort_by, sort_order, db
+):
+    """Internal implementation of users list with full JOINs"""
     # Subquery for matches count per user
     matches_subq = (
         select(
@@ -556,6 +614,140 @@ async def get_users_list(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size
     }
+
+
+# ============================================
+# ADMIN: CREATE USER
+# ============================================
+
+class AdminCreateUserRequest(BaseModel):
+    """Schema for admin to create a user manually"""
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    age: int = 18
+    gender: str = "other"
+    password: Optional[str] = None
+    role: str = "user"
+    status: str = "active"
+    subscription_tier: str = "free"
+    bio: Optional[str] = None
+    city: Optional[str] = None
+
+
+@router.post("/users")
+async def admin_create_user(
+    data: AdminCreateUserRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Create a new user manually by admin"""
+    from backend.core.security import hash_password
+    from backend.models.user import Gender, UserStatus, SubscriptionTier, UserRole
+    
+    try:
+        # Check for duplicate email
+        if data.email:
+            existing = await db.execute(select(User).where(User.email == data.email))
+            if existing.scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Пользователь с таким email уже существует")
+        
+        # Check for duplicate phone
+        if data.phone:
+            existing = await db.execute(select(User).where(User.phone == data.phone))
+            if existing.scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Пользователь с таким телефоном уже существует")
+        
+        # Map gender
+        gender_map = {"male": Gender.MALE, "female": Gender.FEMALE, "other": Gender.OTHER}
+        gender = gender_map.get(data.gender, Gender.OTHER)
+        
+        # Map status
+        status_map = {
+            "active": UserStatus.ACTIVE, "suspended": UserStatus.SUSPENDED,
+            "banned": UserStatus.BANNED, "pending": UserStatus.PENDING
+        }
+        user_status = status_map.get(data.status, UserStatus.ACTIVE)
+        
+        # Map subscription
+        sub_map = {
+            "free": SubscriptionTier.FREE, "vip": SubscriptionTier.VIP,
+            "gold": SubscriptionTier.GOLD, "platinum": SubscriptionTier.PLATINUM
+        }
+        subscription = sub_map.get(data.subscription_tier, SubscriptionTier.FREE)
+        
+        # Map role
+        role_map = {"user": UserRole.USER, "admin": UserRole.ADMIN, "moderator": UserRole.MODERATOR}
+        role = role_map.get(data.role, UserRole.USER)
+        
+        # Create user
+        password = data.password or "admin_created_user"
+        new_user = User(
+            email=data.email,
+            phone=data.phone,
+            hashed_password=hash_password(password),
+            name=data.name,
+            age=data.age,
+            gender=gender,
+            bio=data.bio,
+            city=data.city,
+            status=user_status,
+            subscription_tier=subscription,
+            role=role,
+            is_active=True,
+            is_complete=False,
+        )
+        
+        db.add(new_user)
+        await db.flush()
+        
+        return {
+            "status": "success",
+            "message": f"Пользователь {data.name} создан",
+            "user_id": str(new_user.id)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка создания пользователя: {str(e)}")
+
+
+# ============================================
+# ADMIN: DELETE USER (full removal from DB)
+# ============================================
+
+@router.delete("/users/{user_id}")
+async def admin_delete_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Permanently delete a user from the database"""
+    from backend.crud.user import delete_user
+    from uuid import UUID
+    
+    try:
+        uid = UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Некорректный ID пользователя")
+    
+    # Prevent admin from deleting themselves
+    if uid == current_user.id:
+        raise HTTPException(status_code=400, detail="Нельзя удалить самого себя")
+    
+    try:
+        deleted = await delete_user(db, uid)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        return {
+            "status": "success",
+            "message": "Пользователь полностью удален из базы данных"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления: {str(e)}")
 
 
 @router.get("/users/segments")
@@ -3566,3 +3758,42 @@ async def admin_gdpr_export(
             "matches": len(matches), "reports": len(reports), "prompts": len(prompts),
         },
     }
+
+
+# ============================================
+# User Payments (admin view)
+# ============================================
+@router.get("/users/{user_id}/payments")
+async def get_user_payments(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Get payment history for a specific user"""
+    try:
+        result = await db.execute(
+            text("""
+                SELECT id::text, amount, currency, status, type, created_at
+                FROM transactions
+                WHERE user_id = :user_id
+                ORDER BY created_at DESC
+                LIMIT 50
+            """),
+            {"user_id": user_id}
+        )
+        rows = result.fetchall()
+        payments = [
+            {
+                "id": r[0],
+                "amount": float(r[1]) if r[1] else 0,
+                "currency": r[2] or "RUB",
+                "status": r[3] or "completed",
+                "type": r[4] or "payment",
+                "created_at": r[5].isoformat() if r[5] else None
+            }
+            for r in rows
+        ]
+    except Exception:
+        payments = []
+
+    return {"payments": payments, "total": len(payments)}

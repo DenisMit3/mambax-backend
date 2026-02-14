@@ -246,6 +246,23 @@ async def campaign_action(
     }
 
 
+@router.post("/campaigns/{campaign_id}/{action}")
+async def campaign_action_path(
+    campaign_id: str,
+    action: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token)
+):
+    """Alias: frontend sends action as path param instead of query param"""
+    if action not in ("start", "pause", "stop", "duplicate"):
+        raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
+    return {
+        "status": "success",
+        "message": f"Campaign {campaign_id} {action}ed",
+        "new_status": "active" if action == "start" else "paused" if action == "pause" else "completed"
+    }
+
+
 # ============================================
 # PUSH NOTIFICATIONS
 # ============================================

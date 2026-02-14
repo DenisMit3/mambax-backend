@@ -24,7 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize Sentry for production error tracking (Enterprise integration)
+# Initialize Sentry
 from backend.core.sentry import init_sentry, set_context
 init_sentry(
     dsn=settings.SENTRY_DSN,
@@ -39,13 +39,11 @@ init_sentry(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Create tables
     if len(settings.SECRET_KEY) < 32:
         raise RuntimeError(f"SECRET_KEY too short ({len(settings.SECRET_KEY)} chars). Must be 32+ characters.")
     
-    # Проверка TELEGRAM_BOT_TOKEN
     if not os.getenv("TELEGRAM_BOT_TOKEN"):
-        logger.warning("⚠️  TELEGRAM_BOT_TOKEN not configured - Telegram authentication will not work")
+        logger.warning("⚠️  TELEGRAM_BOT_TOKEN not configured")
     else:
         logger.info("✅ Telegram bot configured")
         
@@ -59,12 +57,12 @@ async def lifespan(app: FastAPI):
     
     # Seed DB
     if settings.SEED_ON_STARTUP:
-         async with database.async_session() as session:
-             await seed_db(session)
+        async with database.async_session() as session:
+            await seed_db(session)
     else:
-         logger.info("Skipping DB seeding (SEED_ON_STARTUP is False)")
+        logger.info("Skipping DB seeding (SEED_ON_STARTUP is False)")
     
-    # Start scheduler for background jobs (retention calculation, backups)
+    # Start scheduler
     if settings.ENABLE_SCHEDULER:
         try:
             from backend.tasks.retention_calculator import start_scheduler
@@ -73,7 +71,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Failed to start scheduler: {e}")
     
-    # Set Sentry context
     set_context("app", {
         "environment": settings.ENVIRONMENT,
         "version": os.getenv('APP_VERSION', '1.0.0')
@@ -81,10 +78,7 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Shutdown
     logger.info("Shutting down...")
-    
-    # Stop scheduler
     if settings.ENABLE_SCHEDULER:
         try:
             from backend.tasks.retention_calculator import stop_scheduler
@@ -114,32 +108,26 @@ async def global_exception_handler(request, exc):
     logger.error(traceback.format_exc())
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal Server Error", "error": str(exc)}
+        content={"detail": "Internal Server Error"}
     )
 
 # --- Middleware ---
 
-# Prepare allowed origins
 allowed_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://web.telegram.org"
+    "https://web.telegram.org",
 ]
 if settings.ALLOWED_ORIGINS:
     allowed_origins.extend([o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()])
 
-# Regex for Vercel preview deployments and Local Network (if enabled)
+# Allow all Vercel preview deployments
 allowed_origin_regex = r"https://.*\.vercel\.app"
-if settings.LOCAL_NETWORK_ACCESS:
-    # Allow 192.168.x.x, 10.x.x.x, 172.x.x.x with any port
-    allowed_origin_regex += r"|http://192\.168\.\d{1,3}\.\d{1,3}(:\d+)?|http://10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?|http://172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}(:\d+)?"
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=allowed_origin_regex,  # FIX: Enable Vercel preview deployments and local network
+    allow_origin_regex=allowed_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -154,7 +142,7 @@ async def rate_limit_middleware(request: Request, call_next):
         from backend.services.security import check_rate_limit, is_ip_banned
         from fastapi.responses import JSONResponse
         
-        # Exempt static, health, debug, and admin routes FIRST
+        # Exempt static, health, debug, and admin routes
         if (request.url.path.startswith("/static") or 
             request.url.path == "/health" or 
             request.url.path.startswith("/health/") or
@@ -172,13 +160,9 @@ async def rate_limit_middleware(request: Request, call_next):
         if fw: 
             client_ip = fw.split(",")[0].strip()
         
-        # Exempt localhost/internal IPs
-        if client_ip in ["127.0.0.1", "localhost", "::1"]:
-            return await call_next(request)
-            
-        # Check if IP is globally banned (SafeRedisClient handles connection errors gracefully)
+        # Check if IP is banned
         if await is_ip_banned(client_ip):
-             return JSONResponse(status_code=403, content={"detail": "Access Permanently Suspended"})
+            return JSONResponse(status_code=403, content={"detail": "Access Permanently Suspended"})
 
         # Anti-Scraping
         user_agent = request.headers.get("user-agent", "").lower()
@@ -202,10 +186,8 @@ async def rate_limit_middleware(request: Request, call_next):
                 headers={"Retry-After": str(result.retry_after or 60)}
             )
 
-        # Call Next
         response = await call_next(request)
         
-        # Headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
@@ -216,7 +198,6 @@ async def rate_limit_middleware(request: Request, call_next):
         return response
 
     except Exception as e:
-        # Fallback: If middleware fails, allow request but log error
         logger.warning(f"Rate limit middleware error: {e}")
         return await call_next(request)
 
@@ -242,84 +223,52 @@ from backend.api.marketing import router as marketing_router
 from backend.api.system import router as system_router
 from backend.api.advanced import router as advanced_router
 from backend.api.debug import router as debug_router
+from backend.api.missing_endpoints import router as missing_router
 
 
 app.include_router(health_router, tags=["Health"])
-app.include_router(auth_router)
-app.include_router(interaction_router)
-app.include_router(discovery_router)
-app.include_router(chat_router)
-app.include_router(users_router)
+app.include_router(auth_router, prefix="/api")
+app.include_router(interaction_router, prefix="/api")
+app.include_router(discovery_router, prefix="/api")
+app.include_router(chat_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
 app.include_router(traycer_router)
-app.include_router(bot_webhook_router)
-app.include_router(verification_router)
+app.include_router(bot_webhook_router, prefix="/api")
+app.include_router(verification_router, prefix="/api")
 app.include_router(stripe_webhook.router, prefix="/api/v1", tags=["Payments"])
-app.include_router(security_router)
-app.include_router(ux_features_router)
-app.include_router(notification_router)
-app.include_router(safety_router)
+app.include_router(security_router, prefix="/api")
+app.include_router(ux_features_router, prefix="/api")
+app.include_router(notification_router, prefix="/api")
+app.include_router(safety_router, prefix="/api")
 app.include_router(admin_router)
 app.include_router(monetization_router)
-app.include_router(gifts_router)
-app.include_router(payments_router)
+app.include_router(gifts_router, prefix="/api")
+app.include_router(payments_router, prefix="/api")
 app.include_router(marketing_router)
 app.include_router(system_router)
 app.include_router(advanced_router)
+app.include_router(missing_router, prefix="/api")
 
-# Only enable Debug/Dev routes in non-production
+# Debug/Dev routes only in non-production
 if not settings.is_production:
     app.include_router(dev_router)
     app.include_router(debug_router)
 
-# Simple test endpoint that doesn't depend on anything
+# Simple test endpoint
 @app.get("/ping")
 async def ping():
     return {"pong": True}
 
 # --- Static Files & Root ---
 
-# Determine absolute path to static directory
-# When running from different CWD, Path(__file__) might be relative
 static_dir = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "static")))
-
 logger.info(f"Serving static files from: {static_dir}")
 
 if not static_dir.exists():
     static_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Created static directory: {static_dir}")
 
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 @app.get("/")
 async def read_root():
     return FileResponse("static/index.html")
-
-if not settings.is_production:
-    @app.get("/debug/static-files")
-    async def list_static_files():
-        files = []
-        if static_dir.exists():
-            for f in static_dir.glob("**/*"):
-                if f.is_file():
-                    files.append(str(f.relative_to(static_dir)))
-        return {
-            "static_dir_absolute": str(static_dir),
-            "exists": static_dir.exists(),
-            "files_count": len(files),
-            "sample_files": files[:10]
-        }
-
-# --- Run ---
-
-if __name__ == "__main__":
-    import uvicorn
-    cert = "cert.pem"
-    key = "key.pem"
-    port = int(os.getenv("PORT", 8000))
-
-    if os.path.exists(cert) and os.path.exists(key):
-        print(f"Starting in HTTPS mode on port {port}...")
-        uvicorn.run("backend.main:app", host="0.0.0.0", port=port, reload=True, ssl_keyfile=key, ssl_certfile=cert)
-    else:
-        print(f"Starting in HTTP mode on port {port}...")
-        uvicorn.run("backend.main:app", host="0.0.0.0", port=port, reload=True)

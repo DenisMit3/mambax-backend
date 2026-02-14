@@ -1,12 +1,16 @@
+"""Check user data (sync version with psycopg2).
+NOTE: Set DATABASE_URL environment variable before running.
+"""
 import psycopg2
+import os
 
-conn = psycopg2.connect(
-    host="ep-still-band-agqygsk6-pooler.c-2.eu-central-1.aws.neon.tech",
-    database="neondb",
-    user="neondb_owner",
-    password="npg_vjOPMFZV5K9n",
-    sslmode="require"
-)
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+if not DATABASE_URL:
+    print("[ERROR] Set DATABASE_URL environment variable")
+    exit(1)
+
+conn = psycopg2.connect(DATABASE_URL)
 
 cur = conn.cursor()
 
