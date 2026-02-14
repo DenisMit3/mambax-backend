@@ -1,11 +1,38 @@
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 import uuid
+import enum
 
-from sqlalchemy import String, Integer, Float, DateTime, JSON, Uuid, ForeignKey, Text, Boolean
+from sqlalchemy import String, Integer, Float, DateTime, JSON, Uuid, ForeignKey, Text, Boolean, Enum as SQLAlchemyEnum, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.db.base import Base
+
+
+class ReferralStatus(str, enum.Enum):
+    PENDING = "pending"
+    CONVERTED = "converted"
+    EXPIRED = "expired"
+
+
+class Referral(Base):
+    """
+    Tracks individual referral events between users.
+    """
+    __tablename__ = "referrals"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    referrer_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    referred_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[ReferralStatus] = mapped_column(
+        SQLAlchemyEnum(ReferralStatus, values_callable=lambda x: [e.value for e in x]),
+        default=ReferralStatus.PENDING,
+        nullable=False,
+    )
+    reward_stars: Mapped[float] = mapped_column(Float, default=50.0, comment="Stars rewarded to referrer")
+    reward_paid: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    converted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 class MarketingCampaign(Base):
     """

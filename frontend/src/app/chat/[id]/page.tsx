@@ -9,20 +9,48 @@ import { IcebreakersModal } from '@/components/chat/IcebreakersModal';
 import { useTelegram } from '@/lib/telegram';
 import { authService } from '@/services/api';
 import { useParams, useRouter } from 'next/navigation';
-import { Lightbulb } from 'lucide-react';
+import { Lightbulb, Phone, Video } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { EphemeralToggle } from '@/components/chat/EphemeralMessages';
+import { Toast } from '@/components/ui/Toast';
+
+const CallScreen = dynamic(() => import('@/components/chat/CallScreen').then(m => ({ default: m.CallScreen })), {
+    ssr: false,
+    loading: () => null
+});
 
 export default function ChatPage() {
     const { id } = useParams() as { id: string };
     const router = useRouter();
     const { hapticFeedback } = useTelegram();
     const [showGiftPicker, setShowGiftPicker] = useState(false);
+    const [showGifPicker, setShowGifPicker] = useState(false);
     const [showIcebreakers, setShowIcebreakers] = useState(false);
     const [injectInputText, setInjectInputText] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [user, setUser] = useState<ChatUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [isTyping, setIsTyping] = useState(false);
-    const [gifts, setGifts] = useState<any[]>([]);
+    interface UIGift {
+        id: string;
+        name: string;
+        image?: string;
+        price: number;
+        category: string;
+        rarity: string;
+    }
+
+    const [gifts, setGifts] = useState<UIGift[]>([]);
+
+    // Call State
+    const [showCall, setShowCall] = useState(false);
+    const [callType, setCallType] = useState<"audio" | "video">("video");
+    const [incomingCall, setIncomingCall] = useState<{ callerId: string; callerName: string; type: "audio" | "video" } | null>(null);
+
+    // Ephemeral Messages
+    const [ephemeralEnabled, setEphemeralEnabled] = useState(false);
+    const [ephemeralSeconds, setEphemeralSeconds] = useState(10);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
     // WebSocket Refs
     const ws = useRef<WebSocket | null>(null);
@@ -73,15 +101,23 @@ export default function ChatPage() {
                 });
             }
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const currentUserId = matchData?.current_user_id;
             currentUserIdRef.current = currentUserId || null; // Store for WebSocket handler
 
-            // DEBUG: Log values for troubleshooting
-            console.log('DEBUG: currentUserId =', currentUserId);
-            console.log('DEBUG: first message sender_id =', (msgsData as any[])?.[0]?.sender_id);
+            interface BackendMessage {
+                id: string;
+                content?: string;
+                text?: string;
+                photo_url?: string;
+                media_url?: string;
+                created_at?: string;
+                timestamp?: string;
+                sender_id?: string;
+                is_read?: boolean;
+                type?: string;
+            }
 
-            const uiMessages: Message[] = (msgsData as any[]).map((m: any) => ({
+            const uiMessages: Message[] = (msgsData as BackendMessage[]).map((m) => ({
                 id: m.id,
                 text: m.content || m.text,
                 image: getFullUrl(m.photo_url || m.media_url),
@@ -101,9 +137,21 @@ export default function ChatPage() {
             };
 
             // Map backend gifts to UI Gift interface
-            const mappedGifts = catalogData.gifts.map((g: any) => {
-                // Find category name
-                const cat = catalogData.categories.find((c: any) => c.id === g.category_id);
+            interface BackendGift {
+                id: string;
+                name: string;
+                emoji?: string;
+                price: number;
+                category_id?: string;
+            }
+
+            interface BackendCategory {
+                id: string;
+                name: string;
+            }
+
+            const mappedGifts = catalogData.gifts.map((g: BackendGift) => {
+                const cat = catalogData.categories.find((c: BackendCategory) => c.id === g.category_id);
                 const catName = cat ? cat.name.toLowerCase() : 'romantic';
 
                 let uiCategory = 'romantic';
@@ -119,7 +167,6 @@ export default function ChatPage() {
                     rarity: getRarity(g.price)
                 };
             });
-            // @ts-ignore - We are setting the state defined below, but need to add it to component
             setGifts(mappedGifts);
 
         } catch (error) {
@@ -140,12 +187,9 @@ export default function ChatPage() {
         // FIX (SEC-005): Token is now sent via first message, not in URL
         const wsUrl = `${protocol}//${apiUrl.replace('http://', '').replace('https://', '')}/chat/ws`;
 
-        console.log('Connecting to WS:', wsUrl);
-
         const socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
-            console.log('WS Connected, sending auth...');
             // FIX (SEC-005): Send auth message immediately after connection
             socket.send(JSON.stringify({ type: 'auth', token }));
         };
@@ -160,7 +204,6 @@ export default function ChatPage() {
         };
 
         socket.onclose = () => {
-            console.log('WS Closed, reconnecting...');
             ws.current = null;
             reconnectTimeout.current = setTimeout(connectWebSocket, 3000);
         };
@@ -171,12 +214,25 @@ export default function ChatPage() {
             socket.close();
         };
 
-        // TODO (PERF): Unify with services/websocket.ts WebSocketService
-        // Currently duplicating WebSocket logic here
+        // WebSocket connection for this chat (separate from global WebSocketService)
         ws.current = socket;
     };
 
-    const handleWebSocketMessage = (data: any) => {
+    interface WebSocketMessageData {
+        type: string;
+        match_id?: string;
+        id: string;
+        text?: string;
+        content?: string;
+        photo_url?: string;
+        media_url?: string;
+        timestamp?: string;
+        sender_id?: string;
+        is_read?: boolean;
+        message_id?: string;
+    }
+
+    const handleWebSocketMessage = (data: WebSocketMessageData) => {
         if (data.type === 'message' || data.type === 'text' || data.type === 'photo' || data.type === 'super_like') {
             // Check if message belongs to this chat
             if (data.match_id !== id) return;
@@ -237,6 +293,15 @@ export default function ChatPage() {
             if (data.user_id === user?.id) {
                 setUser(prev => prev ? { ...prev, isOnline: data.is_online } : null);
             }
+        } else if (data.type === 'offer' && data.match_id === id) {
+            // Incoming call
+            setIncomingCall({
+                callerId: data.caller_id,
+                callerName: user?.name || "Unknown",
+                type: data.call_type || "video"
+            });
+            setCallType(data.call_type || "video");
+            setShowCall(true);
         }
     };
 
@@ -262,13 +327,14 @@ export default function ChatPage() {
             ws.current.send(JSON.stringify({
                 type: 'message',
                 match_id: id,
-                content: text
+                content: text,
+                is_ephemeral: ephemeralEnabled,
+                ephemeral_seconds: ephemeralEnabled ? ephemeralSeconds : undefined
             }));
         } else {
             // Fallback to REST
             try {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const sentMsg = await authService.sendMessage(id, text) as any;
+                const sentMsg = await authService.sendMessage(id, text) as { id: string; created_at: string };
                 // Update the temp message with real one
                 setMessages(prev => prev.map(m => m.id === tempId ? {
                     ...m,
@@ -336,7 +402,7 @@ export default function ChatPage() {
         try {
             // 1. Upload
             // Use 'any' type to bypass strict restriction if needed, or update api.ts return type
-            const response = await authService.uploadChatMedia(file) as any;
+            const response = await authService.uploadChatMedia(file) as { url: string };
             const imageUrl = response.url; // Backend returns { url: "..." }
 
             if (!imageUrl) throw new Error("No URL returned from upload");
@@ -358,7 +424,7 @@ export default function ChatPage() {
             // 3. Send Message
             // Type 'photo' match backend expectation
             // We pass imageUrl as 4th arg (mapped to media_url)
-            const sentMsg = await authService.sendMessage(id, '', 'photo', imageUrl) as any;
+            const sentMsg = await authService.sendMessage(id, '', 'photo', imageUrl) as { id: string; created_at: string };
 
             // 4. Update Status
             setMessages(prev => prev.map(m => m.id === tempId ? {
@@ -371,7 +437,7 @@ export default function ChatPage() {
         } catch (error) {
             console.error("Image send failed", error);
             // Show error in UI (optional toast)
-            alert("Не удалось отправить фото");
+            setToast({message: "Не удалось отправить фото", type: 'error'});
         }
     };
 
@@ -389,9 +455,48 @@ export default function ChatPage() {
             <div className="sticky top-0 z-10 flex flex-col gap-2 p-2 bg-black/80 backdrop-blur-sm border-b border-white/5">
                 <QuestionOfTheDayCard
                     matchId={id}
-                    onBothAnswered={() => {}}
+                    onBothAnswered={() => { /* No action needed after both answer */ }}
                 />
                 <div className="flex items-center gap-2">
+                    {/* Call Buttons */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setCallType("audio");
+                            setIncomingCall(null);
+                            setShowCall(true);
+                        }}
+                        className="p-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white/90 transition-colors"
+                        title="Аудиозвонок"
+                    >
+                        <Phone className="w-4 h-4 text-green-400" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setCallType("video");
+                            setIncomingCall(null);
+                            setShowCall(true);
+                        }}
+                        className="p-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white/90 transition-colors"
+                        title="Видеозвонок"
+                    >
+                        <Video className="w-4 h-4 text-blue-400" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setShowGifPicker(true)}
+                        className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white/90 text-sm font-bold transition-colors"
+                        title="Отправить GIF"
+                    >
+                        GIF
+                    </button>
+                    <EphemeralToggle
+                        isEnabled={ephemeralEnabled}
+                        seconds={ephemeralSeconds}
+                        onToggle={setEphemeralEnabled}
+                        onChangeSeconds={setEphemeralSeconds}
+                    />
                     <ConversationPromptsButton
                         matchId={id}
                         onSelectPrompt={(text) => setInjectInputText(text)}
@@ -433,7 +538,7 @@ export default function ChatPage() {
                 isOpen={showGiftPicker}
                 gifts={gifts}
                 onClose={() => setShowGiftPicker(false)}
-                onSelectGift={async (gift: any) => {
+                onSelectGift={async (gift: { id: string; name: string }) => {
                     if (!user) return;
                     try {
                         hapticFeedback.notificationOccurred('success');
@@ -457,10 +562,38 @@ export default function ChatPage() {
                         setShowGiftPicker(false);
                     } catch (error) {
                         console.error("Failed to send gift", error);
-                        alert("Недостаточно средств или ошибка отправки.");
+                        setToast({message: "Недостаточно средств или ошибка отправки.", type: 'error'});
                     }
                 }}
             />
+
+            {/* Call Screen */}
+            <CallScreen
+                isOpen={showCall}
+                matchId={id}
+                callType={callType}
+                callerName={user?.name || ""}
+                callerPhoto={user?.photo || ""}
+                isIncoming={!!incomingCall}
+                ws={ws.current}
+                currentUserId={currentUserIdRef.current || ""}
+                remoteUserId={user?.id || ""}
+                onClose={() => {
+                    setShowCall(false);
+                    setIncomingCall(null);
+                }}
+            />
+
+            {/* GIF Picker */}
+            <GifPicker
+                isOpen={showGifPicker}
+                onClose={() => setShowGifPicker(false)}
+                onSelectGif={(gifUrl) => {
+                    handleSendMessage(`[GIF] ${gifUrl}`);
+                    setShowGifPicker(false);
+                }}
+            />
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

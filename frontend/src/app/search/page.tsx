@@ -1,23 +1,29 @@
 "use client";
 
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
+import Image from 'next/image';
 import { motion, AnimatePresence } from "framer-motion";
-import { SlidersHorizontal, MapPin, X, Heart, Star, Zap, Search, ChevronDown, Filter } from "lucide-react";
-import { authService, UserProfile } from "@/services/api";
+import { SlidersHorizontal, MapPin, X, Heart, Star, Search, ChevronDown } from "lucide-react";
+import { authService, UserProfile, PaginatedResponse } from "@/services/api";
+import { FALLBACK_AVATAR } from "@/lib/constants";
+
+// --- Типы фильтров ---
+type FilterTag = "Онлайн" | "Новые" | "Рядом" | "Путешествия" | "С верификацией";
+const FILTER_TAGS: FilterTag[] = ["Онлайн", "Новые", "Рядом", "Путешествия", "С верификацией"];
 
 // --- Components ---
 
-// FIX: Memoized to prevent re-renders when parent updates
+// Мемоизированный компонент Story-кружка
 const StoryCircle = memo(({ user, index }: { user: UserProfile; index: number }) => (
     <motion.div
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: Math.min(index * 0.05, 0.2) }} // FIX: Cap delay
+        transition={{ delay: Math.min(index * 0.05, 0.2) }}
         className="flex flex-col items-center gap-1 min-w-[70px] cursor-pointer group"
     >
         <div className="w-[66px] h-[66px] rounded-full p-[2px] bg-gradient-to-tr from-[#ff4b91] to-[#ff9e4a] group-hover:scale-105 transition-transform">
             <div className="w-full h-full rounded-full border-2 border-black overflow-hidden relative">
-                <img src={getPhotoUrl(user.photos)} alt={user.name} className="w-full h-full object-cover" loading="lazy" />
+                <Image src={getPhotoUrl(user.photos)} alt={user.name} className="w-full h-full object-cover" loading="lazy" fill unoptimized />
             </div>
         </div>
         <span className="text-[10px] text-white font-medium truncate w-full text-center">{user.name}</span>
@@ -25,9 +31,9 @@ const StoryCircle = memo(({ user, index }: { user: UserProfile; index: number })
 ));
 StoryCircle.displayName = 'StoryCircle';
 
-// Helper for Photo URLs
+// Хелпер для URL фотографий
 const getPhotoUrl = (photos: string[] | undefined) => {
-    if (!photos || photos.length === 0) return 'https://placehold.co/400x600/1a1a1a/white?text=No+Photo';
+    if (!photos || photos.length === 0) return FALLBACK_AVATAR;
     const photo = photos[0];
     if (photo.startsWith('/static/')) return `/api_proxy${photo}`;
     if (photo.startsWith('http') || photo.startsWith('data:')) return photo;
@@ -35,13 +41,18 @@ const getPhotoUrl = (photos: string[] | undefined) => {
 };
 
 export default function SearchPage() {
-    const [profiles, setProfiles] = useState<UserProfile[]>([]);
+    const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-    const [activeFilter, setActiveFilter] = useState("Онлайн");
+    const [activeFilter, setActiveFilter] = useState<FilterTag | null>(null);
     const [showFilters, setShowFilters] = useState(false);
 
-    // Initial Load
+    // Состояние фильтров модального окна
+    const [ageMin, setAgeMin] = useState(18);
+    const [ageMax, setAgeMax] = useState(60);
+    const [distanceMax, setDistanceMax] = useState(100);
+
+    // Загрузка профилей
     useEffect(() => {
         loadProfiles();
     }, []);
@@ -49,38 +60,68 @@ export default function SearchPage() {
     const loadProfiles = async () => {
         setLoading(true);
         try {
-            // Fetch real profiles from API
-            // Note: API might support filters in future, currently just fetches feed
-            const response = await authService.getProfiles({ limit: 20 });
-
-            // Handle PaginatedResponse structure safely
-            let data: UserProfile[] = [];
-            // @ts-ignore
-            if (response && response.items && Array.isArray(response.items)) {
-                // @ts-ignore
-                data = response.items;
-            } else if (Array.isArray(response)) {
-                data = response;
-            }
-
-            setProfiles(data);
+            const response: PaginatedResponse<UserProfile> = await authService.getProfiles({ limit: 40 });
+            setAllProfiles(response.items ?? []);
         } catch (error) {
-            console.error("Failed to load search profiles", error);
-            setProfiles([]);
+            console.error("Не удалось загрузить профили", error);
+            setAllProfiles([]);
         } finally {
             setLoading(false);
         }
     };
 
+    // Применение фильтров и сортировки к профилям
+    const profiles = useMemo(() => {
+        let result = allProfiles.filter(u => {
+            // Фильтр по возрасту из модального окна
+            if (u.age < ageMin || u.age > ageMax) return false;
+            // Фильтр по расстоянию из модального окна
+            if (u.distance_km !== undefined && u.distance_km > distanceMax) return false;
+            return true;
+        });
+
+        // Применение тег-фильтра
+        if (activeFilter === "Онлайн") {
+            result = result.filter(u => u.online_status === "online");
+        } else if (activeFilter === "С верификацией") {
+            result = result.filter(u => u.is_verified === true);
+        } else if (activeFilter === "Новые") {
+            result = [...result].sort((a, b) =>
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            );
+        } else if (activeFilter === "Рядом") {
+            result = [...result].sort((a, b) =>
+                (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity)
+            );
+        }
+        // "Путешествия" — без специальной логики, показываем все
+
+        return result;
+    }, [allProfiles, activeFilter, ageMin, ageMax, distanceMax]);
+
+    // Обработка тег-фильтра: повторный клик снимает фильтр
+    const handleFilterClick = (tag: FilterTag) => {
+        setActiveFilter(prev => prev === tag ? null : tag);
+    };
+
+    // Применение фильтров из модального окна
+    const applyModalFilters = () => {
+        setShowFilters(false);
+    };
+
+    // Сброс фильтров модального окна
+    const resetModalFilters = () => {
+        setAgeMin(18);
+        setAgeMax(60);
+        setDistanceMax(100);
+    };
+
     // Actions
     const handleLike = async (user: UserProfile) => {
-        // Optimistic UI: Close immediately
         setSelectedUser(null);
-
         if (window.Telegram?.WebApp?.HapticFeedback) {
             window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
         }
-
         try {
             await authService.swipe(user.id, 'like');
         } catch (e) {
@@ -92,7 +133,6 @@ export default function SearchPage() {
         setSelectedUser(null);
         try {
             await authService.swipe(user.id, 'dislike');
-            // If failed, we could reopen, but for swiping it's usually fine
         } catch (e) {
             console.error(e);
         }
@@ -119,10 +159,10 @@ export default function SearchPage() {
 
                 {/* Tags (Horizontal Scroll) */}
                 <div className="flex gap-2 px-4 overflow-x-auto scrollbar-hide pb-2">
-                    {['Онлайн', 'Новые', 'Рядом', 'Путешествия', 'С верификацией'].map((tag) => (
+                    {FILTER_TAGS.map((tag) => (
                         <button
                             key={tag}
-                            onClick={() => setActiveFilter(tag)}
+                            onClick={() => handleFilterClick(tag)}
                             className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${activeFilter === tag
                                 ? 'bg-white text-black border-white'
                                 : 'bg-white/5 text-gray-400 border-white/5 hover:border-white/20'
@@ -138,7 +178,7 @@ export default function SearchPage() {
             <div className="flex-1 overflow-y-auto scrollbar-hide pb-24">
 
                 {/* Stories / Highlights Area */}
-                {!loading && profiles.length > 0 && (
+                {!loading && allProfiles.length > 0 && (
                     <div className="pt-4 pb-6 px-4">
                         <div className="flex gap-4 overflow-x-auto scrollbar-hide">
                             <div className="flex flex-col items-center gap-1 min-w-[70px]">
@@ -147,7 +187,7 @@ export default function SearchPage() {
                                 </div>
                                 <span className="text-[10px] text-gray-400 font-medium">Мой идеал</span>
                             </div>
-                            {profiles.slice(0, 5).map((u, i) => (
+                            {allProfiles.slice(0, 5).map((u, i) => (
                                 <StoryCircle key={'story-' + u.id} user={u} index={i} />
                             ))}
                         </div>
@@ -169,17 +209,19 @@ export default function SearchPage() {
                                     key={user.id}
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: Math.min(idx * 0.03, 0.3) }} // FIX: Cap delay
+                                    transition={{ delay: Math.min(idx * 0.03, 0.3) }}
                                     whileTap={{ scale: 0.98 }}
                                     onClick={() => setSelectedUser(user)}
                                     className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-zinc-900 group cursor-pointer"
                                 >
-                                    <img
+                                    <Image
                                         src={getPhotoUrl(user.photos)}
                                         alt={user.name}
                                         loading={idx > 3 ? "lazy" : "eager"}
                                         decoding="async"
                                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                        fill
+                                        unoptimized
                                     />
 
                                     {/* Gradient & Info */}
@@ -189,11 +231,11 @@ export default function SearchPage() {
                                                 <h3 className="text-white font-bold text-lg leading-none">{user.name}, {user.age}</h3>
                                                 <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
                                                     <MapPin size={10} />
-                                                    <span>{user.distance_km ? `${user.distance_km.toFixed(0)} км` : 'Рядом'}</span>
+                                                    <span>{user.distance_km !== undefined ? `${user.distance_km.toFixed(0)} км` : 'Рядом'}</span>
                                                 </div>
                                             </div>
-                                            {/* Status Dot */}
-                                            {idx % 3 === 0 && ( // Fake status logic for demo if no real status
+                                            {/* Реальный статус онлайн */}
+                                            {user.online_status === "online" && (
                                                 <div className="w-2.5 h-2.5 rounded-full bg-green-500 border border-black mb-1" />
                                             )}
                                         </div>
@@ -216,7 +258,12 @@ export default function SearchPage() {
                         <div className="flex flex-col items-center justify-center py-20 text-gray-500">
                             <Search size={48} className="mb-4 opacity-20" />
                             <p>Никого не найдено :(</p>
-                            <button onClick={() => setActiveFilter('Все')} className="mt-4 text-[#ff4b91]">Сбросить фильтры</button>
+                            <button
+                                onClick={() => { setActiveFilter(null); resetModalFilters(); }}
+                                className="mt-4 text-[#ff4b91]"
+                            >
+                                Сбросить фильтры
+                            </button>
                         </div>
                     )}
                 </div>
@@ -246,31 +293,68 @@ export default function SearchPage() {
                                 </button>
                             </div>
 
-                            {/* Age Range Slider (Mock) */}
-                            <div className="mb-6">
-                                <label className="text-sm text-gray-400 font-bold mb-2 block">Возраст (18 - 35)</label>
-                                <div className="h-12 bg-white/5 rounded-xl flex items-center px-4 relative">
-                                    <div className="absolute left-4 right-12 h-1 bg-gray-700 rounded-full">
-                                        <div className="absolute left-0 w-1/2 h-full bg-[#ff4b91] rounded-full" />
-                                    </div>
-                                    <div className="absolute left-[50%] w-6 h-6 bg-white rounded-full shadow-lg border-2 border-[#ff4b91]" />
+                            {/* Возраст — минимум */}
+                            <div className="mb-5">
+                                <label className="text-sm text-gray-400 font-bold mb-2 block">
+                                    Возраст: {ageMin} — {ageMax}
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-gray-500 w-6 text-right">{ageMin}</span>
+                                    <input
+                                        type="range"
+                                        min={18}
+                                        max={ageMax - 1}
+                                        value={ageMin}
+                                        onChange={(e) => setAgeMin(Number(e.target.value))}
+                                        className="flex-1 h-1.5 rounded-full appearance-none bg-gray-700 accent-[#ff4b91] cursor-pointer"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-3 mt-2">
+                                    <span className="text-xs text-gray-500 w-6 text-right">{ageMax}</span>
+                                    <input
+                                        type="range"
+                                        min={ageMin + 1}
+                                        max={80}
+                                        value={ageMax}
+                                        onChange={(e) => setAgeMax(Number(e.target.value))}
+                                        className="flex-1 h-1.5 rounded-full appearance-none bg-gray-700 accent-[#ff4b91] cursor-pointer"
+                                    />
                                 </div>
                             </div>
 
-                            {/* Distance Slider (Mock) */}
+                            {/* Расстояние */}
                             <div className="mb-8">
-                                <label className="text-sm text-gray-400 font-bold mb-2 block">Расстояние (до 50 км)</label>
-                                <div className="h-12 bg-white/5 rounded-xl flex items-center px-4 relative">
-                                    <div className="absolute left-4 right-4 h-1 bg-gray-700 rounded-full">
-                                        <div className="absolute left-0 w-1/3 h-full bg-blue-500 rounded-full" />
-                                    </div>
-                                    <div className="absolute left-[33%] w-6 h-6 bg-white rounded-full shadow-lg border-2 border-blue-500" />
+                                <label className="text-sm text-gray-400 font-bold mb-2 block">
+                                    Расстояние: до {distanceMax} км
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-gray-500 w-6 text-right">{distanceMax}</span>
+                                    <input
+                                        type="range"
+                                        min={1}
+                                        max={300}
+                                        value={distanceMax}
+                                        onChange={(e) => setDistanceMax(Number(e.target.value))}
+                                        className="flex-1 h-1.5 rounded-full appearance-none bg-gray-700 accent-blue-500 cursor-pointer"
+                                    />
                                 </div>
                             </div>
 
-                            <button onClick={() => setShowFilters(false)} className="w-full py-4 bg-[#ff4b91] rounded-xl text-white font-bold text-lg active:scale-95 transition">
-                                Применить
-                            </button>
+                            {/* Кнопки */}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => { resetModalFilters(); }}
+                                    className="flex-1 py-4 rounded-xl text-gray-400 font-bold text-base border border-white/10 bg-transparent active:scale-95 transition"
+                                >
+                                    Сбросить
+                                </button>
+                                <button
+                                    onClick={applyModalFilters}
+                                    className="flex-1 py-4 bg-[#ff4b91] rounded-xl text-white font-bold text-base active:scale-95 transition"
+                                >
+                                    Применить
+                                </button>
+                            </div>
                         </motion.div>
                     </motion.div>
                 )}
@@ -284,7 +368,6 @@ export default function SearchPage() {
                         animate={{ y: 0 }}
                         exit={{ y: '100%' }}
                         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                        // ABSOLUTE POSITIONING to stay within mobile frame
                         className="absolute inset-0 z-[150] bg-black flex flex-col"
                     >
                         {/* Close Button Area */}
@@ -296,20 +379,29 @@ export default function SearchPage() {
                                 <ChevronDown size={24} className="text-white" />
                             </button>
 
-                            <div className="pointer-events-auto px-3 py-1 bg-black/50 backdrop-blur-xl rounded-full border border-white/10 flex items-center gap-1">
-                                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                <span className="text-xs font-bold text-white">Online</span>
-                            </div>
+                            {/* Реальный статус онлайн в модалке профиля */}
+                            {selectedUser.online_status === "online" ? (
+                                <div className="pointer-events-auto px-3 py-1 bg-black/50 backdrop-blur-xl rounded-full border border-white/10 flex items-center gap-1">
+                                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                    <span className="text-xs font-bold text-white">Online</span>
+                                </div>
+                            ) : (
+                                <div className="pointer-events-auto px-3 py-1 bg-black/50 backdrop-blur-xl rounded-full border border-white/10 flex items-center gap-1">
+                                    <div className="w-2 h-2 rounded-full bg-gray-500" />
+                                    <span className="text-xs font-bold text-gray-400">Offline</span>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Image (Parallax-ish) */}
+                        {/* Image */}
                         <div className="flex-1 relative w-full bg-zinc-900">
-                            <img
+                            <Image
                                 src={getPhotoUrl(selectedUser.photos)}
                                 alt={selectedUser.name}
                                 className="w-full h-full object-cover"
+                                fill
+                                unoptimized
                             />
-                            {/* Gradient Overlay for Text */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-90" />
 
                             {/* Info */}

@@ -10,9 +10,16 @@ import {
 } from 'lucide-react';
 import { advancedApi, Partner } from '@/services/advancedApi';
 
+interface PartnerStats {
+  total_partners?: number;
+  active_partners?: number;
+  total_revenue?: number;
+  [key: string]: unknown;
+}
+
 export default function PartnersPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<PartnerStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -123,20 +130,20 @@ export default function PartnersPage() {
 
       <div className="header">
         <div><h1>White-Label Partners</h1><p>Manage partner integrations and revenue sharing</p></div>
-        <button className="btn pri" onClick={() => { setEditingPartner(null); setFormData({ name: '', domain: '', revenue_share_percentage: 15 }); setFormErrors({}); setShowModal(true); }}><Plus size={18} />Add Partner</button>
+        <button className="btn pri" onClick={() => { setEditingPartner(null); setFormData({ name: '', domain: '', revenue_share_percentage: 15 }); setFormErrors({}); setShowModal(true); }}><Plus size={18} />Добавить партнёра</button>
       </div>
 
       {stats && (
         <div className="stats">
-          <div className="stat"><Building2 size={20} /><div><span>Partners</span><b>{stats.total_partners}</b></div></div>
-          <div className="stat"><Users size={20} /><div><span>Total Users</span><b>{stats.total_users.toLocaleString()}</b></div></div>
-          <div className="stat"><DollarSign size={20} /><div><span>Revenue</span><b>{formatCurrency(stats.total_revenue)}</b></div></div>
-          <div className="stat"><Clock size={20} /><div><span>Pending</span><b>{stats.pending_invites}</b></div></div>
+          <div className="stat"><Building2 size={20} /><div><span>Партнёры</span><b>{stats.total_partners}</b></div></div>
+          <div className="stat"><Users size={20} /><div><span>Пользователи</span><b>{stats.total_users.toLocaleString()}</b></div></div>
+          <div className="stat"><DollarSign size={20} /><div><span>Доход</span><b>{formatCurrency(stats.total_revenue)}</b></div></div>
+          <div className="stat"><Clock size={20} /><div><span>Ожидание</span><b>{stats.pending_invites}</b></div></div>
         </div>
       )}
 
       <div className="filters">
-        <div className="search"><Search size={18} /><input placeholder="Search partners..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
+        <div className="search"><Search size={18} /><input placeholder="Поиск партнёров..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="all">All Status</option>
           <option value="active">Active</option>
@@ -150,19 +157,19 @@ export default function PartnersPage() {
         <div className="table-wrap">
           <table>
             <thead><tr>
-              <th>Partner</th>
-              <th>Domain</th>
-              <th>Status</th>
-              <th onClick={() => { setSortField('users_count'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>Users <ArrowUpDown size={12} /></th>
+              <th>Партнёр</th>
+              <th>Домен</th>
+              <th>Статус</th>
+              <th onClick={() => { setSortField('users_count'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>Пользователи <ArrowUpDown size={12} /></th>
               <th onClick={() => { setSortField('revenue_share'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>Rev Share <ArrowUpDown size={12} /></th>
               <th>Joined</th>
-              <th>Actions</th>
+              <th>Действия</th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 ? <tr><td colSpan={7} className="empty">No partners found</td></tr> : filtered.map((p) => (
                 <tr key={p.id}>
                   <td className="partner-cell">
-                    <div className="partner-logo">{p.logo ? <img src={p.logo} alt="" /> : <Building2 size={20} />}</div>
+                    <div className="partner-logo">{p.logo ? <img src={p.logo} alt={p.name || 'Логотип партнёра'} /> : <Building2 size={20} />}</div>
                     <span className="partner-name">{p.name}</span>
                   </td>
                   <td className="domain">{p.domain ? <a href={`https://${p.domain}`} target="_blank" rel="noopener"><Globe size={14} />{p.domain}</a> : '-'}</td>
@@ -191,7 +198,7 @@ export default function PartnersPage() {
               <form onSubmit={handleSubmit}>
                 <div className="field">
                   <label>Partner Name *</label>
-                  <input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} placeholder="Company Name" />
+                  <input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} placeholder="Название компании" />
                   {formErrors.name && <span className="err">{formErrors.name}</span>}
                 </div>
                 <div className="field">
@@ -209,8 +216,8 @@ export default function PartnersPage() {
                 <div className="info-box"><Percent size={16} />Revenue share determines the percentage of subscription revenue paid to the partner for users acquired through their platform.</div>
                 {formErrors.submit && <div className="ferr">{formErrors.submit}</div>}
                 <div className="mfoot">
-                  <button type="button" className="btn sec" onClick={closeModal}>Cancel</button>
-                  <button type="submit" className="btn pri" disabled={submitting}>{submitting ? <Loader2 className="spin" size={16} /> : editingPartner ? <Edit2 size={16} /> : <Plus size={16} />}{editingPartner ? 'Save Changes' : 'Add Partner'}</button>
+                  <button type="button" className="btn sec" onClick={closeModal}>Отмена</button>
+                  <button type="submit" className="btn pri" disabled={submitting}>{submitting ? <Loader2 className="spin" size={16} /> : editingPartner ? <Edit2 size={16} /> : <Plus size={16} />}{editingPartner ? 'Сохранить' : 'Добавить партнёра'}</button>
                 </div>
               </form>
             </motion.div>
@@ -226,7 +233,7 @@ export default function PartnersPage() {
               <div className="mhead"><h2>Partner Details</h2><button onClick={() => setSelectedPartner(null)}><X size={20} /></button></div>
               <div className="detail-content">
                 <div className="detail-head">
-                  <div className="partner-logo lg">{selectedPartner.logo ? <img src={selectedPartner.logo} alt="" /> : <Building2 size={32} />}</div>
+                  <div className="partner-logo lg">{selectedPartner.logo ? <img src={selectedPartner.logo} alt={selectedPartner.name || 'Логотип партнёра'} /> : <Building2 size={32} />}</div>
                   <div>
                     <h3>{selectedPartner.name}</h3>
                     {selectedPartner.domain && <a href={`https://${selectedPartner.domain}`} target="_blank" rel="noopener"><Globe size={14} />{selectedPartner.domain}</a>}
@@ -234,10 +241,10 @@ export default function PartnersPage() {
                   <span className={`status ${getStatusColor(selectedPartner.status)}`}>{getStatusIcon(selectedPartner.status)}{selectedPartner.status}</span>
                 </div>
                 <div className="detail-grid">
-                  <div><span>Users</span><b>{selectedPartner.users_count.toLocaleString()}</b></div>
+                  <div><span>Пользователи</span><b>{selectedPartner.users_count.toLocaleString()}</b></div>
                   <div><span>Revenue Share</span><b>{selectedPartner.revenue_share}%</b></div>
                   <div><span>Joined</span><b>{new Date(selectedPartner.joined_at).toLocaleDateString()}</b></div>
-                  <div><span>Status</span><b className="cap">{selectedPartner.status}</b></div>
+                  <div><span>Статус</span><b className="cap">{selectedPartner.status}</b></div>
                 </div>
               </div>
             </motion.div>
@@ -295,7 +302,7 @@ export default function PartnersPage() {
         .acts .del:hover{color:var(--neon-red)}
         .acts button:disabled{opacity:0.5;cursor:not-allowed}
         .empty{text-align:center;padding:40px;color:var(--text-muted)}
-        .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+        .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
         .modal{background:var(--admin-bg-secondary);border:1px solid var(--glass-border);border-radius:18px;width:100%;max-width:500px}
         .mhead{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--glass-border)}
         .mhead h2{font-size:17px;color:var(--text-primary);margin:0}

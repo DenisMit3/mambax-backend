@@ -11,6 +11,7 @@ import { PullToRefresh } from '@/components/ui/PullToRefresh';
 import { useSoundService } from '@/hooks/useSoundService';
 import { useHaptic } from '@/hooks/useHaptic';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { FALLBACK_AVATAR } from '@/lib/constants';
 
 export default function ChatListPage() {
     const [matches, setMatches] = useState<Match[]>([]);
@@ -39,7 +40,11 @@ export default function ChatListPage() {
     };
 
     useEffect(() => {
-        fetchMatches();
+        let cancelled = false;
+        fetchMatches().then(() => {
+            if (cancelled) return;
+        });
+        return () => { cancelled = true; };
     }, []);
 
     const handleRefresh = async () => {
@@ -126,7 +131,7 @@ export default function ChatListPage() {
                                         <div className={`relative w-[56px] h-[56px] rounded-full p-0.5 ${m.user.is_premium ? 'bg-gradient-to-tr from-[#ff4b91] to-[#ff9e4a]' : 'bg-gradient-to-tr from-cyan-500 to-blue-500'} group-hover:scale-105 transition-transform duration-300`}>
                                             <div className="w-full h-full rounded-full overflow-hidden border-2 border-slate-950 relative">
                                                 <Image
-                                                    src={m.user.photos?.[0] || 'https://placehold.co/400x400/png'}
+                                                    src={m.user.photos?.[0] || FALLBACK_AVATAR}
                                                     alt={m.user.name}
                                                     fill
                                                     sizes="56px"
@@ -183,7 +188,7 @@ export default function ChatListPage() {
                                 <Link href={`/chat/${m.id}`} className="flex items-center space-x-3 p-2 -mx-2 rounded-xl hover:bg-white/5 transition active:scale-[0.99] group">
                                     <div className="relative flex-shrink-0 w-[52px] h-[52px]">
                                         <Image
-                                            src={m.user.photos?.[0] || 'https://placehold.co/400x400/png'}
+                                            src={m.user.photos?.[0] || FALLBACK_AVATAR}
                                             alt={m.user.name}
                                             fill
                                             sizes="52px"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Image from 'next/image';
 import { X, Sparkles, Heart } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -101,8 +102,8 @@ export function GiftRevealAnimation({
         try {
             audioRef.current = new Audio("/sounds/celebration.mp3");
             audioRef.current.volume = 0.3;
-            audioRef.current.play().catch(() => { });
-        } catch { }
+            audioRef.current.play().catch(() => { /* Audio autoplay may be blocked by browser policy */ });
+        } catch { /* Audio autoplay may be blocked by browser */ }
 
         return () => {
             if (animationId) cancelAnimationFrame(animationId);
@@ -113,7 +114,7 @@ export function GiftRevealAnimation({
     return (
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-[100000] flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-xl">
+                <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-xl">
                     <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
                     {/* Close Button */}
@@ -144,10 +145,13 @@ export function GiftRevealAnimation({
 
                             <div className="w-40 h-40 rounded-full bg-gradient-to-br from-neon-pink to-neon-purple flex items-center justify-center shadow-[0_0_60px_rgba(236,72,153,0.4)] border border-white/20 overflow-hidden">
                                 {giftImage ? (
-                                    <img
+                                    <Image
                                         src={giftImage.startsWith("http") ? giftImage : `/api_proxy${giftImage}`}
                                         alt={giftName}
                                         className="w-24 h-24 object-contain drop-shadow-2xl"
+                                        width={96}
+                                        height={96}
+                                        unoptimized
                                         onError={(e) => {
                                             (e.target as HTMLImageElement).style.display = "none";
                                         }}

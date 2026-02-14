@@ -236,7 +236,7 @@ export const AdvancedAnalyticsDashboard = ({
 
                             return (
                                 <motion.div
-                                    key={index}
+                                    key={point.date || index}
                                     className="flex-1 bg-gradient-to-t from-purple-500 to-pink-500 rounded-t-lg min-h-[4px]"
                                     style={{ height: `${height}%` }}
                                     initial={{ height: 0 }}
@@ -249,7 +249,7 @@ export const AdvancedAnalyticsDashboard = ({
 
                     <div className="flex justify-between mt-4 text-xs text-gray-400">
                         {data.profileViews.chartData.map((point, index) => (
-                            <span key={index}>{point.date}</span>
+                            <span key={point.date || index}>{point.date}</span>
                         ))}
                     </div>
                 </GlassCard>
@@ -353,7 +353,7 @@ export const AdvancedAnalyticsDashboard = ({
                             <h4 className="text-lg font-semibold text-white mb-4">По возрасту</h4>
                             <div className="space-y-3">
                                 {data.demographics.ageGroups.map((group, index) => (
-                                    <div key={index} className="flex items-center justify-between">
+                                    <div key={group.range || index} className="flex items-center justify-between">
                                         <span className="text-gray-300">{group.range}</span>
                                         <div className="flex items-center space-x-3">
                                             <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
@@ -378,7 +378,7 @@ export const AdvancedAnalyticsDashboard = ({
                             <h4 className="text-lg font-semibold text-white mb-4">По городам</h4>
                             <div className="space-y-3">
                                 {data.demographics.locations.map((location, index) => (
-                                    <div key={index} className="flex items-center justify-between">
+                                    <div key={location.city || index} className="flex items-center justify-between">
                                         <span className="text-gray-300">{location.city}</span>
                                         <div className="flex items-center space-x-3">
                                             <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">

@@ -295,6 +295,21 @@ class User(Base):
         comment="What user is looking for, comma-separated"
     )
 
+    # Referral system
+    referral_code: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        unique=True,
+        index=True,
+        nullable=True,
+        comment="Unique referral code for sharing"
+    )
+    referred_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="ID of user who referred this user"
+    )
+
     # Telegram Stars balance for in-app purchases (gifts, boosts, etc.)
     stars_balance: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),

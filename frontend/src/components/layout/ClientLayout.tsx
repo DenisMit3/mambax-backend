@@ -33,20 +33,25 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     // PERF: Register Service Worker and measure performance
     useEffect(() => {
         // Register PWA Service Worker
+        let intervalId: ReturnType<typeof setInterval> | undefined;
+
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js')
                 .then(registration => {
-                    console.log('SW Registered:', registration);
                     // Check for updates periodically
-                    setInterval(() => registration.update(), 60 * 60 * 1000);
+                    intervalId = setInterval(() => registration.update(), 60 * 60 * 1000);
                 })
-                .catch(err => {
-                    console.log('SW Registration failed:', err);
+                .catch(() => {
+                    // SW registration failed silently
                 });
         }
         
         // PERF: Measure Core Web Vitals
         measurePerformance();
+
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
     }, []);
 
     // SECURITY: Clear SW cache on auth changes (logout/login)

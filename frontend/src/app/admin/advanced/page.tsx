@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   Sparkles,
@@ -36,6 +37,7 @@ interface Stats {
 }
 
 export default function AdvancedPage() {
+  const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
 
   const [stats, setStats] = useState<Stats>({
@@ -96,19 +98,19 @@ export default function AdvancedPage() {
   }, [loadStats]);
 
   const menuItems = [
-    { href: '/admin/advanced/ai', icon: <Wand2 size={24} />, label: 'AI Content', desc: 'Content generation' },
-    { href: '/admin/advanced/algorithm', icon: <Sliders size={24} />, label: 'Algorithm', desc: 'Match tuning' },
-    { href: '/admin/advanced/reports', icon: <FileBarChart size={24} />, label: 'Reports', desc: 'Custom analytics' },
-    { href: '/admin/advanced/recommendations', icon: <Target size={24} />, label: 'Rec. Engine', desc: 'Engine status' },
-    { href: '/admin/advanced/events', icon: <Calendar size={24} />, label: 'Events', desc: 'Virtual dating' },
-    { href: '/admin/advanced/partners', icon: <Briefcase size={24} />, label: 'Partners', desc: 'White-label' },
-    { href: '/admin/advanced/localization', icon: <Globe size={24} />, label: 'Localization', desc: 'Languages' },
-    { href: '/admin/advanced/calls', icon: <Video size={24} />, label: 'Calls', desc: 'A/V analytics' },
-    { href: '/admin/advanced/accessibility', icon: <Accessibility size={24} />, label: 'Accessibility', desc: 'Audit score' },
-    { href: '/admin/advanced/performance', icon: <Gauge size={24} />, label: 'Performance', desc: 'Web vitals' },
-    { href: '/admin/advanced/pwa', icon: <Smartphone size={24} />, label: 'PWA Stats', desc: 'App usage' },
-    { href: '/admin/advanced/icebreakers', icon: <MessageSquare size={24} />, label: 'Icebreakers', desc: 'Manage openers' },
-    { href: '/admin/advanced/web3', icon: <Zap size={24} />, label: 'Web3 & Metaverse', desc: 'NFT & Smart Contracts' },
+    { href: '/admin/advanced/ai', icon: <Wand2 size={24} />, label: 'AI Контент', desc: 'Генерация контента' },
+    { href: '/admin/advanced/algorithm', icon: <Sliders size={24} />, label: 'Алгоритм', desc: 'Настройка матчинга' },
+    { href: '/admin/advanced/reports', icon: <FileBarChart size={24} />, label: 'Отчёты', desc: 'Пользовательская аналитика' },
+    { href: '/admin/advanced/recommendations', icon: <Target size={24} />, label: 'Рек. движок', desc: 'Статус движка' },
+    { href: '/admin/advanced/events', icon: <Calendar size={24} />, label: 'События', desc: 'Виртуальные свидания' },
+    { href: '/admin/advanced/partners', icon: <Briefcase size={24} />, label: 'Партнёры', desc: 'White-label' },
+    { href: '/admin/advanced/localization', icon: <Globe size={24} />, label: 'Локализация', desc: 'Языки' },
+    { href: '/admin/advanced/calls', icon: <Video size={24} />, label: 'Звонки', desc: 'A/V аналитика' },
+    { href: '/admin/advanced/accessibility', icon: <Accessibility size={24} />, label: 'Доступность', desc: 'Аудит' },
+    { href: '/admin/advanced/performance', icon: <Gauge size={24} />, label: 'Производительность', desc: 'Web-метрики' },
+    { href: '/admin/advanced/pwa', icon: <Smartphone size={24} />, label: 'PWA Статистика', desc: 'Использование' },
+    { href: '/admin/advanced/icebreakers', icon: <MessageSquare size={24} />, label: 'Айсбрейкеры', desc: 'Управление фразами' },
+    { href: '/admin/advanced/web3', icon: <Zap size={24} />, label: 'Web3 и Метавселенная', desc: 'NFT и смарт-контракты' },
   ];
 
   // Animation variants - optimized for performance
@@ -129,14 +131,14 @@ export default function AdvancedPage() {
 
   // Skeleton loader component
   const StatSkeleton = () => (
-    <div className={styles.quickStats} role="status" aria-label="Loading statistics">
+    <div className={styles.quickStats} role="status" aria-label="Загрузка статистики">
       {[1, 2, 3].map((i) => (
         <div key={i} className={`${styles.miniStat} ${styles.skeletonStat}`}>
           <span className={styles.skeletonLabel}></span>
           <span className={styles.skeletonValue}></span>
         </div>
       ))}
-      <span className="sr-only">Loading...</span>
+      <span className="sr-only">Загрузка...</span>
     </div>
   );
 
@@ -148,16 +150,16 @@ export default function AdvancedPage() {
   }) => (
     <div className={styles.errorContainer} role="alert">
       <AlertCircle size={48} className={styles.errorIcon} />
-      <h3 className={styles.errorTitle}>Failed to Load Statistics</h3>
+      <h3 className={styles.errorTitle}>Не удалось загрузить статистику</h3>
       <p className={styles.errorMessage}>{message}</p>
       <button
         className={styles.retryButton}
         onClick={onRetry}
         disabled={isRetrying}
-        aria-label="Retry loading statistics"
+        aria-label="Повторить загрузку статистики"
       >
         <RefreshCw size={18} className={isRetrying ? 'animate-spin' : ''} />
-        {isRetrying ? 'Retrying...' : 'Try Again'}
+        {isRetrying ? 'Повтор...' : 'Повторить'}
       </button>
     </div>
   );
@@ -166,7 +168,7 @@ export default function AdvancedPage() {
   const handleBreadcrumbKeyDown = (e: React.KeyboardEvent, href: string) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      window.location.href = href;
+      router.push(href);
     }
   };
 
@@ -183,10 +185,10 @@ export default function AdvancedPage() {
               href="/admin"
               className={styles.breadcrumbLink}
               onKeyDown={(e) => handleBreadcrumbKeyDown(e, '/admin')}
-              aria-label="Go to Dashboard"
+              aria-label="Перейти на панель управления"
             >
               <Home size={14} aria-hidden="true" />
-              <span>Dashboard</span>
+              <span>Панель управления</span>
             </Link>
           </li>
           <li className={styles.breadcrumbSeparator} aria-hidden="true">
@@ -195,7 +197,7 @@ export default function AdvancedPage() {
           <li className={styles.breadcrumbItem} aria-current="page">
             <span className={styles.breadcrumbCurrent}>
               <Sparkles size={14} aria-hidden="true" />
-              <span>Advanced Features</span>
+              <span>Расширенные функции</span>
             </span>
           </li>
         </ol>
@@ -212,9 +214,9 @@ export default function AdvancedPage() {
             ease: [0.16, 1, 0.3, 1]
           }}
         >
-          <h1 className={styles.headerTitle}>Advanced Features</h1>
+          <h1 className={styles.headerTitle}>Расширенные функции</h1>
           <p className={styles.headerDescription}>
-            Manage AI, algorithms, and system performance
+            Управление AI, алгоритмами и производительностью
           </p>
         </motion.div>
 
@@ -224,7 +226,7 @@ export default function AdvancedPage() {
           // Show inline error only if ALL stats failed
           <div className={styles.quickStats}>
             <span className="text-[13px] text-[var(--admin-text-muted)]">
-              Stats unavailable
+              Статистика недоступна
             </span>
           </div>
         ) : (
@@ -240,17 +242,17 @@ export default function AdvancedPage() {
             aria-label="Quick statistics"
           >
             <div className={styles.miniStat}>
-              <span className={styles.miniStatLabel}>AI Models</span>
+              <span className={styles.miniStatLabel}>AI Модели</span>
               <span className={styles.miniStatValue}>{stats.aiModels}</span>
             </div>
             <div className={styles.miniStat}>
-              <span className={styles.miniStatLabel}>Perf. Score</span>
+              <span className={styles.miniStatLabel}>Произв.</span>
               <span className={`${styles.miniStatValue} ${stats.perfScore > 90 ? styles.miniStatValueSuccess : styles.miniStatValueWarning}`}>
                 {stats.perfScore}
               </span>
             </div>
             <div className={styles.miniStat}>
-              <span className={styles.miniStatLabel}>Partners</span>
+              <span className={styles.miniStatLabel}>Партнёры</span>
               <span className={styles.miniStatValue}>{stats.partners}</span>
             </div>
           </motion.div>

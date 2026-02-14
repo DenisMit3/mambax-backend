@@ -85,7 +85,7 @@ export default function PWAPage() {
   );
 }
 
-function StatCard({ icon, label, value, sub }: any) {
+function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string | number; sub?: string }) {
   return (
     <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800">
       <div className="flex items-center gap-3 mb-2">

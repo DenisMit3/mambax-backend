@@ -2,28 +2,32 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { authService } from "@/services/api";
+import { authService, UserProfile } from "@/services/api";
 import { TopUpModal } from "@/components/ui/TopUpModal";
 import { ArrowLeft, Star, Check, Zap, Crown, Shield } from "lucide-react";
 import Link from "next/link";
+import { Toast } from '@/components/ui/Toast';
 
 export default function PremiumPage() {
     const router = useRouter();
-    const [user, setUser] = useState<any>(null);
+    const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState<string | null>(null);
     const [showTopUp, setShowTopUp] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
-    const fetchUser = () => {
+    const fetchUser = (cancelled?: { current: boolean }) => {
         authService.getMe()
-            .then(setUser)
-            .catch(err => console.error("Failed to load user", err))
-            .finally(() => setLoading(false));
+            .then(data => { if (!cancelled?.current) setUser(data); })
+            .catch(err => { if (!cancelled?.current) console.error("Failed to load user", err); })
+            .finally(() => { if (!cancelled?.current) setLoading(false); });
     };
 
     useEffect(() => {
-        fetchUser();
+        const cancelled = { current: false };
+        fetchUser(cancelled);
+        return () => { cancelled.current = true; };
     }, []);
 
     const handleUpgrade = async (tier: string) => {
@@ -33,14 +37,16 @@ export default function PremiumPage() {
         setError(null);
         try {
             await authService.buySubscription(tier);
-            fetchUser(); // Refresh user data to show new plan
-            alert(`Congratulations! You are now a ${tier} member.`);
-        } catch (e: any) {
+            fetchUser();
+            const tierNames: Record<string, string> = { gold: 'Gold', platinum: 'Platinum' };
+            setToast({message: `Поздравляем! Вы теперь ${tierNames[tier] || tier} участник 🎉`, type: 'success'});
+        } catch (e: unknown) {
+            const err = e as { data?: { error?: string }; message?: string };
             console.error("Upgrade error", e);
-            if (e.data?.error === 'insufficient_balance') {
+            if (err.data?.error === 'insufficient_balance') {
                 setShowTopUp(true);
             } else {
-                setError(e.message || "Failed to upgrade");
+                setError(err.message || "Не удалось оформить подписку");
             }
         } finally {
             setProcessing(null);
@@ -57,7 +63,7 @@ export default function PremiumPage() {
                 alignItems: 'center',
                 justifyContent: 'center'
             }}>
-                Loading...
+                Загрузка...
             </div>
         );
     }
@@ -90,7 +96,7 @@ export default function PremiumPage() {
                 >
                     <ArrowLeft size={24} />
                 </button>
-                <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Premium Membership</h1>
+                <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Премиум подписка</h1>
             </div>
 
             <div className="container" style={{ padding: '0 20px' }}>
@@ -107,7 +113,7 @@ export default function PremiumPage() {
                     justifyContent: 'space-between'
                 }}>
                     <div>
-                        <p style={{ margin: '0 0 4px', fontSize: '14px', color: 'rgba(255,255,255,0.6)' }}>Your Balance</p>
+                        <p style={{ margin: '0 0 4px', fontSize: '14px', color: 'rgba(255,255,255,0.6)' }}>Ваш баланс</p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Star size={24} fill="#FFD700" color="#FFD700" />
                             <span style={{ fontSize: '24px', fontWeight: 800, color: 'white' }}>
@@ -127,7 +133,7 @@ export default function PremiumPage() {
                             cursor: 'pointer'
                         }}
                     >
-                        Top Up
+                        Пополнить
                     </button>
                 </div>
 
@@ -172,22 +178,22 @@ export default function PremiumPage() {
                             </div>
                             <div>
                                 <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Gold</h3>
-                                <p style={{ margin: 0, fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>Level Up</p>
+                                <p style={{ margin: 0, fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>Новый уровень</p>
                             </div>
                         </div>
 
                         <div style={{ marginBottom: '20px' }}>
                             <span style={{ fontSize: '32px', fontWeight: 800 }}>500</span>
-                            <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.5)', marginLeft: '4px' }}>stars / mo</span>
+                            <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.5)', marginLeft: '4px' }}>звёзд / мес</span>
                         </div>
 
                         <ul style={{ padding: 0, margin: '0 0 24px', listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {[
-                                'unlimited_swipes',
-                                '5 Super Likes / day',
-                                'Double XP per match'
+                                'Безлимитные свайпы',
+                                '5 Суперлайков / день',
+                                'Двойной XP за матч'
                             ].map((feat, i) => (
-                                <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px' }}>
+                                <li key={feat} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px' }}>
                                     <Check size={16} color="#FFD700" />
                                     {feat}
                                 </li>
@@ -209,7 +215,7 @@ export default function PremiumPage() {
                                 opacity: processing && processing !== 'gold' ? 0.5 : 1
                             }}
                         >
-                            {processing === 'gold' ? 'Processing...' : currentTier === 'gold' ? 'Current Plan' : 'Upgrade to Gold'}
+                            {processing === 'gold' ? 'Обработка...' : currentTier === 'gold' ? 'Текущий план' : 'Перейти на Gold'}
                         </button>
                     </div>
 
@@ -237,23 +243,23 @@ export default function PremiumPage() {
                             </div>
                             <div>
                                 <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>Platinum</h3>
-                                <p style={{ margin: 0, fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>Ultimate VIP</p>
+                                <p style={{ margin: 0, fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>Максимум VIP</p>
                             </div>
                         </div>
 
                         <div style={{ marginBottom: '20px' }}>
                             <span style={{ fontSize: '32px', fontWeight: 800 }}>1000</span>
-                            <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.5)', marginLeft: '4px' }}>stars / mo</span>
+                            <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.5)', marginLeft: '4px' }}>звёзд / мес</span>
                         </div>
 
                         <ul style={{ padding: 0, margin: '0 0 24px', listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {[
-                                'Everything in Gold',
-                                'See who likes you',
-                                'Priority Listing',
-                                'Incognito Mode'
+                                'Всё из Gold',
+                                'Кто вас лайкнул',
+                                'Приоритетное размещение',
+                                'Режим инкогнито'
                             ].map((feat, i) => (
-                                <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px' }}>
+                                <li key={feat} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px' }}>
                                     <Check size={16} color="#a855f7" />
                                     {feat}
                                 </li>
@@ -275,7 +281,7 @@ export default function PremiumPage() {
                                 opacity: processing && processing !== 'platinum' ? 0.5 : 1
                             }}
                         >
-                            {processing === 'platinum' ? 'Processing...' : currentTier === 'platinum' ? 'Current Plan' : 'Upgrade to Platinum'}
+                            {processing === 'platinum' ? 'Обработка...' : currentTier === 'platinum' ? 'Текущий план' : 'Перейти на Platinum'}
                         </button>
                     </div>
 
@@ -287,10 +293,18 @@ export default function PremiumPage() {
                 onClose={() => setShowTopUp(false)}
                 currentBalance={user?.stars_balance || 0}
                 onSuccess={() => {
-                    // Update local balance
                     fetchUser();
                 }}
             />
+
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+            <style jsx>{`
+                @keyframes fadeInUp {
+                    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+                    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+                }
+            `}</style>
         </div>
     );
 }

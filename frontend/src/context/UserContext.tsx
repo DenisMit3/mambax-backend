@@ -57,8 +57,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 const data = await authService.getMe();
                 if (data) {
                     // Ensure stars_balance is present
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const u = data as any;
+                    const u = data as User & { stars_balance?: number };
                     if (typeof u.stars_balance === 'undefined') u.stars_balance = 0;
                     return u as User;
                 }
@@ -74,9 +73,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         // Listen for real-time balance updates
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const handleBalanceUpdate = (data: any) => {
-            console.log("Balance update received:", data);
+        const handleBalanceUpdate = (data: { balance?: number }) => {
             if (typeof data.balance === 'number') {
                 queryClient.setQueryData(['user', 'me'], (oldUser: User | null) => {
                     if (!oldUser) return null;

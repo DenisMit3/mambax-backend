@@ -76,6 +76,7 @@ export default function RootLayout({
     return (
         <html lang="ru" suppressHydrationWarning>
             <head>
+                {/* Critical CSS inlined intentionally to prevent FOUC (dangerouslySetInnerHTML is safe here — static string, no user input) */}
                 <style dangerouslySetInnerHTML={{
                     __html: `
                     body { background-color: #ffffff; color: #000000; }
@@ -88,9 +89,6 @@ export default function RootLayout({
             <body className={`${manrope.variable} font-sans antialiased text-slate-900 bg-gray-50 overflow-hidden`}>
                 <script dangerouslySetInnerHTML={{ __html: `
                     try {
-                        // Clear old debug logs on every fresh load
-                        localStorage.removeItem('__debug_logs__');
-                        
                         // CRITICAL: Save Telegram initData immediately before any redirects can lose it
                         function __saveTgInitData() {
                             if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData && window.Telegram.WebApp.initData.length > 0) {
@@ -108,45 +106,31 @@ export default function RootLayout({
                         }
                         
                         document.body.style.background = '#0f0f11';
-                        var d = document.createElement('div');
-                        d.id = '__boot_debug';
-                        d.style.cssText = 'position:fixed;bottom:60px;left:0;right:0;z-index:9999999;background:rgba(0,0,0,0.95);color:#0f0;font:9px monospace;padding:4px;max-height:40vh;overflow:auto;white-space:pre-wrap;word-break:break-all;';
-                        d.textContent = '[BOOT] ' + new Date().toISOString() + ' tgSaved=' + !!sessionStorage.getItem('tg_init_data');
-                        document.body.appendChild(d);
-                        
-                        window.__bootLog = function(msg) {
-                            var el = document.getElementById('__boot_debug');
-                            if (el) {
-                                el.textContent += '\\n' + msg;
-                                el.scrollTop = el.scrollHeight;
-                            }
-                        };
-                        
-                        window.onerror = function(m,s,l,c,e) {
-                            window.__bootLog('[ERR] ' + m + ' at ' + (s||'').split('/').pop() + ':' + l);
-                        };
-                        window.addEventListener('unhandledrejection', function(ev) {
-                            window.__bootLog('[REJECT] ' + (ev.reason && ev.reason.message || ev.reason));
-                        });
-                        
-                        // Poll localStorage logs every 500ms and display them
-                        setInterval(function() {
-                            try {
-                                var logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]');
-                                if (logs.length > 0) {
-                                    var el = document.getElementById('__boot_debug');
-                                    if (el) {
-                                        var txt = '[BOOT] ' + new Date().toISOString() + ' | Logs: ' + logs.length;
-                                        for (var i = 0; i < logs.length; i++) {
-                                            txt += '\\n[' + logs[i].hId + '] ' + logs[i].msg + ': ' + JSON.stringify(logs[i].data).substring(0, 150);
-                                        }
-                                        el.textContent = txt;
-                                        el.scrollTop = el.scrollHeight;
-                                    }
+
+                        // DEBUG OVERLAY: Only in development builds
+                        if (${"`${process.env.NODE_ENV}`"} === 'development') {
+                            var d = document.createElement('div');
+                            d.id = '__boot_debug';
+                            d.style.cssText = 'position:fixed;bottom:60px;left:0;right:0;z-index:9999;background:rgba(0,0,0,0.95);color:#0f0;font:9px monospace;padding:4px;max-height:40vh;overflow:auto;white-space:pre-wrap;word-break:break-all;';
+                            d.textContent = '[BOOT] ' + new Date().toISOString() + ' tgSaved=' + !!sessionStorage.getItem('tg_init_data');
+                            document.body.appendChild(d);
+                            
+                            window.__bootLog = function(msg) {
+                                var el = document.getElementById('__boot_debug');
+                                if (el) {
+                                    el.textContent += '\\n' + msg;
+                                    el.scrollTop = el.scrollHeight;
                                 }
-                            } catch(e) {}
-                        }, 500);
-                    } catch(e) {}
+                            };
+                            
+                            window.onerror = function(m,s,l,c,e) {
+                                window.__bootLog('[ERR] ' + m + ' at ' + (s||'').split('/').pop() + ':' + l);
+                            };
+                            window.addEventListener('unhandledrejection', function(ev) {
+                                window.__bootLog('[REJECT] ' + (ev.reason && ev.reason.message || ev.reason));
+                            });
+                        }
+                    } catch(e) { console.warn('Layout init error:', e); }
                 `}} />
                 <ClientLayout>{children}</ClientLayout>
                 {/* HONEYPOT TRAP: Bots following this invisible link get banned */}

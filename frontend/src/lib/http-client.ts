@@ -74,7 +74,7 @@ class HttpClient {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                const error: any = new Error(errorData.detail || errorData.message || 'Request failed');
+                const error = new Error(errorData.detail || errorData.message || 'Request failed') as Error & { status: number; data: Record<string, unknown> };
                 error.status = response.status;
                 error.data = errorData;
                 throw error;
@@ -86,7 +86,7 @@ class HttpClient {
             }
 
             return await response.json();
-        } catch (error: any) {
+        } catch (error: unknown) {
             this.handleError(error, silent);
             throw error;
         }
@@ -96,9 +96,6 @@ class HttpClient {
         // Only clear token in browser context to avoid side effects on server
         if (typeof window !== 'undefined') {
             console.warn('Unauthorized access detected. Clearing token.');
-            // #region agent log
-            try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'H3_UNAUTHORIZED_TRIGGERED',data:{currentPath:window.location.pathname,hasToken:!!(localStorage.getItem('accessToken')||localStorage.getItem('token'))},hId:'H3',t:Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){} console.log('[DEBUG] H3_UNAUTHORIZED_TRIGGERED', window.location.pathname);
-            // #endregion
             localStorage.removeItem('token');
             localStorage.removeItem('accessToken'); // Clear both just in case
             
@@ -113,7 +110,7 @@ class HttpClient {
         this.customToken = null;
     }
 
-    private handleError(error: any, silent?: boolean) {
+    private handleError(error: unknown, silent?: boolean) {
         if (silent) {
             // FIX: Don't completely swallow silent errors, log them at debug level
             if (process.env.NODE_ENV === 'development') {
@@ -122,24 +119,25 @@ class HttpClient {
             return;
         }
 
+        const err = error as Error & { status?: number; data?: { detail?: string }; url?: string; message?: string };
         // Отправлять критические ошибки аутентификации Telegram в Sentry
-        if (error.status === 401 && typeof window !== 'undefined') {
+        if (err.status === 401 && typeof window !== 'undefined') {
             const hasTelegramData = !!window.Telegram?.WebApp?.initData;
-            const isTelegramAuthError = error.message?.toLowerCase().includes('telegram') || 
-                                        error.data?.detail?.toLowerCase().includes('telegram') ||
+            const isTelegramAuthError = err.message?.toLowerCase().includes('telegram') || 
+                                        err.data?.detail?.toLowerCase().includes('telegram') ||
                                         hasTelegramData;
             
             if (isTelegramAuthError) {
-                Sentry.captureException(error, {
+                Sentry.captureException(err, {
                     tags: {
                         error_type: 'telegram_auth_failure',
                         initData_present: hasTelegramData,
-                        error_message: error.message || 'Unknown'
+                        error_message: err.message || 'Unknown'
                     },
                     extra: {
-                        url: error.url,
-                        status: error.status,
-                        detail: error.data?.detail
+                        url: err.url,
+                        status: err.status,
+                        detail: err.data?.detail
                     }
                 });
             }
@@ -147,13 +145,13 @@ class HttpClient {
 
         if (process.env.NODE_ENV === 'development') {
             // Use warn for typical API errors to reduce console noise, error for unexpected
-            if (error.status && error.status >= 400 && error.status < 500) {
-                console.warn('[API Warn]', error.message);
+            if (err.status && err.status >= 400 && err.status < 500) {
+                console.warn('[API Warn]', err.message);
             } else {
-                console.error('[API Error]', error);
+                console.error('[API Error]', err);
             }
         } else {
-            Sentry.captureException(error);
+            Sentry.captureException(err);
         }
     }
 
@@ -162,7 +160,7 @@ class HttpClient {
         return this.request<T>(endpoint, { ...config, method: 'GET' });
     }
 
-    public post<T>(endpoint: string, body?: any, config?: RequestConfig) {
+    public post<T>(endpoint: string, body?: unknown, config?: RequestConfig) {
         return this.request<T>(endpoint, {
             ...config,
             method: 'POST',
@@ -170,7 +168,7 @@ class HttpClient {
         });
     }
 
-    public put<T>(endpoint: string, body?: any, config?: RequestConfig) {
+    public put<T>(endpoint: string, body?: unknown, config?: RequestConfig) {
         return this.request<T>(endpoint, {
             ...config,
             method: 'PUT',
@@ -178,7 +176,7 @@ class HttpClient {
         });
     }
 
-    public patch<T>(endpoint: string, body?: any, config?: RequestConfig) {
+    public patch<T>(endpoint: string, body?: unknown, config?: RequestConfig) {
         return this.request<T>(endpoint, {
             ...config,
             method: 'PATCH',

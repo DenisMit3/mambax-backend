@@ -11,7 +11,7 @@ type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
 interface LogEntry {
     level: LogLevel;
     message: string;
-    args: any[];
+    args: unknown[];
     timestamp: string;
     url: string;
     userAgent: string;
@@ -62,7 +62,7 @@ function scheduleFlush() {
 }
 
 // Serialize arguments to string
-function serializeArgs(args: any[]): string {
+function serializeArgs(args: unknown[]): string {
     return args.map(arg => {
         if (arg === undefined) return 'undefined';
         if (arg === null) return 'null';
@@ -79,7 +79,7 @@ function serializeArgs(args: any[]): string {
 
 // Create log interceptor
 function createInterceptor(level: LogLevel) {
-    return (...args: any[]) => {
+    return (...args: unknown[]) => {
         // Call original console method
         originalConsole[level](...args);
 
@@ -140,8 +140,8 @@ export function initRemoteLogger() {
     if (typeof window === 'undefined') return; // Only in browser
 
     // Check if already initialized
-    if ((window as any).__remoteLoggerInitialized) return;
-    (window as any).__remoteLoggerInitialized = true;
+    if (window.__remoteLoggerInitialized) return;
+    window.__remoteLoggerInitialized = true;
 
     // Override console methods
     console.log = createInterceptor('log');
@@ -154,13 +154,13 @@ export function initRemoteLogger() {
     setupErrorHandler();
 
     // Send init message
-    console.log('[RemoteLogger] 📱 Remote logging initialized from:', navigator.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop');
+    console.debug('[RemoteLogger] 📱 Remote logging initialized from:', navigator.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop');
 
     // Flush on page unload
     window.addEventListener('beforeunload', flushLogs);
 }
 
 // Utility to manually send a log
-export function remoteLog(level: LogLevel, ...args: any[]) {
+export function remoteLog(level: LogLevel, ...args: unknown[]) {
     createInterceptor(level)(...args);
 }

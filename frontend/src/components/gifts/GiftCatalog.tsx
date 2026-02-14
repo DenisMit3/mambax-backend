@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authService, CatalogResponse, GiftCategory, VirtualGift } from "@/services/api";
-import { Sparkles, Star, Heart, Search, Loader2, Gift as GiftIcon } from "lucide-react";
+import { Sparkles, Star, Heart, Search, Loader2, Gift as GiftIcon, RefreshCw } from "lucide-react";
 import { useHaptic } from "@/hooks/useHaptic";
 
 // Remove local interfaces that are now imported
@@ -17,24 +17,6 @@ interface GiftCatalogProps {
     showSendButton?: boolean;
 }
 
-// Fallback mock data
-const FALLBACK_CATEGORIES: GiftCategory[] = [
-    { id: "1", name: "Романтика", description: "Подарки для проявления нежных чувств", icon: "❤️", sort_order: 1, is_active: true },
-    { id: "2", name: "Веселье", description: "Поднимите настроение собеседнику", icon: "🎉", sort_order: 2, is_active: true },
-    { id: "3", name: "Премиум", description: "Эксклюзивные подарки для особенных случаев", icon: "💎", sort_order: 3, is_active: true },
-];
-
-const FALLBACK_GIFTS: VirtualGift[] = [
-    { id: "1", name: "Красная роза", description: "Классический символ любви", image_url: "/static/gifts/rose.png", animation_url: null, price: 10, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, is_active: true, times_sent: 1250, category_id: "1", sort_order: 1, available_until: null, max_quantity: null },
-    { id: "2", name: "Воздушное сердце", description: "Милый воздушный шарик-сердечко", image_url: "/static/gifts/heart_balloon.png", animation_url: null, price: 15, currency: "XTR", is_animated: true, is_premium: false, is_limited: false, is_active: true, times_sent: 980, category_id: "1", sort_order: 2, available_until: null, max_quantity: null },
-    { id: "3", name: "Плюшевый мишка", description: "Уютный плюшевый медвежонок", image_url: "/static/gifts/teddy.png", animation_url: null, price: 25, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, is_active: true, times_sent: 750, category_id: "1", sort_order: 3, available_until: null, max_quantity: null },
-    { id: "4", name: "Шампанское", description: "Отпразднуйте особенный момент", image_url: "/static/gifts/champagne.png", animation_url: null, price: 30, currency: "XTR", is_animated: true, is_premium: false, is_limited: false, is_active: true, times_sent: 620, category_id: "2", sort_order: 4, available_until: null, max_quantity: null },
-    { id: "5", name: "Звезда", description: "Ты - моя звезда!", image_url: "/static/gifts/star.png", animation_url: null, price: 5, currency: "XTR", is_animated: true, is_premium: false, is_limited: false, is_active: true, times_sent: 2100, category_id: "2", sort_order: 7, available_until: null, max_quantity: null },
-    { id: "6", name: "Коробка конфет", description: "Сладкая, как ты", image_url: "/static/gifts/chocolate.png", animation_url: null, price: 20, currency: "XTR", is_animated: false, is_premium: false, is_limited: false, is_active: true, times_sent: 890, category_id: "2", sort_order: 8, available_until: null, max_quantity: null },
-    { id: "7", name: "Бриллиантовое кольцо", description: "Для самого особенного человека", image_url: "/static/gifts/diamond_ring.png", animation_url: null, price: 100, currency: "XTR", is_animated: true, is_premium: true, is_limited: false, is_active: true, times_sent: 320, category_id: "3", sort_order: 5, available_until: null, max_quantity: null },
-    { id: "8", name: "Романтический ужин", description: "Виртуальное свидание за ужином", image_url: "/static/gifts/dinner.png", animation_url: null, price: 50, currency: "XTR", is_animated: false, is_premium: true, is_limited: false, is_active: true, times_sent: 450, category_id: "3", sort_order: 6, available_until: null, max_quantity: null },
-];
-
 export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }: GiftCatalogProps) {
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
@@ -43,7 +25,7 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
 
     // FIX (CACHE): Use React Query with aggressive caching
     // Gift catalog rarely changes - cache for 1 hour
-    const { data, isLoading } = useQuery<CatalogResponse>({
+    const { data, isLoading, isError, refetch } = useQuery<CatalogResponse>({
         queryKey: ['giftsCatalog', selectedCategory],
         queryFn: () => authService.getGiftsCatalog(selectedCategory || undefined),
         staleTime: 1000 * 60 * 60, // 1 hour - catalog rarely changes
@@ -51,8 +33,8 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
         retry: 2,
     });
 
-    const categories = data?.categories || FALLBACK_CATEGORIES;
-    const gifts = data?.gifts || FALLBACK_GIFTS;
+    const categories = data?.categories || [];
+    const gifts = data?.gifts || [];
 
     const filteredGifts = gifts.filter(gift => {
         if (searchQuery) {
@@ -100,6 +82,22 @@ export function GiftCatalog({ onGiftSelect, receiverId, showSendButton = false }
             <div className="flex flex-col items-center justify-center gap-4 py-12 text-muted-foreground">
                 <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin"></div>
                 <p>Загрузка подарков...</p>
+            </div>
+        );
+    }
+
+    if (isError) {
+        return (
+            <div className="flex flex-col items-center justify-center gap-4 py-12 text-muted-foreground">
+                <GiftIcon size={48} className="opacity-50" />
+                <p>Не удалось загрузить подарки</p>
+                <button
+                    onClick={() => refetch()}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium transition-all hover:opacity-90"
+                >
+                    <RefreshCw size={14} />
+                    Попробовать снова
+                </button>
             </div>
         );
     }

@@ -96,7 +96,7 @@ export function ConversationPromptsButton({
                 <ul className="space-y-3">
                   {prompts.map((text, index) => (
                     <motion.li
-                      key={index}
+                      key={text || index}
                       initial={prefersReducedMotion ? undefined : { opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}

@@ -1,69 +1,116 @@
 'use client';
 
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { AdvancedAnalyticsDashboard } from '@/components/analytics/AdvancedAnalyticsDashboard';
+import { authService } from '@/services/api';
 
-const MOCK_ANALYTICS_DATA = {
+// Тип данных аналитики профиля
+interface AnalyticsData {
     profileViews: {
-        total: 1245,
-        change: 12.5,
-        chartData: [
-            { date: 'Mon', views: 45 },
-            { date: 'Tue', views: 52 },
-            { date: 'Wed', views: 38 },
-            { date: 'Thu', views: 65 },
-            { date: 'Fri', views: 42 },
-            { date: 'Sat', views: 89 },
-            { date: 'Sun', views: 74 }
-        ]
-    },
+        total: number;
+        change: number;
+        chartData: { date: string; views: number }[];
+    };
     likes: {
-        received: 342,
-        sent: 156,
-        matches: 48,
-        changeReceived: 8.4,
-        changeSent: 5.2,
-        changeMatches: 12.1
-    },
+        received: number;
+        sent: number;
+        matches: number;
+        changeReceived: number;
+        changeSent: number;
+        changeMatches: number;
+    };
     superLikes: {
-        received: 12,
-        sent: 5,
-        changeReceived: 33.3,
-        changeSent: 0
-    },
+        received: number;
+        sent: number;
+        changeReceived: number;
+        changeSent: number;
+    };
     messages: {
-        sent: 450,
-        received: 423,
-        responseRate: 94,
-        changeSent: 15.3,
-        changeReceived: 14.2,
-        changeResponseRate: 2.1
-    },
+        sent: number;
+        received: number;
+        responseRate: number;
+        changeSent: number;
+        changeReceived: number;
+        changeResponseRate: number;
+    };
     peakActivity: {
-        day: 'Saturday',
-        hour: '21:00',
-        engagement: 85
-    },
+        day: string;
+        hour: string;
+        engagement: number;
+    };
     demographics: {
-        ageGroups: [
-            { range: '18-24', percentage: 45 },
-            { range: '25-34', percentage: 35 },
-            { range: '35+', percentage: 20 }
-        ],
-        locations: [
-            { city: 'Moscow', percentage: 60 },
-            { city: 'St. Petersburg', percentage: 25 },
-            { city: 'Other', percentage: 15 }
-        ]
-    }
-};
+        ageGroups: { range: string; percentage: number }[];
+        locations: { city: string; percentage: number }[];
+    };
+}
 
 export default function AnalyticsPage() {
+    const router = useRouter();
+    const [data, setData] = useState<AnalyticsData | null>(null);
+    const [isPremium, setIsPremium] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Загрузка аналитики и профиля пользователя
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const [analyticsRes, profileRes] = await Promise.all([
+                authService.getAnalytics(),
+                authService.getMe(),
+            ]);
+            setData(analyticsRes.data);
+            setIsPremium(profileRes.data.subscription_tier !== 'free');
+        } catch (err) {
+            const message =
+                err instanceof Error ? err.message : 'Не удалось загрузить аналитику';
+            setError(message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    // Состояние загрузки
+    if (loading) {
+        return (
+            <main className="flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-gray-400 text-sm">Загрузка аналитики...</p>
+                </div>
+            </main>
+        );
+    }
+
+    // Состояние ошибки
+    if (error || !data) {
+        return (
+            <main className="flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-4 text-center">
+                    <p className="text-red-400 text-lg">😔 {error || 'Данные недоступны'}</p>
+                    <button
+                        onClick={fetchData}
+                        className="px-6 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-xl transition-colors"
+                    >
+                        Попробовать снова
+                    </button>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main>
             <AdvancedAnalyticsDashboard
-                data={MOCK_ANALYTICS_DATA}
-                isPremium={true}
-                onUpgradeToPremium={() => console.log('Upgrade clicked')}
+                data={data}
+                isPremium={isPremium}
+                onUpgradeToPremium={() => router.push('/profile/premium')}
             />
         </main>
     );

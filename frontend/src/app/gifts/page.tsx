@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { authService } from "@/services/api";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { GiftRevealAnimation } from "@/components/ui/GiftRevealAnimation";
-import { Gift, Inbox, Send, Star, Clock, User, EyeOff, ChevronRight, ShoppingBag } from "lucide-react";
+import { Gift, Inbox, Send, Star, Clock, User, EyeOff, ChevronRight, ShoppingBag, RefreshCw, AlertTriangle } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 const GiftCatalog = dynamic(() => import('@/components/gifts/GiftCatalog').then(mod => mod.GiftCatalog), {
@@ -50,6 +50,7 @@ export default function GiftsPage() {
     const [receivedGifts, setReceivedGifts] = useState<GiftTransaction[]>([]);
     const [sentGifts, setSentGifts] = useState<GiftTransaction[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [stats, setStats] = useState({
         receivedTotal: 0,
         unreadCount: 0,
@@ -65,6 +66,7 @@ export default function GiftsPage() {
     const loadGifts = async () => {
         try {
             setLoading(true);
+            setError(null);
 
             const [receivedData, sentData] = await Promise.all([
                 authService.getReceivedGifts(50),
@@ -79,52 +81,11 @@ export default function GiftsPage() {
                 sentTotal: sentData.total,
                 totalSpent: sentData.total_spent || 0
             });
-        } catch (error) {
-            console.error("Failed to load gifts:", error);
-            // Mock data for demo
-            setReceivedGifts([
-                {
-                    id: "1",
-                    sender_id: "user1",
-                    receiver_id: "me",
-                    gift_id: "gift1",
-                    price_paid: 10,
-                    currency: "XTR",
-                    message: "You're amazing! ❤️",
-                    status: "completed",
-                    is_anonymous: false,
-                    is_read: false,
-                    read_at: null,
-                    created_at: new Date().toISOString(),
-                    gift: { id: "gift1", name: "Red Rose", image_url: "/static/gifts/rose.png", price: 10, is_premium: false },
-                    sender_name: "Alice",
-                    sender_photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100",
-                    receiver_name: null,
-                    receiver_photo: null
-                }
-            ]);
-            setSentGifts([
-                {
-                    id: "2",
-                    sender_id: "me",
-                    receiver_id: "user2",
-                    gift_id: "gift2",
-                    price_paid: 25,
-                    currency: "XTR",
-                    message: "Hope this makes you smile!",
-                    status: "completed",
-                    is_anonymous: false,
-                    is_read: true,
-                    read_at: new Date().toISOString(),
-                    created_at: new Date(Date.now() - 86400000).toISOString(),
-                    gift: { id: "gift2", name: "Teddy Bear", image_url: "/static/gifts/teddy.png", price: 25, is_premium: false },
-                    sender_name: null,
-                    sender_photo: null,
-                    receiver_name: "Bob",
-                    receiver_photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100"
-                }
-            ]);
-            setStats({ receivedTotal: 1, unreadCount: 1, sentTotal: 1, totalSpent: 25 });
+        } catch (err) {
+            console.error("Не удалось загрузить подарки:", err);
+            setError("Не удалось загрузить подарки. Проверьте подключение к интернету.");
+            setReceivedGifts([]);
+            setSentGifts([]);
         } finally {
             setLoading(false);
         }
@@ -140,14 +101,14 @@ export default function GiftsPage() {
                 ...prev,
                 unreadCount: Math.max(0, prev.unreadCount - 1)
             }));
-        } catch (error) {
-            console.error("Failed to mark gift as read:", error);
+        } catch (err) {
+            console.error("Не удалось отметить подарок как прочитанный:", err);
         }
     };
 
     const handleGiftClick = (transaction: GiftTransaction) => {
         if (!transaction.is_read && activeTab === "received") {
-            // Show reveal animation for unread gifts
+            // Анимация раскрытия для непрочитанных подарков
             setRevealGift(transaction);
         }
     };
@@ -180,11 +141,11 @@ export default function GiftsPage() {
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
         if (diffDays === 0) {
-            return "Today";
+            return "Сегодня";
         } else if (diffDays === 1) {
-            return "Yesterday";
+            return "Вчера";
         } else if (diffDays < 7) {
-            return `${diffDays} days ago`;
+            return `${diffDays} дн. назад`;
         } else {
             return date.toLocaleDateString();
         }
@@ -269,16 +230,29 @@ export default function GiftsPage() {
                     {loading ? (
                         <div className="flex flex-col items-center justify-center gap-4 p-12 text-muted-foreground">
                             <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin"></div>
-                            <p>Loading gifts...</p>
+                            <p>Загрузка подарков...</p>
+                        </div>
+                    ) : error ? (
+                        /* Экран ошибки с кнопкой повтора */
+                        <div className="flex flex-col items-center justify-center gap-4 py-12 px-5 text-center">
+                            <AlertTriangle size={48} className="text-yellow-500 opacity-60" />
+                            <p className="text-muted-foreground text-sm">{error}</p>
+                            <button
+                                onClick={loadGifts}
+                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold active:scale-95 transition"
+                            >
+                                <RefreshCw size={16} />
+                                Попробовать снова
+                            </button>
                         </div>
                     ) : currentGifts.length === 0 ? (
                         <div className="flex flex-col items-center justify-center gap-3 py-12 px-5 text-muted-foreground text-center">
                             <Gift size={48} className="opacity-40" />
-                            <h3 className="m-0 text-lg text-foreground">No gifts yet</h3>
+                            <h3 className="m-0 text-lg text-foreground">Подарков пока нет</h3>
                             <p className="m-0 text-sm">
                                 {activeTab === "received"
-                                    ? "Gifts you receive will appear here"
-                                    : "Gifts you send will appear here"}
+                                    ? "Полученные подарки появятся здесь"
+                                    : "Отправленные подарки появятся здесь"}
                             </p>
                         </div>
                     ) : (
@@ -309,7 +283,7 @@ export default function GiftsPage() {
                                             transaction.is_anonymous ? (
                                                 <>
                                                     <EyeOff size={14} />
-                                                    <span>From Anonymous</span>
+                                                    <span>От анонима</span>
                                                 </>
                                             ) : (
                                                 <>
@@ -322,7 +296,7 @@ export default function GiftsPage() {
                                                     ) : (
                                                         <User size={14} />
                                                     )}
-                                                    <span>From {transaction.sender_name || "Someone"}</span>
+                                                    <span>От {transaction.sender_name || "Кто-то"}</span>
                                                 </>
                                             )
                                         ) : (
@@ -336,11 +310,11 @@ export default function GiftsPage() {
                                                 ) : (
                                                     <User size={14} />
                                                 )}
-                                                <span>To {transaction.receiver_name || "Someone"}</span>
+                                                <span>Для {transaction.receiver_name || "Кого-то"}</span>
                                                 {transaction.is_anonymous && (
                                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/10 text-[11px]">
                                                         <EyeOff size={10} />
-                                                        Anonymous
+                                                        Анонимно
                                                     </span>
                                                 )}
                                             </>

@@ -3,15 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
+import { Toast } from '@/components/ui/Toast';
 
 export default function SetupAgePage() {
     const [age, setAge] = useState("");
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
     const router = useRouter();
 
     const handleNext = () => {
         const ageNum = parseInt(age);
         if (isNaN(ageNum) || ageNum < 18 || ageNum > 100) {
-            alert("Please enter a valid age (18+)");
+            setToast({message: "Введите корректный возраст (18+)", type: 'error'});
             return;
         }
         if (typeof window !== 'undefined') localStorage.setItem("setup_age", age);
@@ -25,11 +27,11 @@ export default function SetupAgePage() {
                     <ArrowLeft />
                 </button>
 
-                <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '10px' }}>My age is</h1>
+                <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '10px' }}>Мой возраст</h1>
 
                 <input
                     type="number"
-                    placeholder="Enter age"
+                    placeholder="Введите возраст"
                     value={age}
                     onChange={(e) => setAge(e.target.value)}
                     autoFocus
@@ -48,7 +50,7 @@ export default function SetupAgePage() {
                 />
 
                 <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '40px' }}>
-                    Your age will be visible to other users.
+                    Ваш возраст будет виден другим пользователям.
                 </p>
 
                 <button
@@ -57,9 +59,10 @@ export default function SetupAgePage() {
                     onClick={handleNext}
                     style={{ width: '100%', opacity: !age ? 0.5 : 1 }}
                 >
-                    Next <ArrowRight size={18} style={{ marginLeft: '8px' }} />
+                    Далее <ArrowRight size={18} style={{ marginLeft: '8px' }} />
                 </button>
             </div>
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

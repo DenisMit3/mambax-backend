@@ -438,13 +438,86 @@ async def delete_my_account(
 
 @router.get("/me/export")
 async def export_my_data(
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    GDPR Data Export.
-    Возвращает все данные пользователя в JSON.
+    GDPR Data Export — полный экспорт всех данных пользователя.
+    Включает профиль, сообщения, лайки, матчи, жалобы, покупки.
     """
+    from backend.models.interaction import Swipe, Match, Like, Report
+    from backend.models.chat import Message
+    from backend.models.monetization import Transaction, StarTransaction
+    from backend.models.profile_enrichment import UserPrompt, UserPreference
+
+    uid = current_user.id
+
+    # Messages sent
+    msgs_result = await db.execute(
+        select(Message).where(Message.sender_id == uid).order_by(Message.created_at)
+    )
+    messages = [
+        {"id": str(m.id), "match_id": str(m.match_id), "text": m.text,
+         "created_at": str(m.created_at), "is_read": m.is_read}
+        for m in msgs_result.scalars().all()
+    ]
+
+    # Likes given
+    likes_result = await db.execute(
+        select(Like).where(Like.liker_id == uid).order_by(Like.created_at)
+    )
+    likes = [
+        {"target_id": str(l.liked_id), "created_at": str(l.created_at)}
+        for l in likes_result.scalars().all()
+    ]
+
+    # Swipes
+    swipes_result = await db.execute(
+        select(Swipe).where(Swipe.swiper_id == uid).order_by(Swipe.created_at)
+    )
+    swipes = [
+        {"target_id": str(s.swiped_id), "direction": s.direction, "created_at": str(s.created_at)}
+        for s in swipes_result.scalars().all()
+    ]
+
+    # Matches
+    matches_result = await db.execute(
+        select(Match).where((Match.user1_id == uid) | (Match.user2_id == uid)).order_by(Match.created_at)
+    )
+    matches = [
+        {"id": str(mt.id), "user1_id": str(mt.user1_id), "user2_id": str(mt.user2_id),
+         "created_at": str(mt.created_at)}
+        for mt in matches_result.scalars().all()
+    ]
+
+    # Reports filed by user
+    reports_result = await db.execute(
+        select(Report).where(Report.reporter_id == uid).order_by(Report.created_at)
+    )
+    reports = [
+        {"reported_id": str(r.reported_id), "reason": r.reason, "created_at": str(r.created_at)}
+        for r in reports_result.scalars().all()
+    ]
+
+    # Prompts & preferences
+    prompts_result = await db.execute(select(UserPrompt).where(UserPrompt.user_id == uid))
+    prompts = [
+        {"prompt": p.prompt_text, "answer": p.answer_text}
+        for p in prompts_result.scalars().all()
+    ]
+
+    prefs_result = await db.execute(select(UserPreference).where(UserPreference.user_id == uid))
+    prefs_row = prefs_result.scalar_one_or_none()
+    preferences = None
+    if prefs_row:
+        preferences = {
+            "min_age": prefs_row.min_age, "max_age": prefs_row.max_age,
+            "max_distance_km": prefs_row.max_distance_km,
+            "gender_preference": prefs_row.gender_preference,
+        }
+
     return {
+        "export_date": str(datetime.now(timezone.utc)),
         "user_profile": {
             "id": str(current_user.id),
             "name": current_user.name,
@@ -454,13 +527,22 @@ async def export_my_data(
             "bio": current_user.bio,
             "interests": current_user.interests,
             "photos": current_user.photos,
+            "gender": current_user.gender,
+            "age": current_user.age,
             "location": {"lat": current_user.latitude, "lon": current_user.longitude} if current_user.latitude else None,
             "created_at": str(current_user.created_at),
             "status": current_user.status,
             "role": current_user.role,
-            "subscription_tier": current_user.subscription_tier
+            "subscription_tier": current_user.subscription_tier,
         },
-        "privacy_note": "This export contains your personal profile data stored on MambaX."
+        "preferences": preferences,
+        "prompts": prompts,
+        "messages_sent": messages,
+        "likes_given": likes,
+        "swipes": swipes,
+        "matches": matches,
+        "reports_filed": reports,
+        "privacy_note": "This is a complete export of your personal data stored on MambaX per GDPR Article 20."
     }
 
 

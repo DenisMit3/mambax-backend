@@ -25,6 +25,7 @@ import {
   User,
   HelpCircle,
 } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Import global admin styles
 import './admin-variables.css';
@@ -36,74 +37,86 @@ interface AdminLayoutProps {
 
 const menuItems = [
   {
-    title: 'Dashboard',
+    title: 'Панель управления',
     icon: LayoutDashboard,
     href: '/admin',
   },
   {
-    title: 'Analytics',
+    title: 'Аналитика',
     icon: BarChart3,
     href: '/admin/analytics',
     submenu: [
-      { title: 'Overview', href: '/admin/analytics' },
-      { title: 'Retention', href: '/admin/analytics/retention' },
-      { title: 'Funnels', href: '/admin/analytics/funnels' },
-      { title: 'Revenue', href: '/admin/analytics/revenue' },
+      { title: 'Обзор', href: '/admin/analytics' },
+      { title: 'Удержание', href: '/admin/analytics/retention' },
+      { title: 'Воронки', href: '/admin/analytics/funnels' },
+      { title: 'Доход', href: '/admin/analytics/revenue' },
     ],
   },
   {
-    title: 'Users',
+    title: 'Пользователи',
     icon: Users,
     href: '/admin/users',
     submenu: [
-      { title: 'All Users', href: '/admin/users' },
-      { title: 'Verification', href: '/admin/users/verification' },
-      { title: 'Segments', href: '/admin/users/segments' },
+      { title: 'Все пользователи', href: '/admin/users' },
+      { title: 'Верификация', href: '/admin/users/verification' },
+      { title: 'Сегменты', href: '/admin/users/segments' },
     ],
   },
   {
-    title: 'Moderation',
+    title: 'Модерация',
     icon: Shield,
     href: '/admin/moderation',
     submenu: [
-      { title: 'Queue', href: '/admin/moderation' },
-      { title: 'Reports', href: '/admin/moderation/reports' },
-      { title: 'Appeals', href: '/admin/moderation/appeals' },
+      { title: 'Очередь', href: '/admin/moderation' },
+      { title: 'Жалобы', href: '/admin/moderation/reports' },
+      { title: 'Апелляции', href: '/admin/moderation/appeals' },
+      { title: 'Правила авто-бана', href: '/admin/auto-ban-rules' },
     ],
   },
   {
-    title: 'Monetization',
+    title: 'Монетизация',
     icon: DollarSign,
     href: '/admin/monetization',
     submenu: [
-      { title: 'Revenue', href: '/admin/monetization' },
-      { title: 'Subscriptions', href: '/admin/monetization/subscriptions' },
-      { title: 'Promo Codes', href: '/admin/monetization/promos' },
+      { title: 'Доход', href: '/admin/monetization' },
+      { title: 'Подписки', href: '/admin/monetization/subscriptions' },
+      { title: 'Промокоды', href: '/admin/monetization/promo-codes' },
+      { title: 'Подарки', href: '/admin/monetization/gifts' },
+      { title: 'Возвраты', href: '/admin/monetization/refunds' },
+      { title: 'Платежи', href: '/admin/monetization/payments' },
+      { title: 'Тренды ARPU', href: '/admin/monetization/arpu-trends' },
+      { title: 'Прогнозы', href: '/admin/monetization/forecasts' },
+      { title: 'Анализ оттока', href: '/admin/monetization/churn-analysis' },
+      { title: 'Бусты и суперлайки', href: '/admin/monetization/boost-analytics' },
+      { title: 'Тесты цен', href: '/admin/monetization/pricing-tests' },
+      { title: 'Отслеживание купонов', href: '/admin/monetization/coupon-tracking' },
+      { title: 'Партнёры', href: '/admin/monetization/affiliates' },
+      { title: 'Допродажи', href: '/admin/monetization/upsell' },
     ],
   },
   {
-    title: 'Marketing',
+    title: 'Маркетинг',
     icon: Megaphone,
     href: '/admin/marketing',
     submenu: [
-      { title: 'Campaigns', href: '/admin/marketing' },
-      { title: 'Push Notifications', href: '/admin/marketing/push' },
-      { title: 'Referrals', href: '/admin/marketing/referrals' },
+      { title: 'Кампании', href: '/admin/marketing' },
+      { title: 'Push-уведомления', href: '/admin/marketing/push' },
+      { title: 'Рефералы', href: '/admin/marketing/referrals' },
     ],
   },
   {
-    title: 'AI & Advanced',
+    title: 'AI и расширенные',
     icon: Sparkles,
     href: '/admin/advanced',
   },
   {
-    title: 'System',
+    title: 'Система',
     icon: Settings,
     href: '/admin/system',
     submenu: [
-      { title: 'Health', href: '/admin/system' },
-      { title: 'Audit Logs', href: '/admin/system/logs' },
-      { title: 'Feature Flags', href: '/admin/system/flags' },
+      { title: 'Здоровье', href: '/admin/system' },
+      { title: 'Журнал аудита', href: '/admin/system/logs' },
+      { title: 'Флаги функций', href: '/admin/system/flags' },
     ],
   },
 ];
@@ -229,11 +242,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <div className="sidebar-footer">
           <button className="theme-toggle" onClick={() => setIsDark(!isDark)}>
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
-            <span className="nav-label">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+            <span className="nav-label">{isDark ? 'Светлая тема' : 'Тёмная тема'}</span>
           </button>
           <button className="logout-btn">
             <LogOut size={18} />
-            <span className="nav-label">Logout</span>
+            <span className="nav-label">Выйти</span>
           </button>
         </div>
       </aside>
@@ -255,7 +268,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             </button>
             <div className="search-box">
               <Search size={18} />
-              <input type="text" placeholder="Search insights, users, reports..." />
+              <input type="text" placeholder="Поиск по аналитике, пользователям, отчётам..." />
             </div>
           </div>
 
@@ -272,28 +285,28 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               >
                 <div className="admin-avatar">A</div>
                 <div className="admin-info">
-                  <span className="admin-name">Admin User</span>
-                  <span className="admin-role">Super Admin</span>
+                  <span className="admin-name">Администратор</span>
+                  <span className="admin-role">Суперадмин</span>
                 </div>
               </div>
 
               <div className={`profile-dropdown ${profileOpen ? 'show' : ''}`}>
                 <button className="dropdown-item">
                   <User size={16} />
-                  <span>My Profile</span>
+                  <span>Мой профиль</span>
                 </button>
                 <button className="dropdown-item">
                   <Settings size={16} />
-                  <span>Settings</span>
+                  <span>Настройки</span>
                 </button>
                 <button className="dropdown-item">
                   <HelpCircle size={16} />
-                  <span>Support</span>
+                  <span>Поддержка</span>
                 </button>
                 <div style={{ height: '1px', background: 'var(--admin-glass-border)', margin: '8px 0' }} />
                 <button className="dropdown-item" style={{ color: 'var(--neon-red)' }}>
                   <LogOut size={16} />
-                  <span>Logout</span>
+                  <span>Выйти</span>
                 </button>
               </div>
             </div>
@@ -302,17 +315,19 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
         {/* Page Content */}
         <main className="admin-content" onClick={() => setProfileOpen(false)}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={pathname}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+          <ErrorBoundary>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={pathname}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </ErrorBoundary>
         </main>
       </div>
     </div>

@@ -13,7 +13,7 @@ from .monetization import (
     GiftCategory, VirtualGift, GiftTransaction
 )
 from .analytics import DailyMetric, RetentionCohort, AnalyticsEvent
-from .marketing import MarketingCampaign, PushCampaign, EmailCampaign
+from .marketing import MarketingCampaign, PushCampaign, EmailCampaign, Referral, AcquisitionChannel
 from .system import AuditLog, FeatureFlag, SecurityAlert, BackupStatus
 from .user_management import FraudScore, UserSegment, UserNote, VerificationRequest
 from .profile_enrichment import UserPrompt, UserPreference
@@ -55,6 +55,8 @@ __all__ = [
     "MarketingCampaign",
     "PushCampaign",
     "EmailCampaign",
+    "Referral",
+    "AcquisitionChannel",
     "AuditLog",
     "FeatureFlag",
     "SecurityAlert",

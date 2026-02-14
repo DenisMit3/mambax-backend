@@ -33,7 +33,7 @@ export function useProfiles() {
             const data = await authService.getProfiles();
             // FIX: API returns PaginatedResponse<UserProfile> with { items: [...] }
             // Extract items array from paginated response
-            const apiResponse = data as any;
+            const apiResponse = data as { items?: Profile[] };
             const profiles = apiResponse?.items || (Array.isArray(data) ? data : []);
             return profiles as Profile[];
         },

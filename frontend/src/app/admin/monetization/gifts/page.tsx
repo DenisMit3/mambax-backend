@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import styles from "../../admin.module.css";
 import { adminApi, GiftCategory, VirtualGift } from "@/services/adminApi";
+import { FALLBACK_AVATAR } from "@/lib/constants";
+import { Toast } from '@/components/ui/Toast';
 
 interface GiftFormData {
     name: string;
@@ -52,6 +54,7 @@ export default function GiftsAdminPage() {
     const [formData, setFormData] = useState<GiftFormData>(defaultGiftForm);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
     const loadData = useCallback(async () => {
         try {
@@ -62,7 +65,7 @@ export default function GiftsAdminPage() {
             setCategories(catalog.categories || []);
         } catch (err) {
             console.error("Failed to load gifts:", err);
-            setError("Failed to load gifts data");
+            setError("Не удалось загрузить данные подарков");
         } finally {
             setLoading(false);
         }
@@ -107,13 +110,13 @@ export default function GiftsAdminPage() {
             setGifts(prev => prev.filter(g => g.id !== giftId));
         } catch (err) {
             console.error("Delete error:", err);
-            alert("Failed to delete gift");
+            setToast({message: "Failed to delete gift", type: 'error'});
         }
     };
 
     const handleSave = async () => {
         if (!formData.name || !formData.price) {
-            setError("Name and price are required");
+            setError("Название и цена обязательны");
             return;
         }
 
@@ -122,7 +125,7 @@ export default function GiftsAdminPage() {
 
         try {
             // Prepare payload
-            const payload: any = {
+            const payload: Record<string, unknown> = {
                 ...formData,
                 max_quantity: formData.max_quantity || null,
                 available_until: formData.available_until || null,
@@ -156,7 +159,7 @@ export default function GiftsAdminPage() {
             setFormData(prev => ({ ...prev, image_url: url }));
         } catch (err) {
             console.error("Upload error:", err);
-            alert("Failed to upload image");
+            setToast({message: "Failed to upload image", type: 'error'});
         }
     };
 
@@ -164,7 +167,7 @@ export default function GiftsAdminPage() {
         return (
             <div className={styles.loadingContainer}>
                 <Loader2 size={40} className={styles.spinner} />
-                <p>Loading gifts...</p>
+                <p>Загрузка подарков...</p>
             </div>
         );
     }
@@ -176,13 +179,13 @@ export default function GiftsAdminPage() {
                 <div className={styles.headerLeft}>
                     <Gift size={28} className={styles.headerIcon} />
                     <div>
-                        <h1>Virtual Gifts</h1>
-                        <p className={styles.subtitle}>Manage gift catalog and categories</p>
+                        <h1>Виртуальные подарки</h1>
+                        <p className={styles.subtitle}>Управление каталогом подарков и категориями</p>
                     </div>
                 </div>
                 <button className={styles.primaryButton} onClick={handleAddNew}>
                     <Plus size={18} />
-                    Add Gift
+                    Добавить подарок
                 </button>
             </div>
 
@@ -190,19 +193,19 @@ export default function GiftsAdminPage() {
             <div className={styles.statsGrid}>
                 <div className={styles.statCard}>
                     <span className={styles.statValue}>{gifts.length}</span>
-                    <span className={styles.statLabel}>Total Gifts</span>
+                    <span className={styles.statLabel}>Всего подарков</span>
                 </div>
                 <div className={styles.statCard}>
                     <span className={styles.statValue}>{gifts.filter(g => g.is_active).length}</span>
-                    <span className={styles.statLabel}>Active</span>
+                    <span className={styles.statLabel}>Активных</span>
                 </div>
                 <div className={styles.statCard}>
                     <span className={styles.statValue}>{gifts.filter(g => g.is_premium).length}</span>
-                    <span className={styles.statLabel}>Premium</span>
+                    <span className={styles.statLabel}>Премиум</span>
                 </div>
                 <div className={styles.statCard}>
                     <span className={styles.statValue}>{gifts.reduce((acc, g) => acc + g.times_sent, 0)}</span>
-                    <span className={styles.statLabel}>Total Sent</span>
+                    <span className={styles.statLabel}>Всего отправлено</span>
                 </div>
             </div>
 
@@ -218,7 +221,7 @@ export default function GiftsAdminPage() {
                                         alt={gift.name}
                                         className={styles.giftImage}
                                         onError={(e) => {
-                                            (e.target as HTMLImageElement).src = "https://placehold.co/80x80/png?text=🎁";
+                                            (e.target as HTMLImageElement).src = FALLBACK_AVATAR;
                                         }}
                                     />
                                 ) : (
@@ -266,17 +269,17 @@ export default function GiftsAdminPage() {
 
             {/* Categories Section */}
             <div className={styles.sectionHeader} style={{ marginTop: "40px" }}>
-                <h2>Categories</h2>
+                <h2>Категории</h2>
             </div>
             <div className={styles.tableContainer}>
                 <table className={styles.table}>
                     <thead>
                         <tr>
-                            <th>Icon</th>
-                            <th>Name</th>
-                            <th>Description</th>
-                            <th>Order</th>
-                            <th>Status</th>
+                            <th>Иконка</th>
+                            <th>Название</th>
+                            <th>Описание</th>
+                            <th>Порядок</th>
+                            <th>Статус</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -288,7 +291,7 @@ export default function GiftsAdminPage() {
                                 <td>{cat.sort_order}</td>
                                 <td>
                                     <span className={cat.is_active ? styles.statusActive : styles.statusInactive}>
-                                        {cat.is_active ? "Active" : "Inactive"}
+                                        {cat.is_active ? "Активен" : "Неактивен"}
                                     </span>
                                 </td>
                             </tr>
@@ -302,7 +305,7 @@ export default function GiftsAdminPage() {
                 <div className={styles.modalOverlay}>
                     <div className={styles.modal} style={{ maxWidth: "600px" }}>
                         <div className={styles.modalHeader}>
-                            <h2>{editingGift ? "Edit Gift" : "Add New Gift"}</h2>
+                            <h2>{editingGift ? "Редактировать подарок" : "Добавить подарок"}</h2>
                             <button className={styles.closeButton} onClick={() => setShowModal(false)}>
                                 <X size={20} />
                             </button>
@@ -315,18 +318,18 @@ export default function GiftsAdminPage() {
                             <div className={styles.formGrid}>
                                 {/* Name */}
                                 <div className={styles.formGroup}>
-                                    <label>Name *</label>
+                                    <label>Название *</label>
                                     <input
                                         type="text"
                                         value={formData.name}
                                         onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                                        placeholder="Gift name"
+                                        placeholder="Название подарка"
                                     />
                                 </div>
 
                                 {/* Price */}
                                 <div className={styles.formGroup}>
-                                    <label>Price (Stars) *</label>
+                                    <label>Цена (Stars) *</label>
                                     <input
                                         type="number"
                                         value={formData.price}
@@ -337,18 +340,18 @@ export default function GiftsAdminPage() {
 
                                 {/* Description */}
                                 <div className={styles.formGroup} style={{ gridColumn: "1 / -1" }}>
-                                    <label>Description</label>
+                                    <label>Описание</label>
                                     <textarea
                                         value={formData.description}
                                         onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                                        placeholder="Gift description"
+                                        placeholder="Описание подарка"
                                         rows={2}
                                     />
                                 </div>
 
                                 {/* Image Upload */}
                                 <div className={styles.formGroup} style={{ gridColumn: "1 / -1" }}>
-                                    <label>Image</label>
+                                    <label>Изображение</label>
                                     <div className={styles.imageUploadContainer}>
                                         {formData.image_url ? (
                                             <img
@@ -359,12 +362,12 @@ export default function GiftsAdminPage() {
                                         ) : (
                                             <div className={styles.uploadPlaceholder}>
                                                 <ImageIcon size={32} />
-                                                <span>No image</span>
+                                                <span>Нет изображения</span>
                                             </div>
                                         )}
                                         <label className={styles.uploadButton}>
                                             <Upload size={16} />
-                                            Upload
+                                            Загрузить
                                             <input
                                                 type="file"
                                                 accept="image/*"
@@ -377,19 +380,19 @@ export default function GiftsAdminPage() {
                                         type="text"
                                         value={formData.image_url}
                                         onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
-                                        placeholder="Or paste image URL"
+                                        placeholder="Или вставьте URL изображения"
                                         style={{ marginTop: "8px" }}
                                     />
                                 </div>
 
                                 {/* Category */}
                                 <div className={styles.formGroup}>
-                                    <label>Category</label>
+                                    <label>Категория</label>
                                     <select
                                         value={formData.category_id}
                                         onChange={(e) => setFormData(prev => ({ ...prev, category_id: e.target.value }))}
                                     >
-                                        <option value="">No category</option>
+                                        <option value="">Без категории</option>
                                         {categories.map(cat => (
                                             <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
                                         ))}
@@ -398,7 +401,7 @@ export default function GiftsAdminPage() {
 
                                 {/* Sort Order */}
                                 <div className={styles.formGroup}>
-                                    <label>Sort Order</label>
+                                    <label>Порядок сортировки</label>
                                     <input
                                         type="number"
                                         value={formData.sort_order}
@@ -425,7 +428,7 @@ export default function GiftsAdminPage() {
                                             checked={formData.is_premium}
                                             onChange={(e) => setFormData(prev => ({ ...prev, is_premium: e.target.checked }))}
                                         />
-                                        Premium
+                                        Премиум
                                     </label>
                                 </div>
                                 <div className={styles.formGroup}>
@@ -435,7 +438,7 @@ export default function GiftsAdminPage() {
                                             checked={formData.is_animated}
                                             onChange={(e) => setFormData(prev => ({ ...prev, is_animated: e.target.checked }))}
                                         />
-                                        Animated
+                                        Анимированный
                                     </label>
                                 </div>
                                 <div className={styles.formGroup}>
@@ -445,7 +448,7 @@ export default function GiftsAdminPage() {
                                             checked={formData.is_limited}
                                             onChange={(e) => setFormData(prev => ({ ...prev, is_limited: e.target.checked }))}
                                         />
-                                        Limited Edition
+                                        Лимитированный
                                     </label>
                                 </div>
                             </div>
@@ -455,7 +458,7 @@ export default function GiftsAdminPage() {
                                 className={styles.secondaryButton}
                                 onClick={() => setShowModal(false)}
                             >
-                                Cancel
+                                Отмена
                             </button>
                             <button
                                 className={styles.primaryButton}
@@ -463,15 +466,16 @@ export default function GiftsAdminPage() {
                                 disabled={saving}
                             >
                                 {saving ? (
-                                    <><Loader2 size={16} className={styles.spinner} /> Saving...</>
+                                    <><Loader2 size={16} className={styles.spinner} /> Сохранение...</>
                                 ) : (
-                                    <><Save size={16} /> Save Gift</>
+                                    <><Save size={16} /> Сохранить подарок</>
                                 )}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

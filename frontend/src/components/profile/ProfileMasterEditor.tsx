@@ -6,6 +6,7 @@ import { Camera, Plus, Trash2, Shield, EyeOff, MapPinOff, Calendar, Sparkles, Wa
 
 import { useTelegram } from '@/lib/telegram';
 import { useUser } from '@/context/UserContext';
+import { authService } from '@/services/api';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 
@@ -14,9 +15,18 @@ interface PhotoSlot {
     url: string | null;
 }
 
+interface ProfileFormData {
+    name?: string;
+    age?: number;
+    gender?: string;
+    bio?: string;
+    photos?: string[];
+    [key: string]: unknown;
+}
+
 interface ProfileMasterEditorProps {
-    initialData?: any;
-    onSave?: (data: any) => void;
+    initialData?: ProfileFormData;
+    onSave?: (data: ProfileFormData) => void;
 }
 
 export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditorProps) => {
@@ -47,11 +57,61 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
         }
     }, [user]);
 
+    // Load real incognito & visibility from API
+    useEffect(() => {
+        authService.getIncognitoStatus()
+            .then((data) => { if (data && typeof data === 'object' && 'enabled' in data) setIncognito((data as { enabled: boolean }).enabled); })
+            .catch((e) => console.warn('Operation failed:', e));
+        authService.getVisibilitySettings()
+            .then((data) => {
+                if (data && typeof data === 'object') {
+                    const vis = data as { show_age?: boolean; show_distance?: boolean };
+                    if (vis.show_age !== undefined) setHideAge(!vis.show_age);
+                    if (vis.show_distance !== undefined) setHideDistance(!vis.show_distance);
+                }
+            })
+            .catch((e) => console.warn('Operation failed:', e));
+    }, []);
+
     const handleUXToggle = (key: keyof typeof uxPrefs) => {
         const newVal = !uxPrefs[key];
         setUxPrefs(prev => ({ ...prev, [key]: newVal }));
         updateUXPreferences({ [key]: newVal });
         hapticFeedback.selection();
+    };
+
+    const handleIncognitoToggle = async () => {
+        const newVal = !incognito;
+        setIncognito(newVal);
+        hapticFeedback.selection();
+        try {
+            if (newVal) await authService.enableIncognito();
+            else await authService.disableIncognito();
+        } catch {
+            setIncognito(!newVal);
+        }
+    };
+
+    const handleHideAgeToggle = async () => {
+        const newVal = !hideAge;
+        setHideAge(newVal);
+        hapticFeedback.selection();
+        try {
+            await authService.updateVisibilitySettings({ show_age: !newVal });
+        } catch {
+            setHideAge(!newVal);
+        }
+    };
+
+    const handleHideDistanceToggle = async () => {
+        const newVal = !hideDistance;
+        setHideDistance(newVal);
+        hapticFeedback.selection();
+        try {
+            await authService.updateVisibilitySettings({ show_distance: !newVal });
+        } catch {
+            setHideDistance(!newVal);
+        }
     };
 
     const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
@@ -67,9 +127,6 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
                 setPhotos(newPhotos);
             }
             setSelectedInterests(initialData.interests || []);
-            setIncognito(initialData.is_incognito || false);
-            setHideAge(initialData.hide_age || false);
-            setHideDistance(initialData.hide_distance || false);
         }
     }, [initialData]);
 
@@ -230,7 +287,7 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
                     title="Режим Инкогнито"
                     desc="Видим только тем, кого лайкнул"
                     active={incognito}
-                    onToggle={() => { setIncognito(!incognito); hapticFeedback.selection(); }}
+                    onToggle={handleIncognitoToggle}
                 />
 
                 <SettingsToggle
@@ -238,7 +295,7 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
                     title="Скрыть возраст"
                     desc="Не показывать возраст в анкете"
                     active={hideAge}
-                    onToggle={() => { setHideAge(!hideAge); hapticFeedback.selection(); }}
+                    onToggle={handleHideAgeToggle}
                 />
 
                 <SettingsToggle
@@ -246,7 +303,7 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
                     title="Скрыть расстояние"
                     desc="Не показывать дистанцию"
                     active={hideDistance}
-                    onToggle={() => { setHideDistance(!hideDistance); hapticFeedback.selection(); }}
+                    onToggle={handleHideDistanceToggle}
                 />
             </div>
 
@@ -285,7 +342,15 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
     );
 };
 
-const SettingsToggle = ({ icon: Icon, title, desc, active, onToggle }: any) => (
+interface SettingsToggleProps {
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+    desc: string;
+    active: boolean;
+    onToggle: () => void;
+}
+
+const SettingsToggle = ({ icon: Icon, title, desc, active, onToggle }: SettingsToggleProps) => (
     <GlassCard
         className="p-4 flex items-center justify-between cursor-pointer group hover:bg-white/[0.05] transition-colors"
         onClick={onToggle}

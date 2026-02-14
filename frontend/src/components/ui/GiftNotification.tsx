@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Image from 'next/image';
 import { X, Sparkles, Star } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -40,7 +41,7 @@ export function GiftNotification({ data, onClose }: GiftNotificationProps) {
                     transition={{ type: "spring", damping: 20, stiffness: 300 }}
                     onClick={() => router.push("/gifts")}
                     className={cn(
-                        "fixed top-6 left-1/2 -translate-x-1/2 z-[9999] min-w-[320px] max-w-[90%] cursor-pointer group"
+                        "fixed top-6 left-1/2 -translate-x-1/2 z-[200] min-w-[320px] max-w-[90%] cursor-pointer group"
                     )}
                 >
                     <div className={cn(
@@ -51,8 +52,7 @@ export function GiftNotification({ data, onClose }: GiftNotificationProps) {
                         <div className="relative">
                             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-neon-pink to-neon-purple flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                                 {data?.gift_image ? (
-                                    /* eslint-disable-next-line @next/next/no-img-element */
-                                    <img src={data.gift_image} alt="Gift" className="w-4/5 h-4/5 object-contain" />
+                                    <Image src={data.gift_image} alt="Gift" className="w-4/5 h-4/5 object-contain" width={80} height={80} unoptimized />
                                 ) : <Sparkles size={20} className="text-white" />}
                             </div>
                             {data?.bonus_received && data.bonus_received > 0 && (

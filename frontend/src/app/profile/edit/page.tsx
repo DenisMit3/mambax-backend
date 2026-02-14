@@ -4,15 +4,17 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { authService } from "@/services/api";
-import { X, Camera } from "lucide-react";
+import { X, Camera, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useUser } from "@/context/UserContext";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
+import { Toast } from '@/components/ui/Toast';
 
 export default function EditProfilePage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
     // Form State
     const [name, setName] = useState("");
@@ -37,7 +39,11 @@ export default function EditProfilePage() {
     const updateUXPref = async (key: string, value: boolean) => {
         const newPrefs = { ...uxPreferences, [key]: value };
         setUxPreferences(newPrefs);
-        await updateUXPreferences(newPrefs);
+        try {
+            await updateUXPreferences(newPrefs);
+        } catch (e) {
+            console.warn('Failed to update UX preferences:', e);
+        }
     };
 
     // UI State
@@ -48,7 +54,7 @@ export default function EditProfilePage() {
             .then((data) => {
                 setName(data.name);
                 setBio(data.bio || "");
-                setGender(data.gender || "male"); // Default if missing
+                setGender(data.gender || "male");
                 setInterests(data.interests || []);
                 setPhotos(data.photos || []);
             })
@@ -66,10 +72,10 @@ export default function EditProfilePage() {
                 interests,
                 photos
             });
-            alert("Profile updated!");
+            setToast({message: "Профиль обновлён!", type: 'success'});
             router.push("/profile");
         } catch (err) {
-            alert("Failed to update profile");
+            setToast({message: "Не удалось обновить профиль", type: 'error'});
             console.error(err);
         } finally {
             setSaving(false);
@@ -81,18 +87,36 @@ export default function EditProfilePage() {
         const file = e.target.files[0];
 
         try {
-            // Upload
             const res = await authService.uploadPhoto(file);
-            // Update local state
             setPhotos(prev => [...prev, res.url]);
         } catch (err) {
-            alert("Upload failed");
+            setToast({message: "Ошибка загрузки", type: 'error'});
             console.error(err);
         }
     };
 
     const removePhoto = (index: number) => {
         setPhotos(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Перемещение фото влево (на позицию раньше)
+    const movePhotoLeft = (index: number) => {
+        if (index <= 0) return;
+        setPhotos(prev => {
+            const next = [...prev];
+            [next[index - 1], next[index]] = [next[index], next[index - 1]];
+            return next;
+        });
+    };
+
+    // Перемещение фото вправо (на позицию позже)
+    const movePhotoRight = (index: number) => {
+        if (index >= photos.length - 1) return;
+        setPhotos(prev => {
+            const next = [...prev];
+            [next[index], next[index + 1]] = [next[index + 1], next[index]];
+            return next;
+        });
     };
 
     const addInterest = () => {
@@ -102,7 +126,7 @@ export default function EditProfilePage() {
         setNewInterest("");
     };
 
-    if (loading) return <div className="flex-center h-screen">Loading...</div>;
+    if (loading) return <div className="flex-center h-screen">Загрузка...</div>;
 
     return (
         <div style={{ paddingBottom: '80px', minHeight: '100dvh', background: 'var(--background)' }}>
@@ -122,15 +146,15 @@ export default function EditProfilePage() {
                 height: '56px'
             }}>
                 <Link href="/profile" style={{ display: 'flex', alignItems: 'center', color: 'var(--primary)' }}>
-                    <span style={{ fontSize: '16px', fontWeight: 500 }}>Cancel</span>
+                    <span style={{ fontSize: '16px', fontWeight: 500 }}>Отмена</span>
                 </Link>
-                <h1 style={{ fontSize: '17px', fontWeight: 600, color: 'var(--foreground)' }}>Edit Profile</h1>
+                <h1 style={{ fontSize: '17px', fontWeight: 600, color: 'var(--foreground)' }}>Редактировать профиль</h1>
                 <button
                     onClick={handleSave}
                     disabled={saving}
                     style={{ fontSize: '16px', fontWeight: 600, color: 'var(--primary)' }}
                 >
-                    {saving ? "..." : "Done"}
+                    {saving ? "..." : "Готово"}
                 </button>
             </header>
 
@@ -140,9 +164,9 @@ export default function EditProfilePage() {
                 <section style={{ padding: '20px 16px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
 
-                        {/* Existing Photos */}
+                        {/* Existing Photos с кнопками перемещения */}
                         {photos.map((url, i) => (
-                            <div key={i} style={{
+                            <div key={url || `slot-${i}`} style={{
                                 position: 'relative',
                                 aspectRatio: '2/3',
                                 borderRadius: '12px',
@@ -151,8 +175,11 @@ export default function EditProfilePage() {
                             }}>
                                 <img
                                     src={url}
+                                    alt={`Фото ${i + 1}`}
                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
+
+                                {/* Кнопка удаления */}
                                 <button
                                     onClick={() => removePhoto(i)}
                                     style={{
@@ -166,11 +193,86 @@ export default function EditProfilePage() {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                        border: 'none',
+                                        cursor: 'pointer',
                                     }}
                                 >
                                     <X size={14} color="#000" />
                                 </button>
+
+                                {/* Номер позиции */}
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '6px',
+                                    left: '6px',
+                                    background: 'rgba(0,0,0,0.6)',
+                                    color: '#fff',
+                                    width: '22px',
+                                    height: '22px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                }}>
+                                    {i + 1}
+                                </div>
+
+                                {/* Кнопки перемещения внизу фото */}
+                                {photos.length > 1 && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        bottom: '6px',
+                                        left: '50%',
+                                        transform: 'translateX(-50%)',
+                                        display: 'flex',
+                                        gap: '4px',
+                                    }}>
+                                        {/* Кнопка "Влево" */}
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); movePhotoLeft(i); }}
+                                            disabled={i === 0}
+                                            aria-label="Переместить влево"
+                                            style={{
+                                                width: '28px',
+                                                height: '28px',
+                                                borderRadius: '50%',
+                                                background: i === 0 ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.6)',
+                                                border: 'none',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: i === 0 ? 'default' : 'pointer',
+                                                opacity: i === 0 ? 0.4 : 1,
+                                            }}
+                                        >
+                                            <ChevronLeft size={16} color="#fff" />
+                                        </button>
+
+                                        {/* Кнопка "Вправо" */}
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); movePhotoRight(i); }}
+                                            disabled={i === photos.length - 1}
+                                            aria-label="Переместить вправо"
+                                            style={{
+                                                width: '28px',
+                                                height: '28px',
+                                                borderRadius: '50%',
+                                                background: i === photos.length - 1 ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.6)',
+                                                border: 'none',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: i === photos.length - 1 ? 'default' : 'pointer',
+                                                opacity: i === photos.length - 1 ? 0.4 : 1,
+                                            }}
+                                        >
+                                            <ChevronRight size={16} color="#fff" />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ))}
 
@@ -195,7 +297,7 @@ export default function EditProfilePage() {
                             }}>
                                 <Camera size={20} color="white" />
                             </div>
-                            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>Add Photo</span>
+                            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>Добавить фото</span>
                             <input
                                 type="file"
                                 accept="image/*"
@@ -206,7 +308,7 @@ export default function EditProfilePage() {
 
                     </div>
                     <p style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-secondary)', textAlign: 'center' }}>
-                        Drag to reorder photos coming soon
+                        Используйте стрелки для изменения порядка фото
                     </p>
                 </section>
 
@@ -214,53 +316,53 @@ export default function EditProfilePage() {
                 <div style={{ padding: '0 16px 30px' }}>
 
                     <h3 style={{ textTransform: 'uppercase', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', paddingLeft: '4px' }}>
-                        About You
+                        О вас
                     </h3>
 
                     <div style={{ background: 'var(--surface)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
                         <div className="input-group" style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-                            <label style={{ width: '100px', fontWeight: 500 }}>Name</label>
+                            <label style={{ width: '100px', fontWeight: 500 }}>Имя</label>
                             <input
                                 type="text"
                                 value={name}
                                 onChange={e => setName(e.target.value)}
                                 style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '16px', outline: 'none' }}
-                                placeholder="Your Name"
+                                placeholder="Ваше имя"
                             />
                         </div>
 
                         <div className="input-group" style={{ padding: '12px 16px', display: 'flex', gap: '10px' }}>
-                            <label style={{ width: '100px', fontWeight: 500, paddingTop: '4px' }}>Bio</label>
+                            <label style={{ width: '100px', fontWeight: 500, paddingTop: '4px' }}>О себе</label>
                             <textarea
                                 value={bio}
                                 onChange={e => setBio(e.target.value)}
                                 style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '16px', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
                                 rows={4}
-                                placeholder="Describe yourself..."
+                                placeholder="Расскажите о себе..."
                             />
                         </div>
                     </div>
 
                     <h3 style={{ textTransform: 'uppercase', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', marginTop: '24px', paddingLeft: '4px' }}>
-                        Details
+                        Детали
                     </h3>
 
                     <div style={{ background: 'var(--surface)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
                         <div className="input-group" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center' }}>
-                            <label style={{ width: '100px', fontWeight: 500 }}>Gender</label>
+                            <label style={{ width: '100px', fontWeight: 500 }}>Пол</label>
                             <select
                                 value={gender}
                                 onChange={e => setGender(e.target.value)}
                                 style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '16px', outline: 'none' }}
                             >
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
+                                <option value="male">Мужской</option>
+                                <option value="female">Женский</option>
                             </select>
                         </div>
                     </div>
 
                     <h3 style={{ textTransform: 'uppercase', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', marginTop: '24px', paddingLeft: '4px' }}>
-                        Interests
+                        Интересы
                     </h3>
 
                     <div style={{
@@ -273,7 +375,7 @@ export default function EditProfilePage() {
                         gap: '8px'
                     }}>
                         {interests.map((tag, i) => (
-                            <span key={i} style={{
+                            <span key={tag} style={{
                                 background: 'rgba(255, 90, 39, 0.1)',
                                 color: 'var(--primary)',
                                 padding: '6px 12px',
@@ -294,7 +396,7 @@ export default function EditProfilePage() {
                                 type="text"
                                 value={newInterest}
                                 onChange={e => setNewInterest(e.target.value)}
-                                placeholder="+ Add Interest"
+                                placeholder="+ Добавить интерес"
                                 onKeyDown={e => e.key === 'Enter' && addInterest()}
                                 style={{
                                     background: 'transparent',
@@ -311,7 +413,8 @@ export default function EditProfilePage() {
                                     onClick={addInterest}
                                     style={{
                                         position: 'absolute', right: '4px',
-                                        color: 'var(--primary)', fontWeight: 700
+                                        color: 'var(--primary)', fontWeight: 700,
+                                        background: 'none', border: 'none', cursor: 'pointer',
                                     }}>
                                     +
                                 </button>
@@ -320,23 +423,23 @@ export default function EditProfilePage() {
                     </div>
 
                     <h3 style={{ textTransform: 'uppercase', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', marginTop: '24px', paddingLeft: '4px' }}>
-                        Interface Settings
+                        Настройки интерфейса
                     </h3>
                     <div style={{ background: 'var(--surface)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)', padding: '0 16px' }}>
                         <ToggleSwitch
-                            label="Sound Effects"
+                            label="Звуковые эффекты"
                             checked={uxPreferences.sounds_enabled}
                             onChange={(val) => updateUXPref('sounds_enabled', val)}
                         />
                         <div style={{ height: '1px', background: 'var(--border)' }} />
                         <ToggleSwitch
-                            label="Haptic Feedback"
+                            label="Вибрация"
                             checked={uxPreferences.haptic_enabled}
                             onChange={(val) => updateUXPref('haptic_enabled', val)}
                         />
                         <div style={{ height: '1px', background: 'var(--border)' }} />
                         <ToggleSwitch
-                            label="Reduced Motion"
+                            label="Уменьшить анимацию"
                             checked={uxPreferences.reduced_motion}
                             onChange={(val) => updateUXPref('reduced_motion', val)}
                         />
@@ -345,6 +448,7 @@ export default function EditProfilePage() {
                 </div>
 
             </div>
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

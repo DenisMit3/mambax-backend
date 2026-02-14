@@ -12,9 +12,16 @@ import { advancedApi, Event } from '@/services/advancedApi';
 
 type EventStatus = 'scheduled' | 'live' | 'completed' | 'cancelled';
 
+interface EventStats {
+  total_events?: number;
+  active_events?: number;
+  total_participants?: number;
+  [key: string]: unknown;
+}
+
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<EventStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -168,11 +175,11 @@ export default function EventsPage() {
 
   return (
     <div className="page">
-      <nav className="bc"><Link href="/admin"><Home size={14} /></Link><ChevronRight size={14} /><Link href="/admin/advanced"><Sparkles size={14} /></Link><ChevronRight size={14} /><span><Calendar size={14} />Events</span></nav>
+      <nav className="bc"><Link href="/admin"><Home size={14} /></Link><ChevronRight size={14} /><Link href="/admin/advanced"><Sparkles size={14} /></Link><ChevronRight size={14} /><span><Calendar size={14} />События</span></nav>
 
       <div className="header">
         <div><h1>Virtual Dating Events</h1><p>Create and manage online dating experiences</p></div>
-        <button className="btn pri" onClick={openCreateModal}><Plus size={18} />Create Event</button>
+        <button className="btn pri" onClick={openCreateModal}><Plus size={18} />Создать событие</button>
       </div>
 
       {stats && (
@@ -185,12 +192,12 @@ export default function EventsPage() {
       )}
 
       <div className="filters">
-        <div className="search"><Search size={18} /><input placeholder="Search events..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
+        <div className="search"><Search size={18} /><input placeholder="Поиск событий..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="all">All Status</option>
           <option value="scheduled">Scheduled</option>
           <option value="live">Live</option>
-          <option value="completed">Completed</option>
+          <option value="completed">Завершено</option>
           <option value="cancelled">Cancelled</option>
         </select>
         <button onClick={loadData}><RefreshCw size={16} className={loading ? 'spin' : ''} /></button>
@@ -199,13 +206,13 @@ export default function EventsPage() {
       {loading ? <div className="loading"><Loader2 className="spin" size={32} /></div> : (
         <div className="events-grid">
           {filtered.length === 0 ? (
-            <div className="empty"><Calendar size={48} /><p>No events found</p><button className="btn pri" onClick={openCreateModal}><Plus size={16} />Create Event</button></div>
+            <div className="empty"><Calendar size={48} /><p>No events found</p><button className="btn pri" onClick={openCreateModal}><Plus size={16} />Создать событие</button></div>
           ) : filtered.map((ev, i) => (
             <motion.div key={ev.id} className="event-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
               <div className="card-head">
                 <div className="type-icon">{getEventIcon(ev.type)}</div>
                 <span className={`status ${getStatusColor(ev.status)}`}>{ev.status}</span>
-                {ev.is_premium && <span className="premium"><Crown size={12} />Premium</span>}
+                {ev.is_premium && <span className="premium"><Crown size={12} />Премиум</span>}
               </div>
               <h3>{ev.name}</h3>
               <p className="type">{eventTypes.find(t => t.id === ev.type)?.name || ev.type}</p>
@@ -214,10 +221,10 @@ export default function EventsPage() {
                 <div><Users size={14} />{ev.registered}/{ev.max_participants}</div>
               </div>
               <div className="progress"><div style={{ width: `${(ev.registered / ev.max_participants) * 100}%` }} /></div>
-              <p className="host">Host: {ev.host || 'TBD'}</p>
+              <p className="host">Организатор: {ev.host || 'TBD'}</p>
               <div className="card-actions">
-                <button onClick={() => setSelectedEvent(ev)}><Eye size={14} />View</button>
-                <button onClick={() => openEditModal(ev)}><Edit2 size={14} />Edit</button>
+                <button onClick={() => setSelectedEvent(ev)}><Eye size={14} />Просмотр</button>
+                <button onClick={() => openEditModal(ev)}><Edit2 size={14} />Редактировать</button>
                 <button className="del" disabled={deletingId === ev.id} onClick={() => handleDelete(ev)}>
                   {deletingId === ev.id ? <Loader2 className="spin" size={14} /> : <Trash2 size={14} />}
                 </button>
@@ -232,7 +239,7 @@ export default function EventsPage() {
         {showModal && (
           <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeModal}>
             <motion.div className="modal" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={e => e.stopPropagation()}>
-              <div className="mhead"><h2>{editingEvent ? 'Edit Event' : 'Create Event'}</h2><button onClick={closeModal}><X size={20} /></button></div>
+              <div className="mhead"><h2>{editingEvent ? 'Edit Event' : 'Создать событие'}</h2><button onClick={closeModal}><X size={20} /></button></div>
               <form onSubmit={editingEvent ? handleEdit : handleCreate}>
                 <div className="field">
                   <label>Event Name *</label>
@@ -268,10 +275,10 @@ export default function EventsPage() {
                 </div>
                 {formErrors.submit && <div className="ferr">{formErrors.submit}</div>}
                 <div className="mfoot">
-                  <button type="button" className="btn sec" onClick={closeModal}>Cancel</button>
+                  <button type="button" className="btn sec" onClick={closeModal}>Отмена</button>
                   <button type="submit" className="btn pri" disabled={submitting}>
                     {submitting ? <Loader2 className="spin" size={16} /> : editingEvent ? <Edit2 size={16} /> : <Plus size={16} />}
-                    {editingEvent ? 'Save Changes' : 'Create Event'}
+                    {editingEvent ? 'Сохранить' : 'Создать событие'}
                   </button>
                 </div>
               </form>
@@ -298,8 +305,8 @@ export default function EventsPage() {
                 <div className="detail-grid">
                   <div><span>Start</span><b>{formatDate(selectedEvent.start_date)}</b></div>
                   <div><span>Registered</span><b>{selectedEvent.registered}/{selectedEvent.max_participants}</b></div>
-                  <div><span>Host</span><b>{selectedEvent.host || 'Not Assigned'}</b></div>
-                  <div><span>Type</span><b>{selectedEvent.is_premium ? 'Premium' : 'Free'}</b></div>
+                  <div><span>Организатор</span><b>{selectedEvent.host || 'Не назначен'}</b></div>
+                  <div><span>Тип</span><b>{selectedEvent.is_premium ? 'Премиум' : 'Бесплатный'}</b></div>
                 </div>
               </div>
             </motion.div>
@@ -357,7 +364,7 @@ export default function EventsPage() {
         .card-actions button:disabled{opacity:0.5;cursor:not-allowed}
         .empty{grid-column:1/-1;text-align:center;padding:60px;color:var(--text-muted)}
         .empty svg{margin-bottom:16px;opacity:0.5}
-        .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+        .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
         .modal{background:var(--admin-bg-secondary);border:1px solid var(--glass-border);border-radius:18px;width:100%;max-width:540px}
         .mhead{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--glass-border)}
         .mhead h2{font-size:17px;color:var(--text-primary);margin:0}

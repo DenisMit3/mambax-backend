@@ -10,23 +10,8 @@ import { useRouter } from 'next/navigation';
 import { useTelegram } from '@/lib/telegram';
 import { MatchModal } from '@/components/discovery/MatchModal';
 import { TelegramAuthError } from '@/components/auth/TelegramAuthError';
-
-// Debug overlay component for runtime diagnostics
-function DebugOverlay() {
-    const [logs, setLogs] = useState<any[]>([]);
-    useEffect(() => {
-        const interval = setInterval(() => {
-            try { setLogs(JSON.parse(localStorage.getItem('__debug_logs__') || '[]')); } catch(e){}
-        }, 500);
-        return () => clearInterval(interval);
-    }, []);
-    if (logs.length === 0) return null;
-    return (<div style={{position:'fixed',bottom:60,left:0,right:0,maxHeight:'40vh',overflow:'auto',background:'rgba(0,0,0,0.9)',color:'#0f0',fontSize:10,fontFamily:'monospace',zIndex:99999,padding:4}}>
-        {logs.map((l: any,i: number) => <div key={i}>[{l.hId||''}] {l.msg}: {JSON.stringify(l.data).slice(0,200)}</div>)}
-    </div>);
-}
-
-// FIX: Move API_BASE outside component to avoid recreation
+import { FALLBACK_AVATAR } from '@/lib/constants';
+import { Toast } from '@/components/ui/Toast'; outside component to avoid recreation
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 // FIX (UX): Deterministic hash function for stable compatibility scores
@@ -41,7 +26,7 @@ const hashCode = (str: string): number => {
 };
 
 const SmartDiscoveryEngine = dynamic(() => import('@/components/discovery/SmartDiscoveryEngine').then(mod => mod.SmartDiscoveryEngine), {
-    loading: () => <div className="h-screen w-full flex items-center justify-center bg-black text-white">Loading Discovery Engine...</div>,
+    loading: () => <div className="h-screen w-full flex items-center justify-center bg-black text-white">Загрузка...</div>,
     ssr: false // Discovery is highly client-dependent (geo, etc)
 });
 
@@ -50,12 +35,17 @@ export function HomeClient() {
     const queryClient = useQueryClient();
     const { user, hapticFeedback } = useTelegram(); // Assuming useTelegram provides user context or similar
     const [isAuth, setIsAuth] = useState(false);
-    const [matchData, setMatchData] = useState<{ isOpen: boolean; user?: any; partner?: any } | null>(null);
+    const [matchData, setMatchData] = useState<{ isOpen: boolean; user?: UserProfile; partner?: UserProfile } | null>(null);
+    
+    // Реальные данные: суперлайки и буст
+    const [superLikesLeft, setSuperLikesLeft] = useState(0);
+    const [boostActive, setBoostActive] = useState(false);
     
     // Telegram auth error handling states
     const [authError, setAuthError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
     const [isRetrying, setIsRetrying] = useState(false);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
     const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     
     // Max retry attempts for Telegram auth
@@ -72,14 +62,9 @@ export function HomeClient() {
 
     // Check authentication function - extracted for reuse
     const checkAuth = useCallback(async () => {
-        console.log("[Home] checkAuth started");
-        // #region agent log
-        const sendLog = (msg: string, data: any) => { try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg, data, hId:'HOME', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){} console.log('[DEBUG]', msg, data); };
-        sendLog('HOME_CHECK_AUTH_START', {url: typeof window !== 'undefined' ? window.location.href : 'ssr'});
-        // #endregion
         
         // Helper to check if profile is complete
-        const isProfileComplete = (profile: any): boolean => {
+        const isProfileComplete = (profile: { photos?: string[]; gender?: string; is_complete?: boolean }): boolean => {
             const hasPhotos = profile.photos && profile.photos.length > 0;
             const hasRealGender = profile.gender && profile.gender !== 'other';
             return profile.is_complete === true && hasPhotos && hasRealGender;
@@ -87,36 +72,20 @@ export function HomeClient() {
         
         // Priority 1: Check for existing valid token FIRST
         const hasToken = httpClient.isAuthenticated();
-        console.log("[Home] Token check:", hasToken);
-        // #region agent log
-        sendLog('HOME_TOKEN_CHECK', {hasToken});
-        // #endregion
         
         if (hasToken) {
             try {
                 const me = await authService.getMe();
-                console.log("[Home] Token valid, is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
-                // #region agent log
-                sendLog('HOME_PROFILE_DATA', {is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender, name: me.name, id: me.id});
-                // #endregion
                 
                 if (!isProfileComplete(me)) {
-                    console.log("[Home] Profile incomplete, redirecting to onboarding...");
-                    // #region agent log
-                    sendLog('HOME_REDIRECT_ONBOARDING', {reason: 'profile incomplete', is_complete: me.is_complete, photosCount: me.photos?.length, gender: me.gender});
-                    // #endregion
                     router.replace('/onboarding');
                     return;
                 }
                 
-                // #region agent log
-                sendLog('HOME_STAYING', {reason: 'profile complete'});
-                // #endregion
                 setIsAuth(true);
                 setAuthError(null);
                 return;
-            } catch (e: any) {
-                console.log("[Home] Token validation failed:", e);
+            } catch (e: unknown) {
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('token');
             }
@@ -124,21 +93,17 @@ export function HomeClient() {
 
         // Priority 2: No token - try Telegram Init Data (Native Flow)
         const initData = window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '';
-        try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'HOME_INITDATA_CHECK', data:{fromTg: (window.Telegram?.WebApp?.initData || '').length, fromSession: (sessionStorage.getItem('tg_init_data') || '').length, final: initData.length}, hId:'HOME', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
         if (initData && initData.trim()) {
             
             try {
-                console.log("[Home] Attempting Telegram login, retry:", retryCount);
                 setIsRetrying(true);
                 const loginResult = await authService.telegramLogin(initData);
-                console.log("[Home] Telegram login success, has_profile:", loginResult.has_profile);
                 
                 // FIX: Always verify actual profile state, not just has_profile flag
                 const me = await authService.getMe();
-                console.log("[Home] Profile check - is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
                 
                 if (!isProfileComplete(me)) {
-                    console.log("[Home] Profile incomplete, redirecting to onboarding...");
+                    router.replace('/onboarding');
                     router.replace('/onboarding');
                     return;
                 }
@@ -148,14 +113,13 @@ export function HomeClient() {
                 setRetryCount(0);
                 setIsRetrying(false);
                 return;
-            } catch (e: any) {
+            } catch (e: unknown) {
                 console.error("[Home] Telegram Login Failed:", e);
                 setIsRetrying(false);
                 
                 if (retryCount < MAX_RETRY_ATTEMPTS) {
                     const nextRetry = retryCount + 1;
                     setRetryCount(nextRetry);
-                    console.log(`[Home] Scheduling retry ${nextRetry}/${MAX_RETRY_ATTEMPTS} in ${1000 * nextRetry}ms`);
                     
                     retryTimeoutRef.current = setTimeout(() => {
                         checkAuth();
@@ -163,7 +127,7 @@ export function HomeClient() {
                     return;
                 }
                 
-                const errorMessage = e.message || e.data?.detail || '';
+                const errorMessage = (e instanceof Error ? e.message : '') || ((e as Record<string, unknown>)?.data as Record<string, unknown>)?.detail as string || '';
                 setAuthError(
                     errorMessage.toLowerCase().includes("auth_date") || errorMessage.toLowerCase().includes("expired")
                         ? "Данные Telegram устарели. Пожалуйста, перезапустите бот командой /start"
@@ -174,16 +138,13 @@ export function HomeClient() {
         }
 
         // No token and no Telegram data - redirect to login
-        console.log("[Home] No auth method available, redirecting to login...");
-        try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'HOME_NO_AUTH_REDIRECT', data:{initData: window?.Telegram?.WebApp?.initData?.length || 0, initDataRaw: (window?.Telegram?.WebApp?.initData || '').substring(0,50), hasTg: !!window?.Telegram, hasWA: !!window?.Telegram?.WebApp}, hId:'HOME', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
         router.replace('/auth/phone');
     }, [retryCount, router]);
 
     // Check authentication on mount
     useEffect(() => {
-        try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'HOME_MOUNT_EFFECT', data:{isAuth, hasCheckAuth: typeof checkAuth === 'function'}, hId:'HOME', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
-        checkAuth().catch((err: any) => {
-            try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'HOME_CHECKAUTH_CRASH', data:{err: String(err), msg: err?.message, stack: err?.stack?.slice(0,200)}, hId:'HOME', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
+        checkAuth().catch((err: unknown) => {
+            console.error('[Home] checkAuth crash:', err);
         });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
     
@@ -205,7 +166,7 @@ export function HomeClient() {
     });
 
     // Cached profiles for infinite loop effect - load from localStorage
-    const [cachedProfiles, setCachedProfiles] = useState<any[]>(() => {
+    const [cachedProfiles, setCachedProfiles] = useState<UserProfile[]>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('cachedProfiles_v3');
             if (saved) {
@@ -229,13 +190,35 @@ export function HomeClient() {
                         position.coords.longitude
                     ).catch(console.error);
                 },
-                (err) => console.log('Location access denied or unavailable', err),
+                (err) => { /* Location access denied or unavailable */ },
                 { timeout: 10000, maximumAge: 60000 }
             );
         }
     }, [isAuth]);
 
-    // 0.1 Check Profile Status (Onboarding Guard)
+    // 0.1 Загрузка данных суперлайков и буста
+    useEffect(() => {
+        if (!isAuth) return;
+        let cancelled = false;
+        const fetchExtra = async () => {
+            try {
+                const [superlikeInfo, boostStatus] = await Promise.all([
+                    authService.getSuperlikeInfo(),
+                    authService.getBoostStatus(),
+                ]);
+                if (!cancelled) {
+                    setSuperLikesLeft(superlikeInfo.remaining);
+                    setBoostActive(boostStatus.is_active);
+                }
+            } catch (e) {
+                if (!cancelled) console.error('[Home] Failed to fetch superlike/boost info', e);
+            }
+        };
+        fetchExtra();
+        return () => { cancelled = true; };
+    }, [isAuth]);
+
+    // 0.2 Check Profile Status (Onboarding Guard)
     const { data: me, error: meError } = useQuery({
         queryKey: ['me'],
         queryFn: authService.getMe,
@@ -246,10 +229,8 @@ export function HomeClient() {
 
     useEffect(() => {
         if (meError) {
-            const e = meError as any;
-            console.log("[Home] meError:", e?.response?.status, e?.status, e?.statusCode);
+            const e = meError as Error & { response?: { status?: number }; status?: number; statusCode?: number };
             if (e?.response?.status === 401 || e?.status === 401 || e?.statusCode === 401) {
-                console.log("[Home] Session expired (me), redirecting...");
                 localStorage.removeItem('accessToken');
                 router.replace('/auth/phone');
             }
@@ -258,7 +239,6 @@ export function HomeClient() {
 
     useEffect(() => {
         if (me) {
-            console.log("[Home] User loaded, is_complete:", me.is_complete, "photos:", me.photos?.length, "gender:", me.gender);
             
             // Critical: Check BOTH is_complete flag AND actual profile data
             const hasPhotos = me.photos && me.photos.length > 0;
@@ -266,7 +246,6 @@ export function HomeClient() {
             
             // Only redirect if profile is truly incomplete
             if (me.is_complete !== true || !hasPhotos || !hasRealGender) {
-                console.log("[Home] Profile incomplete, redirecting to onboarding...");
                 router.replace('/onboarding');
             }
         }
@@ -277,9 +256,6 @@ export function HomeClient() {
         queryKey: ['feed', filters],
         queryFn: async () => {
             try {
-                // Debug log
-                try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'FEED_FETCH_START', data:{filters}, hId:'FEED', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
-                
                 // In a real scenario, passing filters to getProfiles would be ideal.
                 // Currently API definition in services/api.ts might need update to support all filters.
                 // We pass what we can or rely on default backend logic for now.
@@ -287,16 +263,13 @@ export function HomeClient() {
                     limit: 50 // Increased for better UX
                 });
 
-                // Debug log
-                try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'FEED_FETCH_OK', data:{type: typeof res, isArray: Array.isArray(res), keys: res ? Object.keys(res as any).slice(0,5) : null, itemsLen: (res as any)?.items?.length}, hId:'FEED', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
-
                 // API returns paginated response: { items: [...], next_cursor, has_more }
-                const apiRes = res as any;
+                const apiRes = res as { items?: UserProfile[] };
                 const profiles = apiRes?.items || (Array.isArray(res) ? res : []);
 
                 // Helper to resolve photo URLs (uses API_BASE constant from top of file)
                 const resolvePhotoUrl = (url: string): string => {
-                    if (!url) return '/placeholder.jpg';
+                    if (!url) return FALLBACK_AVATAR;
                     // If it's a relative path to static files, prepend backend URL
                     if (url.startsWith('/static/') || url.startsWith('/uploads/')) {
                         return `${API_BASE}${url}`;
@@ -322,7 +295,6 @@ export function HomeClient() {
                 }));
             } catch (err) {
                 console.error("Feed fetch error", err);
-                try { const logs = JSON.parse(localStorage.getItem('__debug_logs__') || '[]'); logs.push({msg:'FEED_FETCH_ERR', data:{err: String(err), msg: (err as any)?.message, status: (err as any)?.response?.status || (err as any)?.status}, hId:'FEED', t: Date.now()}); localStorage.setItem('__debug_logs__', JSON.stringify(logs)); } catch(e){}
                 throw err;
             }
         },
@@ -333,10 +305,9 @@ export function HomeClient() {
 
     useEffect(() => {
         if (error) {
-            const e = error as any;
+            const e = error as Error & { response?: { status?: number }; status?: number; statusCode?: number; message?: string };
             // Check various common error structures
             if (e?.response?.status === 401 || e?.status === 401 || e?.statusCode === 401 || e?.message?.includes('401')) {
-                console.log("Session expired (feed), redirecting...");
                 localStorage.removeItem('accessToken');
                 router.replace('/auth/phone');
             }
@@ -357,7 +328,7 @@ export function HomeClient() {
                 hapticFeedback.impactOccurred('medium');
 
                 // Show Match Modal if it's a match
-                const result = _ as any;
+                const result = _ as { is_match?: boolean };
                 if (result.is_match) {
                     // Find the user we just swiped
                     const partner = profiles?.find(p => p.id === variables.userId);
@@ -416,7 +387,6 @@ export function HomeClient() {
     if (authError) {
         return (
             <>
-            <DebugOverlay />
             <TelegramAuthError 
                 error={authError}
                 onRetry={handleRetry}
@@ -431,7 +401,6 @@ export function HomeClient() {
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-black p-6">
-                <DebugOverlay />
                 <div className="relative">
                     <motion.div
                         className="w-20 h-20 border-2 border-primary-red/20 rounded-full border-t-primary-red"
@@ -454,7 +423,6 @@ export function HomeClient() {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-black text-white p-6 text-center">
-                <DebugOverlay />
                 <h2 className="text-xl font-bold mb-2">Ошибка подключения</h2>
                 <p className="text-gray-400 mb-6">Не удалось загрузить анкеты. Проверьте интернет.</p>
                 <button
@@ -472,7 +440,6 @@ export function HomeClient() {
     if (!profiles || profiles.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-black text-white p-6 text-center">
-                <DebugOverlay />
                 <motion.div
                     className="w-16 h-16 border-2 border-blue-500/30 rounded-full border-t-blue-500"
                     animate={{ rotate: 360 }}
@@ -485,7 +452,6 @@ export function HomeClient() {
 
     return (
         <>
-            <DebugOverlay />
             <SmartDiscoveryEngine
                 users={profiles}
                 filters={filters}
@@ -497,14 +463,21 @@ export function HomeClient() {
                         router.push(`/chat/${result.match_id}`);
                     } catch (e) {
                         console.error("Failed to start chat", e);
-                        alert("Не удалось начать чат");
+                        setToast({message: "Не удалось начать чат", type: 'error'});
                     }
                 }}
-                isPremium={false} // Get from real user state, hardcoded false for now is safer than true
-                superLikesLeft={5} // Get from BE
-                boostActive={false} // Get from BE
-                onUpgradeToPremium={() => router.push('/premium')}
-                onUseBoost={() => { }}
+                isPremium={me?.subscription_tier !== 'free'}
+                superLikesLeft={superLikesLeft}
+                boostActive={boostActive}
+                onUpgradeToPremium={() => router.push('/profile/premium')}
+                onUseBoost={async () => {
+                    try {
+                        await authService.activateBoost(1);
+                        setBoostActive(true);
+                    } catch (e) {
+                        console.error('Boost failed', e);
+                    }
+                }}
             />
 
             {matchData && (
@@ -526,6 +499,7 @@ export function HomeClient() {
                     matchName={matchData.partner?.name || 'Partner'}
                 />
             )}
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </>
     );
 }

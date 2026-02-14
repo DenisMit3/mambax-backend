@@ -24,10 +24,16 @@ interface Icebreaker {
 
 type SortField = 'text' | 'category' | 'usage_count' | 'success_rate';
 
+interface IcebreakerStats {
+  total?: number;
+  avg_success_rate?: number;
+  [key: string]: unknown;
+}
+
 export default function IcebreakersPage() {
     const [icebreakers, setIcebreakers] = useState<Icebreaker[]>([]);
     const [categories, setCategories] = useState<string[]>(['general', 'fun', 'deep']);
-    const [stats, setStats] = useState<any>(null);
+    const [stats, setStats] = useState<IcebreakerStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [showAIModal, setShowAIModal] = useState(false);
@@ -150,7 +156,7 @@ export default function IcebreakersPage() {
 
     return (
         <div className="page">
-            <nav className="bc"><Link href="/admin"><Home size={14} /></Link><ChevronRight size={14} /><Link href="/admin/advanced"><Sparkles size={14} /></Link><ChevronRight size={14} /><span><MessageSquare size={14} />Icebreakers</span></nav>
+            <nav className="bc"><Link href="/admin"><Home size={14} /></Link><ChevronRight size={14} /><Link href="/admin/advanced"><Sparkles size={14} /></Link><ChevronRight size={14} /><span><MessageSquare size={14} />Айсбрейкеры</span></nav>
 
             <div className="header">
                 <div><h1>Icebreaker Templates</h1><p>Manage conversation starters</p></div>
@@ -162,15 +168,15 @@ export default function IcebreakersPage() {
 
             {stats && (
                 <div className="stats">
-                    <div className="stat"><MessageSquare size={20} /><div><span>Total</span><b>{icebreakers.length}</b></div></div>
+                    <div className="stat"><MessageSquare size={20} /><div><span>Всего</span><b>{icebreakers.length}</b></div></div>
                     <div className="stat"><TrendingUp size={20} /><div><span>Uses</span><b>{stats.total_uses}</b></div></div>
-                    <div className="stat"><BarChart3 size={20} /><div><span>Success</span><b>{(stats.avg_success_rate * 100).toFixed(1)}%</b></div></div>
+                    <div className="stat"><BarChart3 size={20} /><div><span>Успешно</span><b>{(stats.avg_success_rate * 100).toFixed(1)}%</b></div></div>
                     <div className="stat"><Tag size={20} /><div><span>Popular</span><b>{stats.most_popular}</b></div></div>
                 </div>
             )}
 
             <div className="filters">
-                <div className="search"><Search size={18} /><input placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
+                <div className="search"><Search size={18} /><input placeholder="Поиск..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
                 <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
                     <option value="all">All Categories</option>
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -183,11 +189,11 @@ export default function IcebreakersPage() {
                     <table>
                         <thead><tr>
                             <th onClick={() => { setSortField('text'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>Text <ArrowUpDown size={12} /></th>
-                            <th>Category</th>
+                            <th>Категория</th>
                             <th>Tags</th>
                             <th onClick={() => { setSortField('usage_count'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>Uses <ArrowUpDown size={12} /></th>
-                            <th onClick={() => { setSortField('success_rate'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>Success <ArrowUpDown size={12} /></th>
-                            <th>Actions</th>
+                            <th onClick={() => { setSortField('success_rate'); setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>Успешно <ArrowUpDown size={12} /></th>
+                            <th>Действия</th>
                         </tr></thead>
                         <tbody>
                             {filtered.length === 0 ? <tr><td colSpan={6} className="empty">No icebreakers found</td></tr> : filtered.map(ib => (
@@ -225,7 +231,7 @@ export default function IcebreakersPage() {
                                     <div className="field"><label>Tags</label><input value={formData.tags} onChange={e => setFormData(p => ({ ...p, tags: e.target.value }))} placeholder="comma,separated" /></div>
                                 </div>
                                 {formErrors.submit && <div className="ferr">{formErrors.submit}</div>}
-                                <div className="mfoot"><button type="button" className="btn sec" onClick={closeModal}>Cancel</button><button type="submit" className="btn pri" disabled={submitting}>{submitting ? <Loader2 className="spin" size={16} /> : editingId ? <Edit2 size={16} /> : <Plus size={16} />}{editingId ? 'Save' : 'Create'}</button></div>
+                                <div className="mfoot"><button type="button" className="btn sec" onClick={closeModal}>Отмена</button><button type="submit" className="btn pri" disabled={submitting}>{submitting ? <Loader2 className="spin" size={16} /> : editingId ? <Edit2 size={16} /> : <Plus size={16} />}{editingId ? 'Сохранить' : 'Создать'}</button></div>
                             </form>
                         </motion.div>
                     </motion.div>
@@ -243,7 +249,7 @@ export default function IcebreakersPage() {
                             </div>
                             <div className="gen-list">
                                 {generated.length === 0 ? <div className="gen-empty">Click generate to create AI icebreakers</div> : generated.map((t, i) => (
-                                    <div key={i} className="gen-item"><p>{t}</p><div><button onClick={() => copy(t, `g${i}`)}>{copiedId === `g${i}` ? <Check size={14} /> : <Copy size={14} />}</button><button className="btn pri sm" onClick={() => saveGenerated(t)}><Plus size={14} />Save</button></div></div>
+                                    <div key={t || i} className="gen-item"><p>{t}</p><div><button onClick={() => copy(t, `g${i}`)}>{copiedId === `g${i}` ? <Check size={14} /> : <Copy size={14} />}</button><button className="btn pri sm" onClick={() => saveGenerated(t)}><Plus size={14} />Save</button></div></div>
                                 ))}
                             </div>
                         </motion.div>
@@ -258,7 +264,7 @@ export default function IcebreakersPage() {
                             <div className="mhead"><h2><Trash2 size={18} />Delete Icebreaker</h2><button onClick={() => setShowDeleteConfirm(null)}><X size={20} /></button></div>
                             <div className="confirm-body"><p>Are you sure you want to delete this icebreaker? This action cannot be undone.</p></div>
                             <div className="mfoot" style={{ padding: '14px 22px' }}>
-                                <button className="btn sec" onClick={() => setShowDeleteConfirm(null)}>Cancel</button>
+                                <button className="btn sec" onClick={() => setShowDeleteConfirm(null)}>Отмена</button>
                                 <button className="btn danger" onClick={() => handleDelete(showDeleteConfirm)} disabled={deletingId === showDeleteConfirm}>
                                     {deletingId === showDeleteConfirm ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />}Delete
                                 </button>
@@ -317,7 +323,7 @@ export default function IcebreakersPage() {
         .acts button:hover{color:var(--text-primary)}
         .acts .del:hover{color:var(--neon-red)}
         .empty{text-align:center;padding:40px;color:var(--text-muted)}
-        .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+        .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
         .modal{background:var(--admin-bg-secondary);border:1px solid var(--glass-border);border-radius:18px;width:100%;max-width:480px}
         .modal.lg{max-width:640px}
         .mhead{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--glass-border)}

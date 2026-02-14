@@ -79,12 +79,12 @@ function OverallStats({ stats, loading }: { stats: OverallStatsData | null; load
   const allOnline = stats.success_rate > 90;
 
   const items = [
-    { label: 'Total Transactions', value: stats.total_transactions >= 1000 ? `${(stats.total_transactions / 1000).toFixed(2)}K` : stats.total_transactions.toString(), icon: <CreditCard size={18} />, color: '#3b82f6' },
-    { label: 'Success Rate', value: `${stats.success_rate.toFixed(1)}%`, icon: <CheckCircle size={18} />, color: '#10b981' },
-    { label: 'Total Volume', value: `$${stats.total_volume >= 1000 ? `${(stats.total_volume / 1000).toFixed(1)}K` : stats.total_volume.toFixed(0)}`, icon: <DollarSign size={18} />, color: '#a855f7' },
-    { label: 'Failed Payments', value: stats.failed_count.toString(), icon: <XCircle size={18} />, color: '#ef4444' },
-    { label: 'Avg Response', value: `${Math.round(stats.avg_response_ms)}ms`, icon: <Zap size={18} />, color: '#f59e0b' },
-    { label: 'All Systems', value: allOnline ? 'Online' : 'Issues', icon: <Server size={18} />, color: allOnline ? '#10b981' : '#f59e0b' },
+    { label: 'Всего транзакций', value: stats.total_transactions >= 1000 ? `${(stats.total_transactions / 1000).toFixed(2)}K` : stats.total_transactions.toString(), icon: <CreditCard size={18} />, color: '#3b82f6' },
+    { label: 'Успешность', value: `${stats.success_rate.toFixed(1)}%`, icon: <CheckCircle size={18} />, color: '#10b981' },
+    { label: 'Общий объём', value: `$${stats.total_volume >= 1000 ? `${(stats.total_volume / 1000).toFixed(1)}K` : stats.total_volume.toFixed(0)}`, icon: <DollarSign size={18} />, color: '#a855f7' },
+    { label: 'Неудачные платежи', value: stats.failed_count.toString(), icon: <XCircle size={18} />, color: '#ef4444' },
+    { label: 'Среднее время', value: `${Math.round(stats.avg_response_ms)}мс`, icon: <Zap size={18} />, color: '#f59e0b' },
+    { label: 'Все системы', value: allOnline ? 'Онлайн' : 'Проблемы', icon: <Server size={18} />, color: allOnline ? '#10b981' : '#f59e0b' },
   ];
 
   return (
@@ -111,9 +111,9 @@ function OverallStats({ stats, loading }: { stats: OverallStatsData | null; load
 
 function GatewayCard({ gateway }: { gateway: Gateway }) {
   const statusColors = {
-    operational: { bg: 'rgba(16, 185, 129, 0.15)', color: '#10b981', label: 'Operational' },
-    degraded: { bg: 'rgba(249, 115, 22, 0.15)', color: '#f97316', label: 'Degraded' },
-    down: { bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', label: 'Down' }
+    operational: { bg: 'rgba(16, 185, 129, 0.15)', color: '#10b981', label: 'Работает' },
+    degraded: { bg: 'rgba(249, 115, 22, 0.15)', color: '#f97316', label: 'Деградация' },
+    down: { bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', label: 'Недоступен' }
   };
 
   const status = statusColors[gateway.status];
@@ -138,7 +138,7 @@ function GatewayCard({ gateway }: { gateway: Gateway }) {
         <Activity size={16} className="text-emerald-500 animate-pulse" />
         <span className="text-sm font-semibold text-[var(--admin-text-primary)]">{ping}ms</span>
         <span className={`text-xs ml-auto ${ping < 300 ? 'text-emerald-500' : ping < 500 ? 'text-orange-500' : 'text-red-500'}`}>
-          {ping < 300 ? 'Fast' : ping < 500 ? 'Moderate' : 'Slow'}
+          {ping < 300 ? 'Быстро' : ping < 500 ? 'Средне' : 'Медленно'}
         </span>
       </div>
 
@@ -215,12 +215,12 @@ function FailedPaymentsTable({ payments, onRetry, retryingId }: { payments: Fail
     <GlassCard className="p-6">
       <div className="flex justify-between items-start mb-6">
         <div>
-          <h2 className="text-lg font-semibold text-[var(--admin-text-primary)] mb-1">Failed Payments</h2>
-          <p className="text-sm text-[var(--admin-text-muted)]">Recent failed transactions requiring attention</p>
+          <h2 className="text-lg font-semibold text-[var(--admin-text-primary)] mb-1">Неудачные платежи</h2>
+          <p className="text-sm text-[var(--admin-text-muted)]">Недавние неудачные транзакции, требующие внимания</p>
         </div>
         <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 text-xs text-[var(--admin-text-secondary)] hover:text-[var(--admin-text-primary)] transition-colors">
           <RefreshCw size={14} />
-          Refresh
+          Обновить
         </button>
       </div>
 
@@ -228,19 +228,19 @@ function FailedPaymentsTable({ payments, onRetry, retryingId }: { payments: Fail
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-[var(--admin-glass-border)]">
-              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider">User</th>
-              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider">Amount</th>
-              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider">Gateway</th>
-              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider">Error</th>
-              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider">Retries</th>
-              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider text-right">Action</th>
+              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider">Пользователь</th>
+              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider">Сумма</th>
+              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider">Шлюз</th>
+              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider">Ошибка</th>
+              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider">Попытки</th>
+              <th className="pb-3 text-xs font-semibold text-[var(--admin-text-muted)] uppercase tracking-wider text-right">Действие</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--admin-glass-border)]">
             {payments.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-sm text-[var(--admin-text-muted)]">
-                  No failed payments — all clear! ✨
+                  Нет неудачных платежей — всё чисто! ✨
                 </td>
               </tr>
             ) : payments.map((payment) => (
@@ -283,7 +283,7 @@ function FailedPaymentsTable({ payments, onRetry, retryingId }: { payments: Fail
                     disabled={payment.retryCount >= 3 || retryingId === payment.id}
                   >
                     <RefreshCw size={12} className={retryingId === payment.id ? 'animate-spin' : ''} />
-                    {retryingId === payment.id ? '...' : 'Retry'}
+                    {retryingId === payment.id ? '...' : 'Повторить'}
                   </button>
                 </td>
               </tr>
@@ -308,7 +308,7 @@ function ErrorBlock({ message, onRetry }: { message: string; onRetry: () => void
         className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-500 text-sm font-medium hover:bg-blue-500 hover:text-white transition-all"
       >
         <RefreshCw size={14} />
-        Retry
+        Повторить
       </button>
     </GlassCard>
   );
@@ -331,25 +331,32 @@ export default function PaymentGatewayPage() {
         adminApi.monetization.payments.getGateways(),
         adminApi.monetization.payments.getFailedPayments(),
       ]);
-      setGateways((gatewaysRes as any).gateways ?? []);
-      setStats((gatewaysRes as any).stats ?? null);
-      setFailedPayments((failedRes as any).payments ?? []);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load payment data');
+      const typedGatewaysRes = gatewaysRes as { gateways?: Gateway[]; stats?: OverallStatsData | null };
+      const typedFailedRes = failedRes as { payments?: FailedPayment[] };
+      setGateways(typedGatewaysRes.gateways ?? []);
+      setStats(typedGatewaysRes.stats ?? null);
+      setFailedPayments(typedFailedRes.payments ?? []);
+    } catch (e: unknown) {
+      const err = e as Error;
+      setError(err?.message || 'Не удалось загрузить данные платежей');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
+    let cancelled = false;
+    fetchData().then(() => {
+      if (cancelled) return;
+    });
+    return () => { cancelled = true; };
   }, [fetchData]);
 
   // Перезагрузка только failed payments
   const refetchFailed = useCallback(async () => {
     try {
       const res = await adminApi.monetization.payments.getFailedPayments();
-      setFailedPayments((res as any).payments ?? []);
+      setFailedPayments((res as { payments?: FailedPayment[] }).payments ?? []);
     } catch {
       // Тихо — основные данные уже загружены
     }
@@ -378,8 +385,8 @@ export default function PaymentGatewayPage() {
       {/* Header */}
       <div className={styles.headerSection}>
         <div className={styles.headerContent}>
-          <h1 className={styles.headerTitle}>Payment Gateway Monitor</h1>
-          <p className={styles.headerDescription}>Real-time monitoring of payment processing systems</p>
+          <h1 className={styles.headerTitle}>Мониторинг платёжных шлюзов</h1>
+          <p className={styles.headerDescription}>Мониторинг систем обработки платежей в реальном времени</p>
         </div>
         {!loading && !error && (
           <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${
@@ -390,7 +397,7 @@ export default function PaymentGatewayPage() {
               : 'bg-red-500/10 border border-red-500/20 text-red-500'
           }`}>
             <ShieldCheck size={18} />
-            <span>{systemStatus === 'operational' ? 'All Systems Operational' : systemStatus === 'degraded' ? 'Degraded Performance' : 'System Issues'}</span>
+            <span>{systemStatus === 'operational' ? 'Все системы работают' : systemStatus === 'degraded' ? 'Снижение производительности' : 'Проблемы с системой'}</span>
           </div>
         )}
       </div>

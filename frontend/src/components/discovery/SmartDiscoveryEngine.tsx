@@ -6,6 +6,7 @@ import { Heart, MessageCircle, SlidersHorizontal, Zap, Grid, Layers } from 'luci
 import { UserProfile } from '@/services/api';
 import { ChevronDown, MapPin, Briefcase, GraduationCap, Ruler, Baby, Cigarette, Wine, Star as StarIcon, X } from 'lucide-react'; // Added icons for profile details
 import Image from 'next/image'; // PERF-017: Optimized images
+import { FALLBACK_AVATAR } from '@/lib/constants';
 
 // --- Types ---
 interface User extends UserProfile {
@@ -16,13 +17,24 @@ interface User extends UserProfile {
     isOnline?: boolean;
     is_online?: boolean; // API returns snake_case
     verificationBadge?: 'verified' | 'premium' | 'none';
+    height?: string;
+    work?: string;
+    education?: string;
+    interests?: string[];
+}
+
+interface DiscoveryFilters {
+    ageRange?: [number, number];
+    distance?: number;
+    gender?: string;
+    [key: string]: unknown;
 }
 
 interface SmartDiscoveryEngineProps {
     users: User[];
-    filters: any;
+    filters: DiscoveryFilters;
     onSwipe: (userId: string, direction: 'like' | 'pass' | 'superlike') => void;
-    onFilterChange: (filters: any) => void;
+    onFilterChange: (filters: DiscoveryFilters) => void;
     onStartChat?: (userId: string) => void;
     isPremium: boolean;
     superLikesLeft: number;
@@ -55,20 +67,14 @@ const formatLastSeen = (lastSeen?: string | Date): string => {
     return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 };
 
-// --- Mock Data for Infinite Demo ---
-const DEMO_USERS: any[] = [
-    { id: 'demo1', name: 'Арина', age: 19, photos: ['https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&auto=format&fit=crop'], bio: 'Студентка, люблю спонтанные поездки ✈️', distance: 2, is_verified: true, gender: 'female', role: 'user' },
-    { id: 'demo2', name: 'Екатерина', age: 25, photos: ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=800&auto=format&fit=crop'], bio: 'Графический дизайнер 🎨 Ищу вдохновение', distance: 5, is_verified: false, gender: 'female', role: 'user' },
-    { id: 'demo3', name: 'Максим', age: 31, photos: ['https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=800&auto=format&fit=crop'], bio: 'Фотограф и путешественник 📸', distance: 1, is_verified: true, gender: 'male', role: 'user' },
-];
-
 export function SmartDiscoveryEngine({
     users,
     onSwipe,
     onStartChat,
+    onFilterChange,
 }: SmartDiscoveryEngineProps) {
-    // Falls back to demo users if list is empty
-    const activeUsers = (users && users.length > 0) ? users : (DEMO_USERS as User[]);
+    // Без фолбэка на демо-данные — показываем реальных пользователей или пустой список
+    const activeUsers = (users && users.length > 0) ? users : [];
 
     const [currentIndex, setCurrentIndex] = useState(0);
     const [viewMode, setViewMode] = useState<'stack' | 'grid'>('stack');
@@ -162,7 +168,7 @@ export function SmartDiscoveryEngine({
     }, [currentProfile, isAnimating, expandedProfile, onSwipe, controls]);
 
     // PERF-010: Мемоизация handleDragEnd
-    const handleDragEnd = useCallback(async (event: any, info: PanInfo) => {
+    const handleDragEnd = useCallback(async (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
         if (isAnimating) return;
 
         const threshold = 100;
@@ -202,10 +208,10 @@ export function SmartDiscoveryEngine({
                     {viewMode === 'stack' ? <Grid size={18} /> : <Layers size={18} />}
                 </button>
                 <h1 className="text-xl font-bold text-white tracking-wide drop-shadow-md">
-                    {viewMode === 'stack' ? 'Знакомства' : 'Сканнер'}
+                    {viewMode === 'stack' ? 'Знакомства' : 'Сканер'}
                 </h1>
                 <button
-                    onClick={() => { }} // Hook up filter later
+                    onClick={() => onFilterChange({})}
                     className="w-8 h-8 flex items-center justify-center text-white pointer-events-auto active:scale-95 transition-transform"
                 >
                     <SlidersHorizontal size={24} />
@@ -235,7 +241,7 @@ export function SmartDiscoveryEngine({
                             >
                                 {/* PERF-017: Optimized grid images */}
                                 <Image 
-                                    src={user.photos?.[0] || '/placeholder.jpg'} 
+                                    src={user.photos?.[0] || FALLBACK_AVATAR}
                                     alt={user.name || ''}
                                     fill
                                     sizes="(max-width: 768px) 50vw, 200px"
@@ -278,7 +284,7 @@ export function SmartDiscoveryEngine({
                                 }}
                             >
                                 <Image
-                                    src={nextProfile.photos?.[0] || '/placeholder.jpg'}
+                                    src={nextProfile.photos?.[0] || FALLBACK_AVATAR}
                                     alt={nextProfile.name || ''}
                                     fill
                                     sizes="100vw"
@@ -301,24 +307,27 @@ export function SmartDiscoveryEngine({
                         >
                             {/* 1. Blurred Background Layer - Optimized */}
                             <div className="absolute inset-0 w-full h-full">
-                                <img
-                                    src={currentProfile.photos?.[0] || '/placeholder.jpg'}
+                                <Image
+                                    src={currentProfile.photos?.[0] || FALLBACK_AVATAR}
                                     className="w-full h-full object-cover blur-3xl opacity-40 pointer-events-none"
                                     alt=""
                                     aria-hidden="true"
+                                    fill
+                                    unoptimized
                                 />
                                 <div className="absolute inset-0 bg-black/30" />
                             </div>
 
                             {/* 2. Main Photo - High priority loading */}
                             <div className="relative w-full h-full flex items-center justify-center z-10">
-                                <img
-                                    src={currentProfile.photos?.[0] || '/placeholder.jpg'}
+                                <Image
+                                    src={currentProfile.photos?.[0] || FALLBACK_AVATAR}
                                     className="w-full h-full object-contain shadow-2xl pointer-events-none select-none drop-shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
                                     alt={currentProfile.name}
                                     draggable={false}
                                     loading="eager"
-                                    fetchPriority="high"
+                                    fill
+                                    unoptimized
                                 />
                             </div>
 
@@ -440,10 +449,12 @@ export function SmartDiscoveryEngine({
 
                                 {/* Main Photo (Parallax-ish) */}
                                 <div className="relative h-[60vh] w-full">
-                                    <img
-                                        src={expandedProfile.photos?.[0] || '/placeholder.jpg'}
+                                    <Image
+                                        src={expandedProfile.photos?.[0] || FALLBACK_AVATAR}
                                         className="w-full h-full object-cover"
-                                        alt=""
+                                        alt={expandedProfile.name || 'Фото профиля'}
+                                        fill
+                                        unoptimized
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
 
@@ -470,7 +481,7 @@ export function SmartDiscoveryEngine({
                                     <div>
                                         <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-3">Интересы</h3>
                                         <div className="flex flex-wrap gap-2">
-                                            {['Спорт', 'Путешествия', 'Музыка', 'IT'].map(tag => ( // Mock tags if missing
+                                            {(expandedProfile.interests && expandedProfile.interests.length > 0 ? expandedProfile.interests : ['Не указаны']).map(tag => (
                                                 <span key={tag} className="px-4 py-2 bg-white/5 border border-white/10 rounded-full text-white text-sm font-semibold">
                                                     {tag}
                                                 </span>
@@ -484,21 +495,21 @@ export function SmartDiscoveryEngine({
                                             <Ruler className="text-blue-400" />
                                             <div>
                                                 <p className="text-white/50 text-xs">Рост</p>
-                                                <p className="text-white font-bold">175 см</p>
+                                                <p className="text-white font-bold">{expandedProfile.height ? `${expandedProfile.height} см` : '—'}</p>
                                             </div>
                                         </div>
                                         <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3">
                                             <Briefcase className="text-purple-400" />
                                             <div>
                                                 <p className="text-white/50 text-xs">Работа</p>
-                                                <p className="text-white font-bold">Дизайнер</p>
+                                                <p className="text-white font-bold">{expandedProfile.work || '—'}</p>
                                             </div>
                                         </div>
                                         <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3">
                                             <GraduationCap className="text-yellow-400" />
                                             <div>
                                                 <p className="text-white/50 text-xs">Образование</p>
-                                                <p className="text-white font-bold">Высшее</p>
+                                                <p className="text-white font-bold">{expandedProfile.education || '—'}</p>
                                             </div>
                                         </div>
                                         <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3">
@@ -513,7 +524,7 @@ export function SmartDiscoveryEngine({
                                     {/* More Photos */}
                                     <div className="space-y-4">
                                         {expandedProfile.photos?.slice(1).map((photo, i) => (
-                                            <img key={i} src={photo} className="w-full rounded-3xl" alt="" />
+                                            <Image key={photo} src={photo} className="w-full rounded-3xl" alt={`${expandedProfile.name || 'Профиль'} — фото ${i + 2}`} width={400} height={500} unoptimized />
                                         ))}
                                     </div>
                                 </div>

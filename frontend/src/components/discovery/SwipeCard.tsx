@@ -57,7 +57,7 @@ export const SwipeCard = ({
         haptic.selection();
     };
 
-    const handleDragEnd = (event: any, info: PanInfo) => {
+    const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
         setIsDragging(false);
         const threshold = 150;
 

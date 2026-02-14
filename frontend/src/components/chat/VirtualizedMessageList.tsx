@@ -8,6 +8,7 @@ import { useRef, useEffect, memo, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion } from 'framer-motion';
 import { Check, CheckCheck, Play, Pause } from 'lucide-react';
+import { FALLBACK_AVATAR } from '@/lib/constants';
 
 interface Message {
     id: string;
@@ -62,8 +63,8 @@ const MessageItem = memo(function MessageItem({
             {/* Avatar */}
             {showAvatar && (
                 <img
-                    src={otherParticipantPhoto || '/placeholder.svg?height=32&width=32'}
-                    alt=""
+                    src={otherParticipantPhoto || FALLBACK_AVATAR}
+                    alt="Изображение в сообщении"
                     className="w-8 h-8 rounded-full object-cover mr-2 mt-auto"
                 />
             )}
@@ -131,7 +132,7 @@ const MessageItem = memo(function MessageItem({
                         <div className="flex flex-wrap gap-1 mt-2">
                             {msg.reactions.map((reaction, idx) => (
                                 <div
-                                    key={idx}
+                                    key={reaction.emoji || idx}
                                     className="bg-black/20 rounded-full px-2 py-1 text-xs"
                                 >
                                     {reaction.emoji}

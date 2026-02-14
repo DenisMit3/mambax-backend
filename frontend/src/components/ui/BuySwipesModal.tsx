@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Zap, Star, Sparkles, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { authService } from "@/services/api";
 
 interface BuySwipesModalProps {
     isOpen: boolean;
@@ -15,7 +16,7 @@ interface BuySwipesModalProps {
     mode?: 'swipes' | 'superlike' | 'boost';
 }
 
-const PRICING = {
+const FALLBACK_PRICING = {
     swipes: { price: 10, count: 10, label: "Swipe Pack", icon: "❤️", gradient: "from-neon-pink to-neon-red" },
     superlike: { price: 5, count: 1, label: "Super Like", icon: "⭐", gradient: "from-neon-blue to-neon-purple" },
     boost: { price: 25, count: 1, label: "1 Hour Boost", icon: "🚀", gradient: "from-neon-orange to-primary-red" }
@@ -33,8 +34,36 @@ export function BuySwipesModal({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [pricing, setPricing] = useState(FALLBACK_PRICING);
 
-    const item = PRICING[mode];
+    // Load dynamic pricing from API
+    useEffect(() => {
+        if (!isOpen) return;
+        authService.getPricing()
+            .then((data) => {
+                if (data) {
+                    setPricing(prev => ({
+                        swipes: {
+                            ...prev.swipes,
+                            price: data.swipe_pack?.price ?? prev.swipes.price,
+                            count: data.swipe_pack?.count ?? prev.swipes.count,
+                        },
+                        superlike: {
+                            ...prev.superlike,
+                            price: data.superlike?.price ?? prev.superlike.price,
+                            count: data.superlike?.count ?? prev.superlike.count,
+                        },
+                        boost: {
+                            ...prev.boost,
+                            price: data.boost?.price_per_hour ?? prev.boost.price,
+                        },
+                    }));
+                }
+            })
+            .catch((e) => console.warn('Operation failed:', e)); // fallback to hardcoded
+    }, [isOpen]);
+
+    const item = pricing[mode];
     const canAfford = currentBalance >= item.price;
 
     const handlePurchase = async () => {
@@ -74,9 +103,10 @@ export function BuySwipesModal({
                     ? `Not enough Stars. Need ${data.required}, have ${data.available}`
                     : data.error || 'Purchase failed');
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             haptic.error();
-            setError(err.message || "An error occurred");
+            const error = err as Error;
+            setError(error.message || "An error occurred");
         } finally {
             setLoading(false);
         }

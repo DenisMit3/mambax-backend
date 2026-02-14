@@ -6,6 +6,8 @@ import { authService, UserProfile } from "@/services/api";
 import { SendGiftModal } from "@/components/gifts";
 import { ArrowLeft, Gift, MapPin, Briefcase, GraduationCap } from "lucide-react";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { CompatibilityScore } from "@/components/profile/CompatibilityScore";
+import { FALLBACK_AVATAR } from "@/lib/constants";
 
 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
@@ -29,7 +31,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh' }}>
-                Loading...
+                Загрузка...
             </div>
         );
     }
@@ -37,9 +39,9 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     if (!user) {
         return (
             <div style={{ padding: '20px', textAlign: 'center' }}>
-                <h2>User not found</h2>
+                <h2>Пользователь не найден</h2>
                 <button onClick={() => router.back()} style={{ marginTop: '20px', padding: '10px 20px' }}>
-                    Go Back
+                    Назад
                 </button>
             </div>
         );
@@ -50,7 +52,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
             {/* Header Image */}
             <div style={{ position: 'relative', height: '400px', width: '100%' }}>
                 <img
-                    src={user.photos[0] || "https://placehold.co/600x600?text=No+Photo"}
+                    src={user.photos[0] || FALLBACK_AVATAR}
                     alt={user.name}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
@@ -88,7 +90,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                             )}
                         </h1>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-                            {user.city || "Unknown Location"}
+                            {user.city || "Местоположение неизвестно"}
                             {user.gifts_received && user.gifts_received > 0 && (
                                 <span style={{
                                     marginLeft: '12px',
@@ -97,7 +99,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                                     alignItems: 'center',
                                     gap: '4px'
                                 }}>
-                                    🎁 {user.gifts_received} gifts
+                                    🎁 {user.gifts_received} подарков
                                 </span>
                             )}
                         </p>
@@ -137,10 +139,15 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
 
                 {/* Bio */}
                 <div style={{ marginBottom: '30px' }}>
-                    <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>About Me</h3>
+                    <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Обо мне</h3>
                     <p style={{ lineHeight: '1.6', color: 'var(--text-secondary)' }}>
-                        {user.bio || "No bio yet."}
+                        {user.bio || "Пока нет описания."}
                     </p>
+                </div>
+
+                {/* Compatibility */}
+                <div style={{ marginBottom: '24px' }}>
+                    <CompatibilityScore userId={id} />
                 </div>
 
                 {/* Send Gift Large Button */}
@@ -164,7 +171,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                     }}
                 >
                     <Gift size={20} />
-                    Send a Gift
+                    Отправить подарок
                 </button>
             </div>
 
@@ -177,9 +184,8 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                 receiverId={user.id}
                 receiverName={user.name}
                 receiverPhoto={user.photos[0]}
-                onGiftSent={(tx) => {
+                onGiftSent={() => {
                     // Maybe show success toast
-                    console.log("Gift sent", tx);
                 }}
             />
         </div>

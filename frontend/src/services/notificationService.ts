@@ -28,7 +28,6 @@ export const notificationService = {
 
             // Check permission
             if (Notification.permission === 'denied') {
-                console.log("Notifications blocked");
                 return;
             }
 
@@ -65,7 +64,6 @@ export const notificationService = {
                         auth: keys.auth
                     }
                 });
-                console.log("Push subscribed successfully");
             }
 
         } catch (e) {

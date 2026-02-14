@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Settings, MapPin, Heart, X, Star, Zap, RotateCcw } from 'lucide-react';
 
 import { useTelegram } from '@/lib/telegram';
@@ -17,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipGuide } from '@/components/onboarding/TooltipGuide';
 import { ContextualTooltip } from '@/components/onboarding/ContextualTooltip';
 import { httpClient } from '@/lib/http-client';
+import { Toast } from '@/components/ui/Toast';
 
 interface Profile {
     id: string;
@@ -61,6 +63,7 @@ export const DiscoveryEngine = ({
     // const { hapticFeedback } = useTelegram(); // Replaced by useHaptic
     const haptic = useHaptic();
     const soundService = useSoundService();
+    const router = useRouter();
 
     const [currentIndex, setCurrentIndex] = useState(0);
     const [showFilters, setShowFilters] = useState(false);
@@ -81,6 +84,7 @@ export const DiscoveryEngine = ({
     const [profileQueue, setProfileQueue] = useState<Profile[]>(profiles);
     const [showLimitModal, setShowLimitModal] = useState(false);
     const [undoHistory, setUndoHistory] = useState<Profile[]>([]);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
     // Sync local queue when prop profiles change
     useEffect(() => {
@@ -150,9 +154,10 @@ export const DiscoveryEngine = ({
             setUndoHistory(prev => prev.slice(1));
 
             haptic.success();
-        } catch (error: any) {
+        } catch (error: unknown) {
             // Показать ошибку (нужен VIP или лимит исчерпан)
-            alert(error.message);
+            const err = error as Error;
+            setToast({message: err.message, type: 'error'});
         }
     };
 
@@ -440,7 +445,7 @@ export const DiscoveryEngine = ({
                 onClose={() => setShowLimitModal(false)}
                 onUpgradeToVIP={() => {
                     // Navigate to premium page
-                    window.location.href = '/profile/premium';
+                    router.push('/profile/premium');
                 }}
                 onBuySwipes={async () => {
                     // Buy swipes logic - используем httpClient
@@ -464,6 +469,7 @@ export const DiscoveryEngine = ({
                     delay={1000}
                 />
             )}
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 };

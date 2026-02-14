@@ -1,6 +1,6 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
+import Image from 'next/image';
 import { useState, useEffect } from "react";
 import { authService } from "@/services/api";
 import { wsService } from "@/services/websocket";
@@ -60,8 +60,7 @@ export function SendGiftModal({
     useEffect(() => {
         if (step !== "waiting_payment") return;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const handleWsMessage = (data: any) => {
+        const handleWsMessage = (data: { type?: string; gift_id?: string; [key: string]: unknown }) => {
             if (data.type === "gift_sent_success") {
                 // Heuristic match
                 if (selectedGift && data.gift_id === selectedGift.id) {
@@ -114,7 +113,7 @@ export function SendGiftModal({
             }
         } catch (err) {
             haptic.error();
-            setError((err as Error).message || "Failed to send gift");
+            setError("Не удалось отправить подарок");
         } finally {
             setSending(false);
         }
@@ -144,16 +143,16 @@ export function SendGiftModal({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-5 z-[1000]" onClick={handleClose}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-5 z-[100]" onClick={handleClose}>
             <div className="w-full max-w-[480px] max-h-[90vh] bg-background rounded-[24px] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-gradient-to-br from-primary/10 to-accent/5">
                     <div className="flex items-center gap-2.5">
                         <Gift size={20} className="text-primary" />
                         <h2 className="m-0 text-lg font-semibold text-foreground">
-                            {step === "catalog" && "Send a Gift"}
-                            {step === "confirm" && "Confirm Gift"}
-                            {step === "success" && "Gift Sent!"}
+                            {step === "catalog" && "Отправить подарок"}
+                            {step === "confirm" && "Подтвердить подарок"}
+                            {step === "success" && "Подарок отправлен!"}
                         </h2>
                     </div>
                     <button className="w-9 h-9 rounded-full border-none bg-surface text-muted-foreground flex items-center justify-center cursor-pointer transition-all hover:bg-border hover:text-foreground" onClick={handleClose}>
@@ -166,14 +165,14 @@ export function SendGiftModal({
                     <div className="flex items-center gap-3 px-5 py-3 bg-surface text-sm text-muted-foreground">
                         <div className="w-9 h-9 rounded-full overflow-hidden">
                             {receiverPhoto ? (
-                                <img src={receiverPhoto} alt={receiverName} loading="lazy" className="w-full h-full object-cover" />
+                                <Image src={receiverPhoto} alt={receiverName} loading="lazy" className="w-full h-full object-cover" width={48} height={48} unoptimized />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary to-accent text-white font-semibold">
                                     {receiverName.charAt(0).toUpperCase()}
                                 </div>
                             )}
                         </div>
-                        <span>Sending to <strong className="text-foreground">{receiverName}</strong></span>
+                        <span>Отправка для <strong className="text-foreground">{receiverName}</strong></span>
                     </div>
                 )}
 
@@ -203,7 +202,7 @@ export function SendGiftModal({
                                 {selectedGift.is_premium && (
                                     <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500 text-black text-[11px] font-semibold">
                                         <Sparkles size={12} />
-                                        Premium
+                                        Премиум
                                     </div>
                                 )}
                             </div>
@@ -213,7 +212,7 @@ export function SendGiftModal({
                             <div className="flex flex-col gap-2 mb-4">
                                 <label className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
                                     <Star size={16} />
-                                    Payment Method
+                                    Способ оплаты
                                 </label>
                                 <div className="flex gap-4 mt-2.5">
                                     <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
@@ -225,7 +224,7 @@ export function SendGiftModal({
                                             onChange={() => setPaymentMethod('balance')}
                                             className="accent-primary"
                                         />
-                                        <span>Use Balance</span>
+                                        <span>С баланса</span>
                                     </label>
                                     <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
                                         <input
@@ -244,12 +243,12 @@ export function SendGiftModal({
                             <div className="flex flex-col gap-2">
                                 <label className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
                                     <MessageSquare size={16} />
-                                    Add a message (optional)
+                                    Добавить сообщение (необязательно)
                                 </label>
                                 <textarea
                                     value={message}
                                     onChange={(e) => setMessage(e.target.value)}
-                                    placeholder="Write something special..."
+                                    placeholder="Напишите что-нибудь особенное..."
                                     maxLength={500}
                                     className="w-full min-h-[80px] p-3 rounded-xl border border-border bg-surface text-foreground text-sm resize-y outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10"
                                 />
@@ -259,10 +258,10 @@ export function SendGiftModal({
                             {/* Anonymous Toggle */}
                             <div className="bg-surface rounded-xl px-2">
                                 <ToggleSwitch
-                                    label="Send anonymously"
+                                    label="Отправить анонимно"
                                     checked={isAnonymous}
                                     onChange={setIsAnonymous}
-                                    description="Receiver won't see who sent the gift"
+                                    description="Получатель не увидит, кто отправил подарок"
                                 />
                             </div>
 
@@ -279,7 +278,7 @@ export function SendGiftModal({
                                     onClick={() => setStep("catalog")}
                                     disabled={sending}
                                 >
-                                    Back
+                                    Назад
                                 </button>
                                 <button
                                     className="flex-[2] flex items-center justify-center gap-2 py-3.5 px-5 rounded-xl border-none bg-gradient-to-br from-primary to-accent text-white text-sm font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(233,30,99,0.4)] disabled:opacity-70 disabled:cursor-not-allowed"
@@ -289,15 +288,15 @@ export function SendGiftModal({
                                     {sending ? (
                                         <>
                                             <Loader2 size={18} className="animate-spin" />
-                                            {paymentMethod === 'balance' ? 'Sending...' : 'Creating Invoice...'}
+                                            {paymentMethod === 'balance' ? 'Отправка...' : 'Создание счёта...'}
                                         </>
                                     ) : (
                                         <>
                                             <Send size={18} />
                                             {paymentMethod === 'balance' ? (
-                                                `Send Gift • ${selectedGift.price}`
+                                                `Отправить • ${selectedGift.price}`
                                             ) : (
-                                                `Pay ${selectedGift.price} Stars`
+                                                `Оплатить ${selectedGift.price} Stars`
                                             )}
                                             <Star size={12} />
                                         </>
@@ -318,14 +317,14 @@ export function SendGiftModal({
                             <div className="text-[64px] mb-5 animate-bounce">
                                 {getGiftEmoji(selectedGift.name)}
                             </div>
-                            <h3 className="m-0 mb-3 text-[22px] font-semibold text-foreground">Gift Sent Successfully!</h3>
+                            <h3 className="m-0 mb-3 text-[22px] font-semibold text-foreground">Подарок успешно отправлен!</h3>
                             <p className="m-0 mb-6 text-sm text-muted-foreground leading-relaxed">
-                                Your <strong className="text-foreground">{selectedGift.name}</strong> has been sent to{" "}
+                                Ваш подарок <strong className="text-foreground">{selectedGift.name}</strong> отправлен для{" "}
                                 <strong className="text-foreground">{receiverName}</strong>
-                                {isAnonymous && " anonymously"}
+                                {isAnonymous && " анонимно"}
                             </p>
                             <button className="w-full max-w-[200px] py-3.5 px-7 rounded-xl border-none bg-gradient-to-br from-primary to-accent text-white text-[15px] font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(233,30,99,0.4)]" onClick={handleClose}>
-                                Done
+                                Готово
                             </button>
                         </div>
                     )}
@@ -335,10 +334,10 @@ export function SendGiftModal({
                             <div className="flex justify-center mb-5">
                                 <Loader2 size={48} className="animate-spin text-primary" />
                             </div>
-                            <h3 className="m-0 mb-3 text-[22px] font-semibold text-foreground">Waiting for Payment...</h3>
-                            <p className="m-0 mb-6 text-sm text-muted-foreground leading-relaxed">Please complete the payment in the Telegram window.</p>
+                            <h3 className="m-0 mb-3 text-[22px] font-semibold text-foreground">Ожидание оплаты...</h3>
+                            <p className="m-0 mb-6 text-sm text-muted-foreground leading-relaxed">Пожалуйста, завершите оплату в окне Telegram.</p>
                             <p className="text-[13px] opacity-70 mt-4 bg-white/10 p-2.5 rounded-lg">
-                                Do not close this window. We will update it automatically once payment is confirmed.
+                                Не закрывайте это окно. Мы обновим его автоматически после подтверждения оплаты.
                             </p>
                         </div>
                     )}

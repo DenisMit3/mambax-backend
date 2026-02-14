@@ -55,7 +55,7 @@ export default function VerificationQueuePage() {
                     disabled={loading}
                 >
                     <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                    <span className="ml-2">Refresh</span>
+                    <span className="ml-2">Обновить</span>
                 </AnimatedButton>
             </div>
 

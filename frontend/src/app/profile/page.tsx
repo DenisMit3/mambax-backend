@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { Star, Plus, Settings, Edit3, Shield, Zap, ChevronRight, LogOut } from "lucide-react";
+import { Star, Plus, Settings, Edit3, Shield, Zap, ChevronRight, LogOut, Rocket, Eye, Gift as GiftIcon, Hash, MessageCircle, Users, Bell, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 import { authService } from "@/services/api";
 import { httpClient } from "@/lib/http-client";
@@ -12,13 +13,27 @@ import { BadgesSection } from "@/components/profile/BadgesSection";
 // PERF-007: BottomNav import removed - already in ClientLayout
 import { GlassCard } from "@/components/ui/GlassCard";
 import { TopUpModal } from "@/components/ui/TopUpModal";
+import { BoostModal } from "@/components/ui/BoostModal";
+import { DailyRewards } from "@/components/rewards/DailyRewards";
 
 export default function ProfilePage() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [profile, setProfile] = useState<any>(null);
+    interface UserProfile {
+        name: string;
+        age: number;
+        photos?: string[];
+        stars_balance?: number;
+        subscription_tier?: string;
+        achievements?: unknown[];
+        [key: string]: unknown;
+    }
+
+    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [showTopUp, setShowTopUp] = useState(false);
+    const [showBoost, setShowBoost] = useState(false);
+    const [showDailyRewards, setShowDailyRewards] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    const router = useRouter();
 
     useEffect(() => {
         loadProfile();
@@ -28,8 +43,7 @@ export default function ProfilePage() {
         try {
             const data = await authService.getMe();
             setProfile(data);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Failed to load profile:', error);
         } finally {
             setLoading(false);
@@ -77,7 +91,10 @@ export default function ProfilePage() {
             {/* Header */}
             <div className="relative px-6 pt-8 pb-6 flex justify-between items-center z-10">
                 <h1 className="text-2xl font-black text-white tracking-wide">ПРОФИЛЬ</h1>
-                <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/70 hover:bg-white/10 transition">
+                <button
+                    onClick={() => router.push('/settings')}
+                    className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/70 hover:bg-white/10 transition"
+                >
                     <Settings size={20} />
                 </button>
             </div>
@@ -149,33 +166,123 @@ export default function ProfilePage() {
 
                 {/* Menu Grid */}
                 <div className="grid grid-cols-2 gap-3 mb-6">
-                    <button className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition text-left group">
+                    <button
+                        onClick={() => router.push('/verification')}
+                        className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition text-left group"
+                    >
                         <Shield className="w-6 h-6 text-cyan-400 mb-3 group-hover:scale-110 transition" />
                         <div className="text-white font-bold text-sm">Безопасность</div>
                         <div className="text-slate-500 text-xs">Верификация</div>
                     </button>
 
-                    <button className="p-4 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-900/10 border border-purple-500/20 hover:border-purple-500/40 transition text-left group">
-                        <Zap className="w-6 h-6 text-purple-400 mb-3 group-hover:scale-110 transition shadow-purple-500" />
-                        <div className="text-white font-bold text-sm">Mamba Turbo</div>
-                        <div className="text-purple-300/70 text-xs">Буст профиля</div>
+                    <button
+                        onClick={() => setShowBoost(true)}
+                        className="p-4 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-900/10 border border-purple-500/20 hover:border-purple-500/40 transition text-left group"
+                    >
+                        <Rocket className="w-6 h-6 text-purple-400 mb-3 group-hover:scale-110 transition shadow-purple-500" />
+                        <div className="text-white font-bold text-sm">Буст</div>
+                        <div className="text-purple-300/70 text-xs">Поднять профиль</div>
+                    </button>
+
+                    <button
+                        onClick={() => setShowDailyRewards(true)}
+                        className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-900/10 border border-amber-500/20 hover:border-amber-500/40 transition text-left group"
+                    >
+                        <GiftIcon className="w-6 h-6 text-amber-400 mb-3 group-hover:scale-110 transition" />
+                        <div className="text-white font-bold text-sm">Награды</div>
+                        <div className="text-amber-300/70 text-xs">Ежедневный бонус</div>
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/profile/premium')}
+                        className="p-4 rounded-2xl bg-gradient-to-br from-pink-500/20 to-rose-900/10 border border-pink-500/20 hover:border-pink-500/40 transition text-left group"
+                    >
+                        <Zap className="w-6 h-6 text-pink-400 mb-3 group-hover:scale-110 transition" />
+                        <div className="text-white font-bold text-sm">VIP</div>
+                        <div className="text-pink-300/70 text-xs">Премиум функции</div>
                     </button>
                 </div>
 
                 {/* List Items */}
                 <div className="space-y-2">
-                    <button className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition">
-                        <span className="text-slate-300 font-medium text-sm">Настройки уведомлений</span>
+                    <button
+                        onClick={() => router.push('/views')}
+                        className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition"
+                    >
+                        <div className="flex items-center gap-3">
+                            <Eye size={18} className="text-slate-400" />
+                            <span className="text-slate-300 font-medium text-sm">Кто смотрел профиль</span>
+                        </div>
                         <ChevronRight size={18} className="text-slate-600" />
                     </button>
-                    <button className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition">
-                        <span className="text-slate-300 font-medium text-sm">Помощь и поддержка</span>
+                    <button
+                        onClick={() => router.push('/profile/prompts')}
+                        className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition"
+                    >
+                        <div className="flex items-center gap-3">
+                            <MessageCircle size={18} className="text-slate-400" />
+                            <span className="text-slate-300 font-medium text-sm">Мои ответы (Q&A)</span>
+                        </div>
+                        <ChevronRight size={18} className="text-slate-600" />
+                    </button>
+                    <button
+                        onClick={() => router.push('/profile/interests')}
+                        className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition"
+                    >
+                        <div className="flex items-center gap-3">
+                            <Hash size={18} className="text-slate-400" />
+                            <span className="text-slate-300 font-medium text-sm">Мои интересы</span>
+                        </div>
+                        <ChevronRight size={18} className="text-slate-600" />
+                    </button>
+                    <button
+                        onClick={() => router.push('/referral')}
+                        className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition"
+                    >
+                        <div className="flex items-center gap-3">
+                            <Users size={18} className="text-slate-400" />
+                            <span className="text-slate-300 font-medium text-sm">Пригласить друзей</span>
+                        </div>
+                        <ChevronRight size={18} className="text-slate-600" />
+                    </button>
+                    <button
+                        onClick={() => router.push('/settings')}
+                        className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition"
+                    >
+                        <span className="text-slate-300 font-medium text-sm">Настройки</span>
+                        <ChevronRight size={18} className="text-slate-600" />
+                    </button>
+                    <button
+                        onClick={() => router.push('/profile/analytics')}
+                        className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition"
+                    >
+                        <span className="text-slate-300 font-medium text-sm">Аналитика профиля</span>
+                        <ChevronRight size={18} className="text-slate-600" />
+                    </button>
+                    <button
+                        onClick={() => router.push('/notifications')}
+                        className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition"
+                    >
+                        <div className="flex items-center gap-3">
+                            <Bell size={18} className="text-blue-400" />
+                            <span className="text-slate-300 font-medium text-sm">Уведомления</span>
+                        </div>
+                        <ChevronRight size={18} className="text-slate-600" />
+                    </button>
+                    <button
+                        onClick={() => router.push('/help')}
+                        className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition"
+                    >
+                        <div className="flex items-center gap-3">
+                            <HelpCircle size={18} className="text-green-400" />
+                            <span className="text-slate-300 font-medium text-sm">Помощь</span>
+                        </div>
                         <ChevronRight size={18} className="text-slate-600" />
                     </button>
                     <button
                         onClick={async () => {
                             await authService.resetOnboarding();
-                            window.location.href = '/discover';
+                            router.push('/discover');
                         }}
                         className="w-full p-4 rounded-2xl bg-white/5 flex items-center justify-between hover:bg-white/10 transition"
                     >
@@ -188,7 +295,7 @@ export default function ProfilePage() {
                     <button
                         onClick={() => {
                             httpClient.logout();
-                            window.location.reload(); // Force reload to clear state/redirect
+                            router.push('/auth/phone');
                         }}
                         className="w-full p-4 rounded-2xl flex items-center gap-3 text-red-500 hover:bg-red-500/10 transition mt-6"
                     >
@@ -207,6 +314,16 @@ export default function ProfilePage() {
                     loadProfile();
                 }}
                 currentBalance={profile?.stars_balance || 0}
+            />
+
+            <BoostModal
+                isOpen={showBoost}
+                onClose={() => setShowBoost(false)}
+            />
+
+            <DailyRewards
+                isOpen={showDailyRewards}
+                onClose={() => setShowDailyRewards(false)}
             />
         </div>
     );

@@ -47,6 +47,18 @@
 
 /* Base Styles */
 :root {
+  /* Z-index scale */
+  --z-base: 1;
+  --z-card-overlay: 10;
+  --z-sticky: 20;
+  --z-dropdown: 30;
+  --z-sidebar: 40;
+  --z-modal-backdrop: 50;
+  --z-modal: 100;
+  --z-toast: 200;
+  --z-tooltip: 300;
+  --z-debug: 9999;
+
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
   --primary: 336 100% 65%;

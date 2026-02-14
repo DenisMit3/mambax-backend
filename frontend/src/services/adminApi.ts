@@ -258,8 +258,7 @@ export interface Transaction {
     currency: string;
     status: 'pending' | 'completed' | 'failed' | 'refunded';
     created_at: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    metadata: Record<string, any>;
+    metadata: Record<string, unknown>;
 }
 
 export interface TransactionListResponse {
@@ -484,7 +483,7 @@ export async function exportAnalyticsData(
     if (endDate) params.append('end_date', endDate);
 
     // For CSV, we need to trigger a direct download
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const token = typeof window !== 'undefined' ? (() => { try { return localStorage.getItem('token'); } catch { return null; } })() : null;
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
     const response = await fetch(`${baseUrl}/admin/analytics/export?${params.toString()}`, {
@@ -546,6 +545,75 @@ export async function getRevenueBreakdown(period: string = 'month'): Promise<{
     by_day: { date: string; amount: number }[];
 }> {
     return httpClient.get(`/admin/analytics/revenue-breakdown?period=${period}`);
+}
+
+export interface GeoHeatmapPoint {
+    city: string;
+    lat: number;
+    lng: number;
+    users: number;
+    vip: number;
+    active: number;
+}
+
+export async function getGeoHeatmap(): Promise<{
+    points: GeoHeatmapPoint[];
+    total_users: number;
+    total_vip: number;
+    top_cities: GeoHeatmapPoint[];
+}> {
+    return httpClient.get('/admin/analytics/geo-heatmap');
+}
+
+// LTV Prediction types
+export interface LtvSegment {
+    segment: string;
+    users: number;
+    percentage: number;
+    avg_ltv: number;
+    total_revenue: number;
+    arpu: number;
+    risk: 'low' | 'medium' | 'high';
+}
+
+export interface LtvPrediction {
+    prediction_date: string;
+    model_version: string;
+    confidence: number;
+    summary: {
+        total_users: number;
+        paying_users: number;
+        conversion_rate: number;
+        arpu_30d: number;
+        arppu_30d: number;
+        estimated_avg_ltv: number;
+        revenue_30d: number;
+        revenue_90d: number;
+        avg_lifetime_months: number;
+    };
+    segments: LtvSegment[];
+    trends: {
+        ltv_change_30d: number;
+        conversion_trend: string;
+        churn_rate: number;
+    };
+    recommendations: string[];
+}
+
+export async function getLtvPrediction(): Promise<LtvPrediction> {
+    return httpClient.get('/admin/analytics/ltv-prediction');
+}
+
+export interface AutoBanRulePayload {
+    name: string;
+    description?: string;
+    trigger_type: string;
+    threshold: number;
+    time_window_hours: number;
+    action: string;
+    action_duration_hours?: number | null;
+    is_enabled: boolean;
+    priority: number;
 }
 
 // ============================================
@@ -679,6 +747,8 @@ export const adminApi = {
         getRealtime: getRealtimeMetrics,
         getChurnPrediction: getChurnPrediction,
         getRevenueBreakdown: getRevenueBreakdown,
+        getGeoHeatmap: getGeoHeatmap,
+        getLtvPrediction: getLtvPrediction,
         exportData: exportAnalyticsData,
     },
     marketing: {
@@ -729,13 +799,13 @@ export const adminApi = {
         promoCodes: {
             list: async (filter?: string) => {
                 const params = filter && filter !== 'all' ? `?status=${filter}` : '';
-                return httpClient.get(`/admin/monetization/promo-codes${params}`);
+                return httpClient.get(`/admin/monetization/promos${params}`);
             },
             create: async (data: Record<string, unknown>) => {
-                return httpClient.post('/admin/monetization/promo-codes', data);
+                return httpClient.post('/admin/monetization/promos', data);
             },
             toggle: async (id: string) => {
-                return httpClient.post(`/admin/monetization/promo-codes/${id}/toggle`);
+                return httpClient.post(`/admin/monetization/promos/${id}/toggle`);
             },
         },
         refunds: {
@@ -758,6 +828,58 @@ export const adminApi = {
                 return httpClient.post(`/admin/monetization/payments/${id}/retry`);
             },
         },
+        pricingTests: {
+            list: async (status?: string) => {
+                const params = status ? `?status=${status}` : '';
+                return httpClient.get(`/admin/monetization/pricing-tests${params}`);
+            },
+            create: async (data: Record<string, unknown>) => {
+                return httpClient.post('/admin/monetization/pricing-tests', data);
+            },
+            update: async (id: string, data: Record<string, unknown>) => {
+                return httpClient.patch(`/admin/monetization/pricing-tests/${id}`, data);
+            },
+            delete: async (id: string) => {
+                return httpClient.delete(`/admin/monetization/pricing-tests/${id}`);
+            },
+            getResults: async (id: string) => {
+                return httpClient.get(`/admin/monetization/pricing-tests/${id}/results`);
+            },
+        },
+        promoRedemptions: {
+            list: async (promoCodeId?: string, page = 1) => {
+                const params = new URLSearchParams({ page: page.toString() });
+                if (promoCodeId) params.append('promo_code_id', promoCodeId);
+                return httpClient.get(`/admin/monetization/promo-redemptions?${params.toString()}`);
+            },
+            analytics: async () => {
+                return httpClient.get('/admin/monetization/promo-redemptions/analytics');
+            },
+        },
+        arpuTrends: async (months = 6) => {
+            return httpClient.get(`/admin/monetization/revenue/arpu-trends?months=${months}`);
+        },
+        getChurnAnalysis: async (period = 'month') => {
+            return httpClient.get(`/admin/monetization/revenue/churn?period=${period}`);
+        },
+        getForecast: async (months = 3) => {
+            return httpClient.get(`/admin/monetization/revenue/forecast?months=${months}`);
+        },
+        getBoostAnalytics: async (period = 'month') => {
+            return httpClient.get(`/admin/monetization/boosts/analytics?period=${period}`);
+        },
+        getSuperlikeAnalytics: async (period = 'month') => {
+            return httpClient.get(`/admin/monetization/superlikes/analytics?period=${period}`);
+        },
+        getAffiliates: async (status = 'active') => {
+            return httpClient.get(`/admin/monetization/affiliates?status=${status}`);
+        },
+        getAffiliateStats: async () => {
+            return httpClient.get('/admin/monetization/affiliates/stats');
+        },
+        getUpsellOpportunities: async () => {
+            return httpClient.get('/admin/monetization/upsell/opportunities');
+        },
     },
     system: {
         getHealth: getSystemHealth,
@@ -773,7 +895,17 @@ export const adminApi = {
             const params = page ? `?page=${page}` : '';
             return httpClient.get(`/admin/system/audit${params}`);
         },
-    }
+    },
+    autoBanRules: {
+        list: async () => httpClient.get('/admin/auto-ban-rules'),
+        create: async (data: AutoBanRulePayload) => httpClient.post('/admin/auto-ban-rules', data),
+        update: async (id: string, data: Partial<AutoBanRulePayload>) => httpClient.put(`/admin/auto-ban-rules/${id}`, data),
+        delete: async (id: string) => httpClient.delete(`/admin/auto-ban-rules/${id}`),
+        toggle: async (id: string) => httpClient.post(`/admin/auto-ban-rules/${id}/toggle`),
+    },
+    gdpr: {
+        exportUserData: async (userId: string) => httpClient.get(`/admin/users/${userId}/gdpr-export`),
+    },
 };
 
 export default adminApi;

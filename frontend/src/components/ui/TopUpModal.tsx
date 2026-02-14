@@ -1,15 +1,15 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Star, Loader2 } from "lucide-react";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useSoundService } from "@/hooks/useSoundService";
 import { authService } from "@/services/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { Toast } from '@/components/ui/Toast';
 
-const PACKAGES = [
+const FALLBACK_PACKAGES = [
     { id: 'starter', stars: 100, price: 100, label: 'Starter', popular: false },
     { id: 'pro', stars: 500, price: 500, label: 'Pro', popular: true },
     { id: 'whale', stars: 2500, price: 2500, label: 'Whale', popular: false },
@@ -27,8 +27,21 @@ export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUp
     const soundService = useSoundService();
     const [loadingPkg, setLoadingPkg] = useState<string | null>(null);
     const prefersReducedMotion = useReducedMotion();
+    const [packages, setPackages] = useState(FALLBACK_PACKAGES);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
-    const handlePurchase = async (pkg: typeof PACKAGES[0]) => {
+    useEffect(() => {
+        if (!isOpen) return;
+        authService.getPricing()
+            .then((data) => {
+                if (data?.top_up_packages?.length) {
+                    setPackages(data.top_up_packages);
+                }
+            })
+            .catch((e) => console.warn('Operation failed:', e)); // fallback to hardcoded
+    }, [isOpen]);
+
+    const handlePurchase = async (pkg: typeof FALLBACK_PACKAGES[0]) => {
         haptic.heavy();
         setLoadingPkg(pkg.id);
 
@@ -37,7 +50,7 @@ export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUp
             const invoice = await authService.createInvoice(pkg.stars, pkg.label);
 
             // 2. Open Telegram Interface (only if inside Telegram WebApp with supported version)
-            const webApp = window.Telegram?.WebApp as any;
+            const webApp = window.Telegram?.WebApp;
             const tgVersion = parseFloat(webApp?.version || '0');
             const supportsInvoice = webApp && typeof webApp.openInvoice === 'function' && tgVersion >= 6.1;
 
@@ -48,8 +61,6 @@ export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUp
                         soundService.playSuccess();
                         if (onSuccess) onSuccess();
                         onClose();
-                        // Ideally we should listen to WS for balance update, but reload works for now
-                        setTimeout(() => window.location.reload(), 1000);
                     } else if (status === 'cancelled' || status === 'failed') {
                         haptic.error();
                     }
@@ -64,13 +75,14 @@ export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUp
 
         } catch (error) {
             console.error("Payment setup failed", error);
-            alert("Не удалось создать платеж. Попробуйте позже.");
+            setToast({message: "Не удалось создать платеж. Попробуйте позже.", type: 'error'});
         } finally {
             setLoadingPkg(null);
         }
     };
 
     return (
+        <>
         <AnimatePresence>
             {isOpen && (
                 <>
@@ -116,7 +128,7 @@ export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUp
                             </div>
 
                             <div className="space-y-3 mb-6 relative z-10">
-                                {PACKAGES.map((pkg) => (
+                                {packages.map((pkg) => (
                                     <button
                                         key={pkg.id}
                                         disabled={loadingPkg !== null}
@@ -164,5 +176,7 @@ export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUp
                 </>
             )}
         </AnimatePresence>
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+        </>
     );
 }

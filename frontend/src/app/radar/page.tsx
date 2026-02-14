@@ -2,36 +2,50 @@
 
 import { useState, useEffect } from 'react';
 import { GeoMapRadar } from '@/components/discovery/GeoMapRadar';
-import { authService, UserProfile } from '@/services/api';
+import { authService, UserProfile, PaginatedResponse } from '@/services/api';
+
+// Координаты Москвы как фоллбэк
+const MOSCOW_LAT = 55.7558;
+const MOSCOW_LON = 37.6173;
 
 export default function RadarPage() {
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const loadRadar = async () => {
+        const loadRadar = async (lat: number, lon: number) => {
             try {
-                // Default coordinates (Moscow)
-                const lat = 55.7558;
-                const lon = 37.6173;
-                const data = await authService.getProfiles({ lat, lon, limit: 50 });
-
-                // Handle response structure (array vs object with items)
-                if (Array.isArray(data)) {
-                    setUsers(data);
-                } else if ((data as any).items) {
-                    setUsers((data as any).items);
-                } else {
-                    setUsers([]);
-                }
+                const data: PaginatedResponse<UserProfile> = await authService.getProfiles({ lat, lon, limit: 50 });
+                setUsers(data.items ?? []);
             } catch (error) {
-                console.error('Failed to load radar', error);
+                console.error('Не удалось загрузить радар', error);
             } finally {
                 setLoading(false);
             }
         };
 
-        loadRadar();
+        // Пытаемся получить реальную геолокацию пользователя
+        if (typeof navigator !== 'undefined' && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    // Успех — используем реальные координаты
+                    loadRadar(position.coords.latitude, position.coords.longitude);
+                },
+                (error) => {
+                    // Отказ или ошибка — фоллбэк на Москву
+                    console.warn('Геолокация недоступна, используем Москву:', error.message);
+                    loadRadar(MOSCOW_LAT, MOSCOW_LON);
+                },
+                {
+                    enableHighAccuracy: false,
+                    timeout: 8000,
+                    maximumAge: 300000, // Кэш 5 минут
+                }
+            );
+        } else {
+            // Браузер не поддерживает geolocation
+            loadRadar(MOSCOW_LAT, MOSCOW_LON);
+        }
     }, []);
 
     return (

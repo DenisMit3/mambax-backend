@@ -9,7 +9,7 @@ import styles from '../../admin.module.css';
 
 export default function RevenueAnalyticsPage() {
     const [loading, setLoading] = useState(true);
-    const [revenueData, setRevenueData] = useState<any>(null);
+    const [revenueData, setRevenueData] = useState<{ sources: { source: string; amount: number }[]; [key: string]: unknown } | null>(null);
     const [period, setPeriod] = useState('month');
     const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +55,7 @@ export default function RevenueAnalyticsPage() {
                     {error ? (
                         <GlassCard className="flex flex-col items-center justify-center min-h-[400px] text-[var(--admin-text-muted)]">
                             <p className="mb-4 text-red-500">{error}</p>
-                            <button onClick={fetchData} className={styles.primaryButton}>Retry</button>
+                            <button onClick={fetchData} className={styles.primaryButton}>Повторить</button>
                         </GlassCard>
                     ) : (
                         <RevenueChart
@@ -77,7 +77,7 @@ export default function RevenueAnalyticsPage() {
                         <div className="flex flex-col">
                             <span className="text-xs text-[var(--admin-text-muted)] mb-1">Active Subscriptions</span>
                             <span className="text-lg font-bold text-[var(--admin-text-primary)]">
-                                {loading ? '...' : revenueData?.sources.find((s: any) => s.source === 'Subscriptions')?.amount > 0 ? 'Active' : '-'}
+                                {loading ? '...' : revenueData?.sources.find((s: { source: string; amount: number }) => s.source === 'Subscriptions')?.amount > 0 ? 'Активен' : '-'}
                             </span>
                         </div>
                     </GlassCard>

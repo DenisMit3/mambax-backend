@@ -65,8 +65,29 @@ export default function UserSegmentsPage() {
 
             <div className="segment-details">
                 <h2>Segment Analysis</h2>
-                <div className="placeholder-chart">
-                    Chart visualization coming soon
+                <div style={{ marginTop: 16 }}>
+                    {segments.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            {segments.map((s) => {
+                                const maxCount = Math.max(...segments.map(seg => seg.count), 1);
+                                const pct = Math.round((s.count / maxCount) * 100);
+                                const color = getColor(s.id);
+                                return (
+                                    <div key={`bar-${s.id}`} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <span style={{ width: 120, fontSize: 13, color: '#94a3b8', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                                        <div style={{ flex: 1, height: 28, background: 'rgba(0,0,0,0.3)', borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
+                                            <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, ${color}, ${color}88)`, borderRadius: 8, transition: 'width 0.8s ease', minWidth: 4 }} />
+                                        </div>
+                                        <span style={{ width: 60, fontSize: 14, fontWeight: 700, color: '#f1f5f9', textAlign: 'right' }}>{s.count}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                            No segment data available
+                        </div>
+                    )}
                 </div>
             </div>
 

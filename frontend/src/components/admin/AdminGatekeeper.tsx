@@ -28,9 +28,10 @@ export function AdminGatekeeper({ onUnlock }: GatekeeperProps) {
             } else {
                 setError("Invalid response from server");
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Login failed", err);
-            setError(err.message || "Authentication failed");
+            const error = err as Error;
+            setError(error.message || "Authentication failed");
         } finally {
             setLoading(false);
         }

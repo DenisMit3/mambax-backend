@@ -70,7 +70,7 @@ export default function CallsPage() {
           </div>
 
           <div className="md:col-span-2 lg:col-span-4 bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Conversion</h3>
+            <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Конверсия</h3>
             <div className="grid grid-cols-3 gap-6 text-center">
               <div>
                 <div className="text-2xl font-bold text-zinc-800 dark:text-zinc-200">{data?.conversion.calls_to_dates}</div>

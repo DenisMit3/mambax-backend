@@ -85,7 +85,7 @@ export const MetricsDashboard = () => {
         return (
             <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-2xl text-center">
                 <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-3" />
-                <h3 className="text-red-400 font-semibold">Failed to load metrics</h3>
+                <h3 className="text-red-400 font-semibold">Не удалось загрузить метрики</h3>
                 <p className="text-red-300/60 text-sm">Please check your connection and try again.</p>
             </div>
         );
@@ -97,14 +97,14 @@ export const MetricsDashboard = () => {
         <div className="space-y-6">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
-                    title="Total Users"
+                    title="Всего пользователей"
                     value={m.total_users.toLocaleString()}
                     icon={Users}
                     color="blue"
                     delay={0.1}
                 />
                 <MetricCard
-                    title="Active Today"
+                    title="Активных сегодня"
                     value={m.active_today.toLocaleString()}
                     icon={Activity}
                     color="emerald"

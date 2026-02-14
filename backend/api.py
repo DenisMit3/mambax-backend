@@ -4182,38 +4182,54 @@ async def get_referral_code(
     db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
-    """Get user's referral code"""
-    result = await db.execute(
-        text("SELECT referral_code FROM users WHERE id = :user_id"),
-        {"user_id": current_user_id}
-    )
-    row = result.fetchone()
-    
-    code = row[0] if row and row[0] else f"MAMBA{current_user_id[:6].upper()}"
-    
+    """Get user's referral code, generate if missing"""
+    from backend.models.user import User as UserModel
+    import secrets
+
+    user = await db.get(UserModel, current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.referral_code:
+        user.referral_code = f"MAMBA{secrets.token_hex(4).upper()}"
+        await db.commit()
+        await db.refresh(user)
+
     return {
-        "code": code,
-        "link": f"https://t.me/mambax_bot?start={code}",
+        "code": user.referral_code,
+        "link": f"https://t.me/mambax_bot?start={user.referral_code}",
         "reward": "50 Stars for each friend who joins"
     }
 
 
 @app.get("/api/referral/stats")
-async def get_referral_stats(
+async def get_user_referral_stats(
     db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
-    """Get referral statistics"""
-    result = await db.execute(text("""
-        SELECT COUNT(*) FROM users WHERE referred_by = :user_id
-    """), {"user_id": current_user_id})
-    
-    count = result.scalar() or 0
-    
+    """Get user's personal referral statistics"""
+    from backend.models.marketing import Referral, ReferralStatus
+
+    total = await db.scalar(
+        select(func.count(Referral.id)).where(Referral.referrer_id == current_user_id)
+    )
+    converted = await db.scalar(
+        select(func.count(Referral.id)).where(
+            Referral.referrer_id == current_user_id,
+            Referral.status == ReferralStatus.CONVERTED
+        )
+    )
+    pending = await db.scalar(
+        select(func.count(Referral.id)).where(
+            Referral.referrer_id == current_user_id,
+            Referral.status == ReferralStatus.PENDING
+        )
+    )
+
     return {
-        "total_referrals": count,
-        "earned_stars": count * 50,
-        "pending_rewards": 0
+        "total_referrals": total or 0,
+        "earned_stars": (converted or 0) * 50,
+        "pending_rewards": (pending or 0) * 50
     }
 
 
@@ -4224,43 +4240,46 @@ async def apply_referral_code(
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Apply a referral code"""
-    # Find referrer
+    from backend.models.user import User as UserModel
+    from backend.models.marketing import Referral, ReferralStatus
+
+    # Find referrer by code
     result = await db.execute(
-        text("SELECT id::text FROM users WHERE referral_code = :code"),
-        {"code": code}
+        select(UserModel).where(UserModel.referral_code == code)
     )
-    referrer = result.fetchone()
-    
+    referrer = result.scalar_one_or_none()
+
     if not referrer:
         raise HTTPException(status_code=404, detail="Invalid referral code")
-    
-    if referrer[0] == current_user_id:
+
+    if str(referrer.id) == current_user_id:
         raise HTTPException(status_code=400, detail="Cannot use your own code")
-    
+
     # Check if already referred
-    check = await db.execute(
-        text("SELECT referred_by FROM users WHERE id = :user_id"),
-        {"user_id": current_user_id}
-    )
-    existing = check.fetchone()
-    
-    if existing and existing[0]:
+    user = await db.get(UserModel, current_user_id)
+    if user.referred_by:
         raise HTTPException(status_code=400, detail="Already used a referral code")
-    
+
     # Apply referral
-    await db.execute(
-        text("UPDATE users SET referred_by = :referrer_id WHERE id = :user_id"),
-        {"referrer_id": referrer[0], "user_id": current_user_id}
+    user.referred_by = referrer.id
+
+    # Create referral record
+    ref = Referral(
+        referrer_id=referrer.id,
+        referred_id=user.id,
+        status=ReferralStatus.CONVERTED,
+        reward_stars=50.0,
+        reward_paid=True,
+        converted_at=datetime.utcnow(),
     )
-    
+    db.add(ref)
+
     # Give bonus to both users
-    await db.execute(
-        text("UPDATE users SET stars_balance = stars_balance + 50 WHERE id IN (:user1, :user2)"),
-        {"user1": current_user_id, "user2": referrer[0]}
-    )
-    
+    user.stars_balance += 50
+    referrer.stars_balance += 50
+
     await db.commit()
-    
+
     return {"success": True, "bonus": 50, "message": "Referral code applied! You got 50 Stars!"}
 
 
@@ -6380,15 +6399,23 @@ async def send_marketing_push(
 
 
 @app.get("/api/admin/marketing/referrals")
-async def get_referral_stats(
+async def get_admin_referral_stats_legacy(
     db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
-    """Get referral statistics"""
+    """Get referral statistics (legacy endpoint, redirects to admin router)"""
+    from backend.models.marketing import Referral, ReferralStatus
+    total = await db.scalar(select(func.count(Referral.id))) or 0
+    converted = await db.scalar(
+        select(func.count(Referral.id)).where(Referral.status == ReferralStatus.CONVERTED)
+    ) or 0
+    rewards = await db.scalar(
+        select(func.coalesce(func.sum(Referral.reward_stars), 0.0)).where(Referral.reward_paid == True)
+    )
     return {
-        "total_referrals": 0,
-        "successful_referrals": 0,
-        "pending_rewards": 0
+        "total_referrals": total,
+        "successful_referrals": converted,
+        "pending_rewards": float(rewards or 0)
     }
 
 

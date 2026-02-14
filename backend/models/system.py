@@ -82,3 +82,38 @@ class BackupStatus(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+
+class AutoBanRule(Base):
+    """
+    Automated ban rules configuration.
+    When conditions are met, users are automatically banned/suspended.
+    """
+    __tablename__ = "auto_ban_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Rule trigger type
+    trigger_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    # reports_count, fraud_score, spam_messages, inactive_days, multiple_accounts
+    
+    # Condition
+    threshold: Mapped[int] = mapped_column(Integer, nullable=False)  # e.g. 5 reports
+    time_window_hours: Mapped[int] = mapped_column(Integer, default=24)  # within X hours
+    
+    # Action
+    action: Mapped[str] = mapped_column(String(30), default="suspend")  # suspend, ban, warn
+    action_duration_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # null = permanent
+    
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    priority: Mapped[int] = mapped_column(Integer, default=0)  # Higher = checked first
+    
+    # Stats
+    times_triggered: Mapped[int] = mapped_column(Integer, default=0)
+    last_triggered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+

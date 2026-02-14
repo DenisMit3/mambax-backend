@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Phone, Send } from "lucide-react";
 import { authService } from "@/services/api";
 import { useTelegram } from "@/lib/telegram";
-
-// Имя бота из env или дефолтное
+import { Toast } from '@/components/ui/Toast'; из env или дефолтное
 const TELEGRAM_BOT_NAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME || "YouMeMeet_bot";
 
 export default function AuthGatePage() {
     const [identifier, setIdentifier] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [telegramLoading, setTelegramLoading] = useState(false);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
     const router = useRouter();
     const { initData, isReady } = useTelegram();
 
@@ -23,7 +23,6 @@ export default function AuthGatePage() {
         // FIX: Check if we were redirected due to 401 - prevent auto-login loop
         const redirectReason = sessionStorage.getItem('auth_redirect_reason');
         if (redirectReason === 'unauthorized') {
-            console.log("[Auth] Redirected due to 401, clearing flag and waiting for manual action");
             sessionStorage.removeItem('auth_redirect_reason');
             // Don't auto-login, let user click the button manually
             return;
@@ -35,17 +34,14 @@ export default function AuthGatePage() {
             // Validate token by calling /users/me before redirecting
             authService.getMe()
                 .then((user) => {
-                    console.log("[Auth] Token valid, user:", user.name, "is_complete:", user.is_complete);
                     // FIX: Check profile completion status
                     if (user.is_complete === false) {
-                        console.log("[Auth] Profile incomplete, redirecting to onboarding");
                         router.replace("/onboarding");
                     } else {
                         router.replace("/");
                     }
                 })
-                .catch((err) => {
-                    console.log("[Auth] Token invalid, clearing and proceeding with Telegram login:", err);
+                .catch(() => {
                     localStorage.removeItem('accessToken');
                     localStorage.removeItem('token');
                     // Now proceed with Telegram login
@@ -63,21 +59,18 @@ export default function AuthGatePage() {
             authService
                 .telegramLogin(initData)
                 .then(async (data) => {
-                    console.log("[Auth] Telegram login success, has_profile:", data.has_profile);
                     
                     // FIX: Even if has_profile is true, verify profile is actually complete
                     // by checking for photos and real data
                     if (data.has_profile) {
                         try {
                             const me = await authService.getMe();
-                            console.log("[Auth] Profile check - photos:", me.photos?.length, "gender:", me.gender);
                             
                             // Profile is only truly complete if user has photos and real gender
                             const hasPhotos = me.photos && me.photos.length > 0;
                             const hasRealGender = me.gender && me.gender !== 'other';
                             
                             if (!hasPhotos || !hasRealGender) {
-                                console.log("[Auth] Profile incomplete (no photos or gender=other), redirecting to onboarding");
                                 router.replace("/onboarding");
                                 return;
                             }
@@ -105,26 +98,23 @@ export default function AuthGatePage() {
         
         // Проверяем, есть ли initData (открыто внутри Telegram Mini App)
         const initDataRaw =
-            (typeof window !== "undefined" && (window as any).Telegram?.WebApp?.initData) || initData;
+            (typeof window !== "undefined" && window.Telegram?.WebApp?.initData) || initData;
 
         if (initDataRaw && initDataRaw.length >= 10) {
             // Уже внутри Mini App - делаем автовход
             setTelegramLoading(true);
             authService.telegramLogin(initDataRaw)
                 .then(async (data) => {
-                    console.log("[Auth] Telegram button login success, has_profile:", data.has_profile);
                     
                     // FIX: Even if has_profile is true, verify profile is actually complete
                     if (data.has_profile) {
                         try {
                             const me = await authService.getMe();
-                            console.log("[Auth] Button - Profile check - photos:", me.photos?.length, "gender:", me.gender);
                             
                             const hasPhotos = me.photos && me.photos.length > 0;
                             const hasRealGender = me.gender && me.gender !== 'other';
                             
                             if (!hasPhotos || !hasRealGender) {
-                                console.log("[Auth] Button - Profile incomplete, redirecting to onboarding");
                                 router.replace("/onboarding");
                                 return;
                             }
@@ -139,9 +129,10 @@ export default function AuthGatePage() {
                         router.replace("/onboarding");
                     }
                 })
-                .catch((error: any) => {
+                .catch((error: unknown) => {
                     setTelegramLoading(false);
-                    alert(error?.message || "Ошибка входа через Telegram");
+                    const err = error as Error;
+                    setToast({message: err?.message || "Ошибка входа через Telegram", type: 'error'});
                 });
             return;
         }
@@ -159,9 +150,10 @@ export default function AuthGatePage() {
             await authService.requestOtp(identifier);
             // SEC-001: OTP is no longer returned in response, check server logs in dev mode
             router.push(`/auth/otp?phone=${encodeURIComponent(identifier)}`);
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Login failed:", error);
-            alert(error.message || "Ошибка входа");
+            const err = error as Error;
+            setToast({message: err.message || "Ошибка входа", type: 'error'});
         } finally {
             setIsLoading(false);
         }
@@ -246,6 +238,7 @@ export default function AuthGatePage() {
                     </p>
                 </div>
             </div>
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

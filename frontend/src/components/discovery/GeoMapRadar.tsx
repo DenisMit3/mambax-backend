@@ -1,10 +1,12 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import { useState, useEffect, useCallback } from 'react';
 import { MapPin, Zap, Target } from 'lucide-react';  // FIX: Removed unused imports
 
 import { useTelegram } from '@/lib/telegram';
+import { FALLBACK_AVATAR } from '@/lib/constants';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 
@@ -28,7 +30,7 @@ export interface RadarUser {
 }
 
 interface GeoMapRadarProps {
-    users?: any[];
+    users?: RadarUser[];
     loading?: boolean;
 }
 
@@ -46,7 +48,7 @@ export const GeoMapRadar = ({ users = [], loading = false }: GeoMapRadarProps) =
                 return {
                     id: u.id,
                     name: u.name,
-                    photo: u.photos?.[0] || '/api/placeholder/100/100',
+                    photo: u.photos?.[0] || FALLBACK_AVATAR,
                     distance: u.distance || ((userHash % 50) / 10).toFixed(1),  // 0-5km based on hash
                     angle: (idx * (360 / users.length)) + (userHash % 20),  // Stable angle offset
                     isOnline: u.is_online
@@ -163,7 +165,7 @@ export const GeoMapRadar = ({ users = [], loading = false }: GeoMapRadarProps) =
                                         whileHover={{ scale: 1.5, borderColor: '#FF3B30' }}
                                         onClick={() => hapticFeedback.selection()}
                                     >
-                                        <img src={user.photo} className="w-full h-full object-cover" alt={`${user.name} profile`} />
+                                        <Image src={user.photo} className="w-full h-full object-cover" alt={`${user.name} profile`} fill unoptimized />
                                     </motion.div>
                                     {user.isOnline && (
                                         <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border border-black animate-pulse" />

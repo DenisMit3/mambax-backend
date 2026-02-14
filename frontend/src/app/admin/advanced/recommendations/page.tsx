@@ -61,7 +61,7 @@ export default function RecommendationsPage() {
             <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
               <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-4">Active Experiments</h3>
               <div className="space-y-4">
-                {data?.experiments.map((exp: any) => (
+                {data?.experiments.map((exp: { name: string; traffic: number; lift: number }) => (
                   <div key={exp.name} className="flex justify-between items-center p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg">
                     <div>
                       <div className="font-medium">{exp.name}</div>
@@ -104,7 +104,7 @@ export default function RecommendationsPage() {
   );
 }
 
-function MetricBox({ label, value }: any) {
+function MetricBox({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 text-center">
       <div className="text-xs text-zinc-500 mb-1">{label}</div>

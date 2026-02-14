@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic } from 'lucide-react';
 import { useHaptic } from '@/hooks/useHaptic';
+import { Toast } from '@/components/ui/Toast';
 
 interface VoiceRecorderProps {
     onSend: (audioBlob: Blob, duration: number) => void;
@@ -11,6 +12,7 @@ export const VoiceRecorder = ({ onSend }: VoiceRecorderProps) => {
     const [isRecording, setIsRecording] = useState(false);
     const [duration, setDuration] = useState(0);
     const [waveform, setWaveform] = useState<number[]>([]);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
@@ -80,7 +82,7 @@ export const VoiceRecorder = ({ onSend }: VoiceRecorderProps) => {
 
         } catch (error) {
             console.error("Error accessing microphone:", error);
-            alert('Микрофон недоступен. Проверьте разрешения.');
+            setToast({message: 'Микрофон недоступен. Проверьте разрешения.', type: 'error'});
             haptic.error();
         }
     };
@@ -105,6 +107,7 @@ export const VoiceRecorder = ({ onSend }: VoiceRecorderProps) => {
     }, [isRecording]);
 
     return (
+        <>
         <div className="relative">
             <AnimatePresence>
                 {isRecording && (
@@ -149,5 +152,7 @@ export const VoiceRecorder = ({ onSend }: VoiceRecorderProps) => {
                 <Mic className="w-5 h-5" />
             </motion.button>
         </div>
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+    </>
     );
 };

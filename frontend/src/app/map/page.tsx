@@ -1,11 +1,10 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
+import Image from 'next/image';
 import { useEffect, useState } from "react";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { authService } from "@/services/api";
 import dynamic from "next/dynamic";
-// Removed next/head as it's not supported in App Router
 
 // Import Leaflet CSS
 import "leaflet/dist/leaflet.css";
@@ -16,12 +15,20 @@ const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLaye
 const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then(mod => mod.Popup), { ssr: false });
 
+interface NearbyUser {
+    id: string;
+    name: string;
+    age: number;
+    photos?: string[];
+    latitude?: number;
+    longitude?: number;
+}
+
 export default function MapPage() {
     const [position, setPosition] = useState<[number, number] | null>(null);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [others, setOthers] = useState<any[]>([]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [leafletIcon, setLeafletIcon] = useState<any>(null);
+    const [others, setOthers] = useState<NearbyUser[]>([]);
+    // Leaflet Icon type is complex and dynamic-imported, using unknown here
+    const [leafletIcon, setLeafletIcon] = useState<unknown>(null);
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -30,8 +37,7 @@ export default function MapPage() {
         // Import Leaflet and create icon only on client side
         import("leaflet").then((L) => {
             // Fix Leaflet's default icon path issues in webpack
-            // @ts-ignore
-            delete L.Icon.Default.prototype._getIconUrl;
+            delete (L.Icon.Default.prototype as Record<string, unknown>)._getIconUrl;
             L.Icon.Default.mergeOptions({
                 iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
                 iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
@@ -58,8 +64,7 @@ export default function MapPage() {
                     // Use authService to get real users nearby
                     const profiles = await authService.getProfiles({ lat: latitude, lon: longitude, limit: 50 });
                     // Filter users who have valid coordinates
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    setOthers(Array.isArray(profiles) ? profiles.filter((u: any) => u.latitude && u.longitude) : []);
+                    setOthers(Array.isArray(profiles) ? profiles.filter((u: { latitude?: number; longitude?: number }) => u.latitude && u.longitude) as NearbyUser[] : []);
                 } catch (e) {
                     console.error("Failed to fetch nearby users", e);
                 }
@@ -91,7 +96,7 @@ export default function MapPage() {
 
                         {/* Me */}
                         <Marker position={position} icon={leafletIcon}>
-                            <Popup>You are here</Popup>
+                            <Popup>Вы здесь</Popup>
                         </Marker>
 
                         {/* Real Users only */}
@@ -104,7 +109,7 @@ export default function MapPage() {
                                 <Popup>
                                     <div style={{ textAlign: "center", color: "black" }}>
                                         {user.photos?.[0] && (
-                                            <img src={user.photos[0]} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", margin: "0 auto" }} alt={user.name} />
+                                            <Image src={user.photos[0]} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", margin: "0 auto" }} alt={user.name} width={40} height={40} unoptimized />
                                         )}
                                         <div style={{ fontWeight: "bold", marginTop: 5 }}>{user.name}, {user.age}</div>
                                     </div>
@@ -114,7 +119,7 @@ export default function MapPage() {
                     </MapContainer>
                 ) : (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-                        <p>Loading Map / Requesting Location...</p>
+                        <p>Загрузка карты... / Запрос геолокации...</p>
                     </div>
                 )}
             </div>

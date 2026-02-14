@@ -11,7 +11,9 @@ Comprehensive API for marketing automation including:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, desc
+from sqlalchemy.orm import aliased
 from typing import List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -80,7 +82,7 @@ async def get_campaigns(
     campaign_type: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get all marketing campaigns"""
@@ -171,7 +173,7 @@ async def get_campaigns(
 @router.post("/campaigns")
 async def create_campaign(
     campaign: CampaignCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Create a new marketing campaign"""
@@ -189,7 +191,7 @@ async def create_campaign(
 @router.get("/campaigns/{campaign_id}")
 async def get_campaign_details(
     campaign_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get detailed campaign performance"""
@@ -232,7 +234,7 @@ async def get_campaign_details(
 async def campaign_action(
     campaign_id: str,
     action: str = Query(..., regex="^(start|pause|stop|duplicate)$"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Perform action on campaign"""
@@ -252,7 +254,7 @@ async def campaign_action(
 async def get_push_notifications(
     page: int = 1,
     page_size: int = 20,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get push notification history"""
@@ -290,7 +292,7 @@ async def get_push_notifications(
 @router.post("/push-notifications")
 async def send_push_notification(
     notification: PushNotificationCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Send or schedule push notification"""
@@ -313,7 +315,7 @@ async def send_push_notification(
 @router.get("/push-notifications/analytics")
 async def get_push_analytics(
     period: str = "7d",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get push notification analytics"""
@@ -354,7 +356,7 @@ async def get_email_campaigns(
     status: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get email campaigns"""
@@ -410,7 +412,7 @@ async def get_email_campaigns(
 @router.post("/email-campaigns")
 async def create_email_campaign(
     campaign: EmailCampaignCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Create email campaign"""
@@ -428,7 +430,7 @@ async def create_email_campaign(
 @router.get("/email-campaigns/{campaign_id}/stats")
 async def get_email_stats(
     campaign_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get detailed email campaign statistics"""
@@ -477,35 +479,84 @@ async def get_email_stats(
 # ============================================
 
 @router.get("/referrals/stats")
-async def get_referral_stats(
+async def get_referral_program_stats(
     period: str = "30d",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
-    """Get referral program statistics"""
-    
+    """Get referral program statistics from real data"""
+    from backend.models.marketing import Referral, ReferralStatus
+
+    days = int(period.replace("d", "")) if period.endswith("d") else 30
+    since = datetime.utcnow() - timedelta(days=days)
+
+    total_referrals = await db.scalar(
+        select(func.count(Referral.id)).where(Referral.created_at >= since)
+    ) or 0
+
+    successful_signups = await db.scalar(
+        select(func.count(Referral.id)).where(
+            Referral.created_at >= since,
+            Referral.status.in_([ReferralStatus.CONVERTED, ReferralStatus.PENDING])
+        )
+    ) or 0
+
+    premium_conversions = await db.scalar(
+        select(func.count(Referral.id)).where(
+            Referral.created_at >= since,
+            Referral.status == ReferralStatus.CONVERTED
+        )
+    ) or 0
+
+    total_rewards = await db.scalar(
+        select(func.coalesce(func.sum(Referral.reward_stars), 0.0)).where(
+            Referral.reward_paid == True,
+            Referral.created_at >= since
+        )
+    ) or 0
+
+    conversion_rate = round((successful_signups / total_referrals * 100), 1) if total_referrals > 0 else 0
+    premium_rate = round((premium_conversions / successful_signups * 100), 1) if successful_signups > 0 else 0
+
+    # Weekly trend
+    trend = []
+    for week in range(4):
+        week_start = since + timedelta(weeks=week)
+        week_end = week_start + timedelta(weeks=1)
+        w_total = await db.scalar(
+            select(func.count(Referral.id)).where(
+                Referral.created_at >= week_start,
+                Referral.created_at < week_end
+            )
+        ) or 0
+        w_converted = await db.scalar(
+            select(func.count(Referral.id)).where(
+                Referral.created_at >= week_start,
+                Referral.created_at < week_end,
+                Referral.status == ReferralStatus.CONVERTED
+            )
+        ) or 0
+        trend.append({
+            "date": f"Week {week + 1}",
+            "referrals": w_total,
+            "signups": w_total,
+            "conversions": w_converted
+        })
+
     return {
         "summary": {
-            "total_referrals": 12456,
-            "successful_signups": 8923,
-            "premium_conversions": 2847,
-            "conversion_rate": 71.7,
-            "premium_rate": 31.9,
-            "total_rewards_given": 28470.00,
-            "cac_via_referral": 3.19,
-            "viral_coefficient": 1.24
+            "total_referrals": total_referrals,
+            "successful_signups": successful_signups,
+            "premium_conversions": premium_conversions,
+            "conversion_rate": conversion_rate,
+            "premium_rate": premium_rate,
+            "total_rewards_given": float(total_rewards),
+            "cac_via_referral": round(float(total_rewards) / max(successful_signups, 1), 2),
+            "viral_coefficient": round(total_referrals / max(1, await db.scalar(select(func.count(User.id)).where(User.referred_by.isnot(None))) or 1), 2)
         },
-        "trend": [
-            {"date": "Week 1", "referrals": 2500, "signups": 1800, "conversions": 580},
-            {"date": "Week 2", "referrals": 2800, "signups": 2000, "conversions": 650},
-            {"date": "Week 3", "referrals": 3200, "signups": 2300, "conversions": 720},
-            {"date": "Week 4", "referrals": 3956, "signups": 2823, "conversions": 897}
-        ],
+        "trend": trend,
         "rewards_breakdown": [
-            {"type": "Free Month Premium", "count": 1567, "value": 14269.33},
-            {"type": "Boost Credits", "count": 2345, "value": 8207.50},
-            {"type": "Super Like Pack", "count": 1234, "value": 4936.00},
-            {"type": "Cash Reward", "count": 456, "value": 1057.17}
+            {"type": "Stars Bonus", "count": premium_conversions, "value": float(total_rewards)}
         ]
     }
 
@@ -513,80 +564,61 @@ async def get_referral_stats(
 @router.get("/referrals/top-referrers")
 async def get_top_referrers(
     limit: int = 20,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
-    """Get top referrers"""
-    
+    """Get top referrers from real data"""
+    from backend.models.marketing import Referral, ReferralStatus
+
+    result = await db.execute(
+        select(
+            User.id,
+            User.name,
+            User.created_at,
+            func.count(Referral.id).label("total_referrals"),
+            func.count(Referral.id).filter(Referral.status == ReferralStatus.CONVERTED).label("conversions"),
+            func.coalesce(func.sum(Referral.reward_stars).filter(Referral.reward_paid == True), 0).label("total_rewards"),
+        )
+        .join(Referral, Referral.referrer_id == User.id)
+        .group_by(User.id, User.name, User.created_at)
+        .order_by(desc("total_referrals"))
+        .limit(limit)
+    )
+    rows = result.all()
+
     referrers = [
         {
-            "user_id": "user-101",
-            "name": "Sarah M.",
-            "referrals": 156,
-            "signups": 134,
-            "conversions": 45,
-            "total_rewards": 450.00,
-            "joined": "2023-06-15"
-        },
-        {
-            "user_id": "user-102",
-            "name": "Michael K.",
-            "referrals": 123,
-            "signups": 98,
-            "conversions": 32,
-            "total_rewards": 320.00,
-            "joined": "2023-08-22"
-        },
-        {
-            "user_id": "user-103",
-            "name": "Emma J.",
-            "referrals": 98,
-            "signups": 87,
-            "conversions": 28,
-            "total_rewards": 280.00,
-            "joined": "2023-09-10"
-        },
-        {
-            "user_id": "user-104",
-            "name": "David L.",
-            "referrals": 87,
-            "signups": 72,
-            "conversions": 23,
-            "total_rewards": 230.00,
-            "joined": "2023-07-05"
-        },
-        {
-            "user_id": "user-105",
-            "name": "Lisa W.",
-            "referrals": 76,
-            "signups": 65,
-            "conversions": 21,
-            "total_rewards": 210.00,
-            "joined": "2023-10-18"
+            "user_id": str(row.id),
+            "name": row.name,
+            "referrals": row.total_referrals,
+            "signups": row.total_referrals,
+            "conversions": row.conversions,
+            "total_rewards": float(row.total_rewards),
+            "joined": row.created_at.strftime("%Y-%m-%d") if row.created_at else None
         }
+        for row in rows
     ]
-    
-    return {"referrers": referrers[:limit], "total": len(referrers)}
+
+    return {"referrers": referrers, "total": len(referrers)}
 
 
 @router.get("/referrals/settings")
 async def get_referral_settings(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get referral program settings"""
-    
     return {
         "program_active": True,
         "referrer_reward": {
-            "type": "premium_days",
-            "value": 7,
-            "description": "7 days free Premium for each successful referral"
+            "type": "stars",
+            "value": 50,
+            "description": "50 Stars for each successful referral"
         },
         "referee_reward": {
-            "type": "premium_trial",
-            "value": 3,
-            "description": "3 days Premium trial for new users"
+            "type": "stars",
+            "value": 50,
+            "description": "50 Stars bonus for new users"
         },
         "conditions": {
             "min_profile_completion": 80,
@@ -607,94 +639,53 @@ async def get_referral_settings(
 @router.get("/acquisition/channels")
 async def get_acquisition_channels(
     period: str = "30d",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
-    """Get user acquisition by channel"""
-    
+    """Get user acquisition by channel from real data"""
+    from backend.models.marketing import AcquisitionChannel
+
+    result = await db.execute(
+        select(AcquisitionChannel).where(AcquisitionChannel.is_active == True).order_by(desc(AcquisitionChannel.total_users))
+    )
+    channels_db = result.scalars().all()
+
+    total_users = sum(c.total_users for c in channels_db) or 1
+    total_cost = sum(c.total_cost for c in channels_db)
+    total_revenue = sum(c.total_revenue for c in channels_db)
+
+    channels = []
+    for c in channels_db:
+        pct = round(c.total_users / total_users * 100, 1)
+        cac = round(c.total_cost / max(c.total_users, 1), 2)
+        ltv = round(c.total_revenue / max(c.total_users, 1), 2)
+        roi = round((c.total_revenue - c.total_cost) / max(c.total_cost, 1) * 100, 1) if c.total_cost > 0 else 0
+        premium_rate = round(c.total_conversions / max(c.total_users, 1) * 100, 1)
+
+        channels.append({
+            "channel": c.name,
+            "code": c.code,
+            "color": c.color,
+            "users": c.total_users,
+            "percentage": pct,
+            "cac": cac,
+            "ltv": ltv,
+            "premium_rate": premium_rate,
+            "roi": roi,
+            "total_cost": c.total_cost,
+            "total_revenue": c.total_revenue,
+        })
+
+    avg_cac = round(total_cost / max(total_users, 1), 2)
+    avg_ltv = round(total_revenue / max(total_users, 1), 2)
+
     return {
-        "channels": [
-            {
-                "channel": "Organic Search",
-                "users": 12456,
-                "percentage": 28.5,
-                "cac": 0,
-                "ltv": 45.67,
-                "retention_d7": 65.2,
-                "retention_d30": 42.3,
-                "premium_rate": 15.2
-            },
-            {
-                "channel": "Facebook Ads",
-                "users": 8923,
-                "percentage": 20.4,
-                "cac": 3.45,
-                "ltv": 52.34,
-                "retention_d7": 58.4,
-                "retention_d30": 38.7,
-                "premium_rate": 18.5,
-                "roi": 1417.7
-            },
-            {
-                "channel": "Google Ads",
-                "users": 7234,
-                "percentage": 16.5,
-                "cac": 4.12,
-                "ltv": 48.92,
-                "retention_d7": 62.1,
-                "retention_d30": 40.5,
-                "premium_rate": 16.8,
-                "roi": 1087.4
-            },
-            {
-                "channel": "Referral",
-                "users": 5892,
-                "percentage": 13.5,
-                "cac": 3.19,
-                "ltv": 67.45,
-                "retention_d7": 72.3,
-                "retention_d30": 55.6,
-                "premium_rate": 31.9,
-                "roi": 2014.4
-            },
-            {
-                "channel": "App Store",
-                "users": 4521,
-                "percentage": 10.3,
-                "cac": 0,
-                "ltv": 42.12,
-                "retention_d7": 55.8,
-                "retention_d30": 35.2,
-                "premium_rate": 12.4
-            },
-            {
-                "channel": "Social Media",
-                "users": 3456,
-                "percentage": 7.9,
-                "cac": 2.15,
-                "ltv": 38.90,
-                "retention_d7": 48.9,
-                "retention_d30": 28.4,
-                "premium_rate": 10.2,
-                "roi": 1709.3
-            },
-            {
-                "channel": "Influencer",
-                "users": 1234,
-                "percentage": 2.8,
-                "cac": 8.50,
-                "ltv": 55.23,
-                "retention_d7": 68.2,
-                "retention_d30": 48.9,
-                "premium_rate": 25.6,
-                "roi": 549.8
-            }
-        ],
+        "channels": channels,
         "totals": {
-            "total_users": 43716,
-            "avg_cac": 2.87,
-            "avg_ltv": 48.52,
-            "blended_roi": 1590.6
+            "total_users": total_users,
+            "avg_cac": avg_cac,
+            "avg_ltv": avg_ltv,
+            "blended_roi": round((total_revenue - total_cost) / max(total_cost, 1) * 100, 1) if total_cost > 0 else 0
         }
     }
 
@@ -703,99 +694,85 @@ async def get_acquisition_channels(
 async def get_channel_roi(
     channel: Optional[str] = None,
     period: str = "30d",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
-    """Get ROI analysis by channel"""
-    
-    return {
-        "channels": [
-            {
-                "channel": "Referral",
-                "spend": 28470.00,
-                "users_acquired": 8923,
-                "revenue_generated": 602050.35,
-                "cac": 3.19,
-                "ltv": 67.45,
-                "roi": 2014.4,
-                "payback_days": 4.5
-            },
-            {
-                "channel": "Facebook Ads",
-                "spend": 30783.35,
-                "users_acquired": 8923,
-                "revenue_generated": 466908.82,
-                "cac": 3.45,
-                "ltv": 52.34,
-                "roi": 1417.7,
-                "payback_days": 6.2
-            },
-            {
-                "channel": "Google Ads",
-                "spend": 29804.08,
-                "users_acquired": 7234,
-                "revenue_generated": 353934.48,
-                "cac": 4.12,
-                "ltv": 48.92,
-                "roi": 1087.4,
-                "payback_days": 7.8
-            },
-            {
-                "channel": "Social Media",
-                "spend": 7430.40,
-                "users_acquired": 3456,
-                "revenue_generated": 134427.84,
-                "cac": 2.15,
-                "ltv": 38.90,
-                "roi": 1709.3,
-                "payback_days": 5.1
-            },
-            {
-                "channel": "Influencer",
-                "spend": 10489.00,
-                "users_acquired": 1234,
-                "revenue_generated": 68153.82,
-                "cac": 8.50,
-                "ltv": 55.23,
-                "roi": 549.8,
-                "payback_days": 12.4
-            }
-        ],
-        "recommendations": [
-            "Increase budget for Referral program - highest ROI and LTV",
-            "Optimize Facebook Ads targeting - good volume but lower LTV",
-            "Consider reducing Influencer spend - lowest ROI"
-        ]
-    }
+    """Get ROI analysis by channel from real data"""
+    from backend.models.marketing import AcquisitionChannel
+
+    query = select(AcquisitionChannel).where(AcquisitionChannel.total_cost > 0)
+    if channel:
+        query = query.where(AcquisitionChannel.code == channel)
+    query = query.order_by(desc(AcquisitionChannel.total_revenue))
+
+    result = await db.execute(query)
+    channels_db = result.scalars().all()
+
+    channels = []
+    for c in channels_db:
+        cac = round(c.total_cost / max(c.total_users, 1), 2)
+        ltv = round(c.total_revenue / max(c.total_users, 1), 2)
+        roi = round((c.total_revenue - c.total_cost) / max(c.total_cost, 1) * 100, 1)
+        payback = round(c.total_cost / max(c.total_revenue / 30, 0.01), 1)  # approx days
+
+        channels.append({
+            "channel": c.name,
+            "spend": c.total_cost,
+            "users_acquired": c.total_users,
+            "revenue_generated": c.total_revenue,
+            "cac": cac,
+            "ltv": ltv,
+            "roi": roi,
+            "payback_days": payback
+        })
+
+    # Generate recommendations
+    recommendations = []
+    if channels:
+        best = max(channels, key=lambda x: x["roi"])
+        worst = min(channels, key=lambda x: x["roi"])
+        recommendations.append(f"Increase budget for {best['channel']} — highest ROI at {best['roi']}%")
+        if worst["roi"] < 500:
+            recommendations.append(f"Consider reducing {worst['channel']} spend — lowest ROI at {worst['roi']}%")
+
+    return {"channels": channels, "recommendations": recommendations}
 
 
 @router.get("/attribution")
 async def get_marketing_attribution(
     period: str = "30d",
     model: str = "last_touch",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
-    """Get marketing attribution data"""
-    
+    """Get marketing attribution data from real channels"""
+    from backend.models.marketing import AcquisitionChannel
+
+    result = await db.execute(
+        select(AcquisitionChannel).where(AcquisitionChannel.is_active == True).order_by(desc(AcquisitionChannel.total_revenue))
+    )
+    channels_db = result.scalars().all()
+
+    total_revenue = sum(c.total_revenue for c in channels_db) or 1
+
+    attribution = [
+        {
+            "channel": c.name,
+            "conversions": c.total_conversions,
+            "revenue": c.total_revenue,
+            "percentage": round(c.total_revenue / total_revenue * 100, 1)
+        }
+        for c in channels_db
+    ]
+
     return {
         "model": model,
-        "attribution": [
-            {"channel": "Organic Search", "conversions": 1892, "revenue": 56760.08, "percentage": 22.5},
-            {"channel": "Facebook Ads", "conversions": 1634, "revenue": 49020.66, "percentage": 19.4},
-            {"channel": "Referral", "conversions": 1456, "revenue": 43680.44, "percentage": 17.3},
-            {"channel": "Google Ads", "conversions": 1234, "revenue": 37020.66, "percentage": 14.7},
-            {"channel": "Direct", "conversions": 1123, "revenue": 33690.77, "percentage": 13.4},
-            {"channel": "App Store", "conversions": 678, "revenue": 20340.22, "percentage": 8.1},
-            {"channel": "Social Media", "conversions": 389, "revenue": 11670.11, "percentage": 4.6}
-        ],
+        "attribution": attribution,
         "multi_touch": {
             "avg_touchpoints": 2.8,
             "common_paths": [
-                {"path": "Organic → Direct", "conversions": 456},
-                {"path": "Facebook → Direct", "conversions": 378},
-                {"path": "Google → Facebook → Direct", "conversions": 234},
-                {"path": "Referral → Direct", "conversions": 189}
+                {"path": "Organic → Direct", "conversions": 0},
+                {"path": "Referral → Direct", "conversions": 0}
             ]
         }
     }
@@ -808,7 +785,7 @@ async def get_marketing_attribution(
 @router.get("/experiments")
 async def get_growth_experiments(
     status: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get growth experiments"""
@@ -867,7 +844,7 @@ async def get_growth_experiments(
 @router.get("/experiments/{experiment_id}")
 async def get_experiment_details(
     experiment_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get detailed experiment results"""
@@ -926,7 +903,7 @@ async def get_experiment_details(
 @router.get("/seo/performance")
 async def get_seo_performance(
     period: str = "30d",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get SEO performance metrics"""
@@ -960,7 +937,7 @@ async def get_seo_performance(
 async def get_app_store_metrics(
     platform: str = "all",
     period: str = "30d",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Get App Store / Play Store metrics"""
@@ -1009,7 +986,7 @@ async def get_app_store_metrics(
 @router.get("/viral-coefficient")
 async def get_viral_coefficient(
     period: str = "30d",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
     """Calculate and get viral coefficient"""

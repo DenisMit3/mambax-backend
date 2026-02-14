@@ -16,7 +16,10 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 import uuid
 import os
+import logging
 import httpx
+
+logger = logging.getLogger(__name__)
 
 # Use AsyncSession
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +29,7 @@ from backend.models.user import User
 from backend.models.monetization import (
     SubscriptionPlan, UserSubscription, RevenueTransaction, 
     PromoCode, PromoRedemption, Refund, PricingTest, PaymentGatewayLog,
-    VirtualGift, GiftCategory
+    VirtualGift, GiftCategory, BoostPurchase, SuperLikePurchase, AffiliatePartner
 )
 from backend.schemas.monetization import (
     SubscriptionPlanCreate, SubscriptionPlanResponse, 
@@ -434,6 +437,106 @@ async def telegram_refund_transaction(
 
 
 # ============================================
+# REFUND MANAGEMENT (Real DB)
+# ============================================
+
+@router.get("/refunds")
+async def list_refunds(
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """List all refund requests with filtering"""
+    stmt = (
+        select(Refund)
+        .order_by(desc(Refund.created_at))
+    )
+    
+    if status:
+        stmt = stmt.where(Refund.status == status)
+    
+    # Count
+    count_stmt = select(func.count()).select_from(Refund)
+    if status:
+        count_stmt = count_stmt.where(Refund.status == status)
+    total = (await db.execute(count_stmt)).scalar() or 0
+    
+    # Paginate
+    stmt = stmt.offset((page - 1) * size).limit(size)
+    result = await db.execute(stmt)
+    refunds = result.scalars().all()
+    
+    items = []
+    for r in refunds:
+        # Get transaction info
+        tx = await db.get(RevenueTransaction, r.transaction_id) if r.transaction_id else None
+        # Get user info
+        user = await db.get(User, r.user_id) if r.user_id else None
+        items.append({
+            "id": str(r.id),
+            "transaction_id": str(r.transaction_id) if r.transaction_id else None,
+            "user_id": str(r.user_id) if r.user_id else None,
+            "user_name": user.name if user else "Unknown",
+            "amount": float(r.amount) if r.amount else 0,
+            "reason": r.reason,
+            "status": r.status,
+            "original_amount": float(tx.amount) if tx else 0,
+            "payment_gateway": tx.payment_gateway if tx else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "resolved_at": r.resolved_at.isoformat() if hasattr(r, 'resolved_at') and r.resolved_at else None,
+        })
+    
+    return {"items": items, "total": total, "page": page, "size": size}
+
+
+@router.post("/refunds/{refund_id}/{action}")
+async def refund_action(
+    refund_id: uuid.UUID,
+    action: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Approve or reject a refund request"""
+    if action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="Action must be 'approve' or 'reject'")
+    
+    refund = await db.get(Refund, refund_id)
+    if not refund:
+        raise HTTPException(status_code=404, detail="Refund not found")
+    
+    if refund.status not in ("pending", "requested"):
+        raise HTTPException(status_code=400, detail=f"Refund already {refund.status}")
+    
+    if action == "approve":
+        refund.status = "approved"
+        # Also refund the transaction
+        if refund.transaction_id:
+            tx = await db.get(RevenueTransaction, refund.transaction_id)
+            if tx:
+                tx.status = "refunded"
+                # Return funds to user balance if applicable
+                if tx.user_id and tx.payment_gateway == "telegram_stars":
+                    await db.execute(
+                        update(User)
+                        .where(User.id == tx.user_id)
+                        .values(stars_balance=User.stars_balance + tx.amount)
+                    )
+    else:
+        refund.status = "rejected"
+    
+    if hasattr(refund, 'resolved_at'):
+        refund.resolved_at = datetime.utcnow()
+    if hasattr(refund, 'resolved_by'):
+        refund.resolved_by = current_user.id
+    
+    await db.commit()
+    
+    return {"status": "success", "refund_status": refund.status}
+
+
+# ============================================
 # REVENUE ANALYTICS (Real DB)
 # ============================================
 
@@ -639,55 +742,130 @@ async def get_revenue_trend(
 @router.get("/revenue/by-channel")
 async def get_revenue_by_channel(
     period: str = "month",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get revenue breakdown by acquisition channel"""
-    
-    return {
-        "channels": [
-            {"channel": "Organic", "revenue": 125678.00, "users": 4521, "arpu": 27.80},
-            {"channel": "Paid Ads", "revenue": 98234.00, "users": 3245, "arpu": 30.27},
-            {"channel": "Referral", "revenue": 45678.00, "users": 1823, "arpu": 25.05},
-            {"channel": "Social Media", "revenue": 34567.00, "users": 1456, "arpu": 23.74},
-            {"channel": "App Store", "revenue": 20410.00, "users": 892, "arpu": 22.88}
-        ],
-        "total_revenue": 324567.00
-    }
+    """Get revenue breakdown by acquisition channel (Real DB)"""
+    days = {"week": 7, "month": 30, "quarter": 90, "year": 365}.get(period, 30)
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    stmt = (
+        select(
+            func.coalesce(RevenueTransaction.acquisition_channel, "organic").label("channel"),
+            func.sum(RevenueTransaction.amount).label("revenue"),
+            func.count(func.distinct(RevenueTransaction.user_id)).label("users"),
+        )
+        .where(
+            and_(
+                RevenueTransaction.status == "completed",
+                RevenueTransaction.created_at >= start_date,
+            )
+        )
+        .group_by(func.coalesce(RevenueTransaction.acquisition_channel, "organic"))
+        .order_by(func.sum(RevenueTransaction.amount).desc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    total_revenue = sum(float(r.revenue or 0) for r in rows) or 1.0
+    channels = []
+    for r in rows:
+        rev = float(r.revenue or 0)
+        users = r.users or 0
+        channels.append({
+            "channel": (r.channel or "organic").replace("_", " ").title(),
+            "revenue": round(rev, 2),
+            "users": users,
+            "arpu": round(rev / users, 2) if users else 0,
+        })
+
+    return {"channels": channels, "total_revenue": round(total_revenue, 2)}
 
 
 @router.get("/revenue/churn")
 async def get_churn_analysis(
     period: str = "month",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get churn analysis by subscription tier"""
-    
+    """Get churn analysis by subscription tier (Real DB)"""
+    days = {"week": 7, "month": 30, "quarter": 90, "year": 365}.get(period, 30)
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    # Cancelled/expired subscriptions in period grouped by plan tier
+    # Join UserSubscription -> SubscriptionPlan to get tier
+    stmt = (
+        select(
+            SubscriptionPlan.tier,
+            func.count(UserSubscription.id).label("churned"),
+        )
+        .join(SubscriptionPlan, UserSubscription.plan_id == SubscriptionPlan.id)
+        .where(
+            and_(
+                UserSubscription.status.in_(["cancelled", "expired"]),
+                UserSubscription.cancelled_at >= start_date,
+            )
+        )
+        .group_by(SubscriptionPlan.tier)
+    )
+    result = await db.execute(stmt)
+    churned_rows = result.all()
+
+    # Total active per tier at start of period
+    active_stmt = (
+        select(
+            SubscriptionPlan.tier,
+            func.count(UserSubscription.id).label("active"),
+        )
+        .join(SubscriptionPlan, UserSubscription.plan_id == SubscriptionPlan.id)
+        .where(UserSubscription.status == "active")
+        .group_by(SubscriptionPlan.tier)
+    )
+    active_result = await db.execute(active_stmt)
+    active_map = {r.tier: r.active for r in active_result.all()}
+
+    churned_map = {r.tier: r.churned for r in churned_rows}
+
+    total_active = sum(active_map.values()) or 1
+    total_churned = sum(churned_map.values())
+    overall_churn = round((total_churned / total_active) * 100, 1) if total_active else 0
+
+    by_tier = []
+    for tier in ["free", "vip", "gold", "platinum"]:
+        churned = churned_map.get(tier, 0)
+        active = active_map.get(tier, 0)
+        if churned == 0 and active == 0:
+            continue
+        rate = round((churned / (active + churned)) * 100, 1) if (active + churned) else 0
+        by_tier.append({
+            "tier": tier,
+            "churn_rate": rate,
+            "churned_users": churned,
+            "active_users": active,
+        })
+
+    # Churn trend — last 4 months
+    churn_trend = []
+    for i in range(3, -1, -1):
+        m_start = datetime.utcnow() - timedelta(days=30 * (i + 1))
+        m_end = datetime.utcnow() - timedelta(days=30 * i)
+        cnt_stmt = select(func.count(UserSubscription.id)).where(
+            and_(
+                UserSubscription.status.in_(["cancelled", "expired"]),
+                UserSubscription.cancelled_at >= m_start,
+                UserSubscription.cancelled_at < m_end,
+            )
+        )
+        cnt = (await db.execute(cnt_stmt)).scalar() or 0
+        churn_trend.append({
+            "month": m_start.strftime("%b"),
+            "churned": cnt,
+        })
+
     return {
-        "overall_churn": 4.8,
-        "by_tier": [
-            {
-                "tier": "gold",
-                "churn_rate": 5.2,
-                "churned_users": 647,
-                "revenue_lost": 19396.53,
-                "top_reasons": ["too_expensive", "not_enough_features", "found_partner"]
-            },
-            {
-                "tier": "platinum",
-                "churn_rate": 3.8,
-                "churned_users": 146,
-                "revenue_lost": 7298.54,
-                "top_reasons": ["found_partner", "moving_to_gold", "not_using"]
-            }
-        ],
-        "churn_trend": [
-            {"month": "Oct", "rate": 5.1},
-            {"month": "Nov", "rate": 4.9},
-            {"month": "Dec", "rate": 5.3},
-            {"month": "Jan", "rate": 4.8}
-        ]
+        "overall_churn": overall_churn,
+        "by_tier": by_tier,
+        "churn_trend": churn_trend,
     }
 
 
@@ -698,36 +876,82 @@ async def get_churn_analysis(
 @router.get("/revenue/forecast")
 async def get_revenue_forecast(
     months: int = 3,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get revenue forecast for upcoming months"""
-    
-    current_mrr = 565838.95
-    growth_rate = 0.088  # 8.8% monthly growth
-    
+    """Get revenue forecast based on real DB trends"""
+    now = datetime.utcnow()
+
+    # Calculate MRR for last 3 months to derive growth rate
+    monthly_revenues = []
+    for i in range(3, 0, -1):
+        m_start = now - timedelta(days=30 * i)
+        m_end = now - timedelta(days=30 * (i - 1))
+        stmt = select(func.sum(RevenueTransaction.amount)).where(
+            and_(
+                RevenueTransaction.status == "completed",
+                RevenueTransaction.created_at >= m_start,
+                RevenueTransaction.created_at < m_end,
+            )
+        )
+        rev = float((await db.execute(stmt)).scalar() or 0)
+        monthly_revenues.append(rev)
+
+    # Current month MRR
+    current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    stmt = select(func.sum(RevenueTransaction.amount)).where(
+        and_(
+            RevenueTransaction.status == "completed",
+            RevenueTransaction.created_at >= current_month_start,
+        )
+    )
+    current_mrr = float((await db.execute(stmt)).scalar() or 0)
+
+    # Growth rate from historical data
+    growth_rates = []
+    for i in range(1, len(monthly_revenues)):
+        if monthly_revenues[i - 1] > 0:
+            rate = (monthly_revenues[i] - monthly_revenues[i - 1]) / monthly_revenues[i - 1]
+            growth_rates.append(rate)
+    avg_growth = sum(growth_rates) / len(growth_rates) if growth_rates else 0.05
+
+    # Churn rate
+    total_subs = (await db.execute(select(func.count(UserSubscription.id)).where(UserSubscription.status == "active"))).scalar() or 1
+    cancelled_last_month = (await db.execute(
+        select(func.count(UserSubscription.id)).where(
+            and_(
+                UserSubscription.status.in_(["cancelled", "expired"]),
+                UserSubscription.cancelled_at >= now - timedelta(days=30),
+            )
+        )
+    )).scalar() or 0
+    churn_rate = round((cancelled_last_month / total_subs) * 100, 1) if total_subs else 0
+
+    base_mrr = current_mrr if current_mrr > 0 else (monthly_revenues[-1] if monthly_revenues and monthly_revenues[-1] > 0 else 0)
+
     forecasts = []
     for i in range(1, months + 1):
-        projected = current_mrr * ((1 + growth_rate) ** i)
+        projected = base_mrr * ((1 + avg_growth) ** i)
         forecasts.append({
-            "month": (datetime.utcnow() + timedelta(days=30 * i)).strftime("%B %Y"),
+            "month": (now + timedelta(days=30 * i)).strftime("%B %Y"),
             "projected_mrr": round(projected, 2),
             "projected_arr": round(projected * 12, 2),
-            "confidence_low": round(projected * 0.9, 2),
+            "confidence_low": round(projected * 0.85, 2),
             "confidence_high": round(projected * 1.15, 2),
-            "growth_from_current": round((projected / current_mrr - 1) * 100, 1)
+            "growth_from_current": round((projected / base_mrr - 1) * 100, 1) if base_mrr > 0 else 0,
         })
-    
+
     return {
-        "current_mrr": current_mrr,
-        "current_arr": round(current_mrr * 12, 2),
-        "growth_rate": growth_rate * 100,
+        "current_mrr": round(base_mrr, 2),
+        "current_arr": round(base_mrr * 12, 2),
+        "growth_rate": round(avg_growth * 100, 1),
+        "historical_mrr": [round(r, 2) for r in monthly_revenues],
         "forecasts": forecasts,
         "assumptions": {
-            "churn_rate": 4.8,
-            "new_subscriber_growth": 12.5,
-            "price_changes": "none_planned"
-        }
+            "churn_rate": churn_rate,
+            "avg_growth_rate": round(avg_growth * 100, 1),
+            "based_on_months": len(monthly_revenues),
+        },
     }
 
 
@@ -738,60 +962,119 @@ async def get_revenue_forecast(
 @router.get("/boosts/analytics")
 async def get_boost_analytics(
     period: str = "month",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get boost purchase and usage analytics"""
-    
+    """Get boost purchase and usage analytics (Real DB)"""
+    days = {"week": 7, "month": 30, "quarter": 90, "year": 365}.get(period, 30)
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    # Total purchases
+    total_stmt = select(func.count(BoostPurchase.id)).where(BoostPurchase.created_at >= start_date)
+    total = (await db.execute(total_stmt)).scalar() or 0
+
+    # Revenue from boosts
+    rev_stmt = select(func.sum(RevenueTransaction.amount)).where(
+        and_(
+            RevenueTransaction.transaction_type == "boost",
+            RevenueTransaction.status == "completed",
+            RevenueTransaction.created_at >= start_date,
+        )
+    )
+    revenue = float((await db.execute(rev_stmt)).scalar() or 0)
+
+    # Used vs unused
+    used_stmt = select(func.count(BoostPurchase.id)).where(
+        and_(BoostPurchase.created_at >= start_date, BoostPurchase.used_at != None)
+    )
+    used = (await db.execute(used_stmt)).scalar() or 0
+    unused = total - used
+
+    # Avg effectiveness
+    eff_stmt = select(
+        func.avg(BoostPurchase.views_during_boost),
+        func.avg(BoostPurchase.likes_during_boost),
+        func.avg(BoostPurchase.matches_during_boost),
+    ).where(and_(BoostPurchase.created_at >= start_date, BoostPurchase.used_at != None))
+    eff = (await db.execute(eff_stmt)).one_or_none()
+
+    # By type
+    by_type_stmt = (
+        select(
+            BoostPurchase.boost_type,
+            func.count(BoostPurchase.id).label("purchases"),
+        )
+        .where(BoostPurchase.created_at >= start_date)
+        .group_by(BoostPurchase.boost_type)
+    )
+    by_type_rows = (await db.execute(by_type_stmt)).all()
+
     return {
-        "purchases": {
-            "total": 4521,
-            "revenue": 45234.00,
-            "average_per_day": 150
-        },
-        "usage": {
-            "used": 4123,
-            "unused": 398,
-            "usage_rate": 91.2
-        },
+        "purchases": {"total": total, "revenue": round(revenue, 2), "average_per_day": round(total / max(days, 1), 1)},
+        "usage": {"used": used, "unused": unused, "usage_rate": round((used / total) * 100, 1) if total else 0},
         "effectiveness": {
-            "avg_views_increase": 312,
-            "avg_likes_increase": 45,
-            "avg_matches_increase": 8
+            "avg_views_increase": round(float(eff[0] or 0)) if eff else 0,
+            "avg_likes_increase": round(float(eff[1] or 0)) if eff else 0,
+            "avg_matches_increase": round(float(eff[2] or 0)) if eff else 0,
         },
-        "by_type": [
-            {"type": "standard", "purchases": 3245, "revenue": 16225.00},
-            {"type": "super", "purchases": 987, "revenue": 19740.00},
-            {"type": "mega", "purchases": 289, "revenue": 9269.00}
-        ]
+        "by_type": [{"type": r.boost_type, "purchases": r.purchases} for r in by_type_rows],
     }
 
 
 @router.get("/superlikes/analytics")
 async def get_superlike_analytics(
     period: str = "month",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get super like analytics"""
-    
+    """Get super like analytics (Real DB)"""
+    days = {"week": 7, "month": 30, "quarter": 90, "year": 365}.get(period, 30)
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    # Purchased superlikes
+    purchased_stmt = select(
+        func.count(SuperLikePurchase.id),
+        func.sum(SuperLikePurchase.quantity_purchased),
+    ).where(and_(SuperLikePurchase.created_at >= start_date, SuperLikePurchase.source == "purchase"))
+    purchased = (await db.execute(purchased_stmt)).one_or_none()
+    total_purchases = purchased[0] or 0 if purchased else 0
+    total_qty_purchased = int(purchased[1] or 0) if purchased else 0
+
+    # From subscription
+    from_sub_stmt = select(func.sum(SuperLikePurchase.quantity_purchased)).where(
+        and_(SuperLikePurchase.created_at >= start_date, SuperLikePurchase.source == "subscription")
+    )
+    from_sub = int((await db.execute(from_sub_stmt)).scalar() or 0)
+
+    # Revenue
+    rev_stmt = select(func.sum(RevenueTransaction.amount)).where(
+        and_(
+            RevenueTransaction.transaction_type == "super_like",
+            RevenueTransaction.status == "completed",
+            RevenueTransaction.created_at >= start_date,
+        )
+    )
+    revenue = float((await db.execute(rev_stmt)).scalar() or 0)
+
+    # Remaining (unused)
+    remaining_stmt = select(func.sum(SuperLikePurchase.quantity_remaining)).where(
+        SuperLikePurchase.created_at >= start_date
+    )
+    remaining = int((await db.execute(remaining_stmt)).scalar() or 0)
+    total_sent = (total_qty_purchased + from_sub) - remaining
+
     return {
         "purchases": {
-            "total": 8934,
-            "revenue": 23456.00,
-            "from_subscription": 12456,
-            "total_sent": 21390
+            "total": total_purchases,
+            "revenue": round(revenue, 2),
+            "from_subscription": from_sub,
+            "total_sent": max(total_sent, 0),
         },
         "effectiveness": {
-            "match_rate": 32.5,
-            "response_rate": 45.2,
-            "avg_matches": 3.2
+            "total_purchased_qty": total_qty_purchased,
+            "remaining": remaining,
+            "usage_rate": round(((total_qty_purchased - remaining) / total_qty_purchased) * 100, 1) if total_qty_purchased else 0,
         },
-        "packages": [
-            {"size": 5, "purchases": 5234, "revenue": 10468.00},
-            {"size": 15, "purchases": 2456, "revenue": 7368.00},
-            {"size": 30, "purchases": 1244, "revenue": 5620.00}
-        ]
     }
 
 
@@ -804,72 +1087,91 @@ async def get_affiliates(
     status: str = "active",
     page: int = 1,
     page_size: int = 20,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get affiliate partners"""
-    
-    affiliates = [
-        {
-            "id": "aff-1",
-            "name": "Dating Blog Pro",
-            "code": "DATINGBLOG",
-            "email": "partner@datingblog.com",
-            "commission_rate": 15,
-            "total_referrals": 1245,
-            "total_conversions": 423,
-            "conversion_rate": 33.9,
-            "revenue_generated": 42345.00,
-            "commission_paid": 6351.75,
-            "pending_commission": 892.50,
-            "is_active": True
-        },
-        {
-            "id": "aff-2",
-            "name": "Love Finder Reviews",
-            "code": "LOVEFINDER",
-            "email": "affiliates@lovefinder.com",
-            "commission_rate": 12,
-            "total_referrals": 892,
-            "total_conversions": 287,
-            "conversion_rate": 32.2,
-            "revenue_generated": 28456.00,
-            "commission_paid": 3414.72,
-            "pending_commission": 423.60,
-            "is_active": True
-        }
-    ]
-    
+    """Get affiliate partners (Real DB)"""
+    stmt = select(AffiliatePartner).order_by(AffiliatePartner.total_revenue_generated.desc())
     if status == "active":
-        affiliates = [a for a in affiliates if a["is_active"]]
-    
+        stmt = stmt.where(AffiliatePartner.is_active == True)
+    elif status == "inactive":
+        stmt = stmt.where(AffiliatePartner.is_active == False)
+
+    offset = (page - 1) * page_size
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    stmt = stmt.offset(offset).limit(page_size)
+    result = await db.execute(stmt)
+    partners = result.scalars().all()
+
+    affiliates = []
+    for p in partners:
+        conv_rate = round((p.total_conversions / p.total_referrals) * 100, 1) if p.total_referrals else 0
+        affiliates.append({
+            "id": str(p.id),
+            "name": p.name,
+            "code": p.code,
+            "email": p.email,
+            "commission_rate": float(p.commission_rate),
+            "total_referrals": p.total_referrals,
+            "total_conversions": p.total_conversions,
+            "conversion_rate": conv_rate,
+            "revenue_generated": float(p.total_revenue_generated),
+            "commission_paid": float(p.total_commission_paid),
+            "pending_commission": float(p.pending_commission),
+            "is_active": p.is_active,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        })
+
     return {
         "affiliates": affiliates,
-        "total": len(affiliates),
+        "total": total,
         "total_revenue": sum(a["revenue_generated"] for a in affiliates),
-        "total_commission": sum(a["commission_paid"] + a["pending_commission"] for a in affiliates)
+        "total_commission": sum(a["commission_paid"] + a["pending_commission"] for a in affiliates),
     }
 
 
 @router.get("/affiliates/stats")
 async def get_affiliate_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get affiliate program overview stats"""
-    
+    """Get affiliate program overview stats (Real DB)"""
+    active_stmt = select(func.count(AffiliatePartner.id)).where(AffiliatePartner.is_active == True)
+    active_count = (await db.execute(active_stmt)).scalar() or 0
+
+    agg_stmt = select(
+        func.sum(AffiliatePartner.total_referrals),
+        func.sum(AffiliatePartner.total_conversions),
+        func.sum(AffiliatePartner.total_revenue_generated),
+        func.sum(AffiliatePartner.total_commission_paid),
+        func.sum(AffiliatePartner.pending_commission),
+    )
+    agg = (await db.execute(agg_stmt)).one_or_none()
+
+    total_referrals = int(agg[0] or 0) if agg else 0
+    total_conversions = int(agg[1] or 0) if agg else 0
+    total_revenue = float(agg[2] or 0) if agg else 0
+    total_paid = float(agg[3] or 0) if agg else 0
+    total_pending = float(agg[4] or 0) if agg else 0
+
+    # Top performer
+    top_stmt = select(AffiliatePartner).order_by(AffiliatePartner.total_revenue_generated.desc()).limit(1)
+    top = (await db.execute(top_stmt)).scalar_one_or_none()
+
     return {
-        "active_affiliates": 24,
-        "total_referrals": 8547,
-        "total_conversions": 2891,
-        "conversion_rate": 33.8,
-        "revenue_generated": 289456.00,
-        "commission_paid": 34734.72,
-        "pending_commission": 4892.50,
+        "active_affiliates": active_count,
+        "total_referrals": total_referrals,
+        "total_conversions": total_conversions,
+        "conversion_rate": round((total_conversions / total_referrals) * 100, 1) if total_referrals else 0,
+        "revenue_generated": round(total_revenue, 2),
+        "commission_paid": round(total_paid, 2),
+        "pending_commission": round(total_pending, 2),
         "top_performer": {
-            "name": "Dating Blog Pro",
-            "revenue": 42345.00
-        }
+            "name": top.name if top else "N/A",
+            "revenue": float(top.total_revenue_generated) if top else 0,
+        },
     }
 
 
@@ -879,48 +1181,569 @@ async def get_affiliate_stats(
 
 @router.get("/upsell/opportunities")
 async def get_upsell_opportunities(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Identify upsell opportunities"""
-    
+    """Identify upsell opportunities (Real DB)"""
+    now = datetime.utcnow()
+
+    # Segment 1: Active free users (high activity = have transactions)
+    free_active_stmt = select(func.count(User.id)).where(
+        and_(
+            User.subscription_tier == "free",
+            User.is_active == True,
+            User.last_active >= now - timedelta(days=7),
+        )
+    )
+    free_active = (await db.execute(free_active_stmt)).scalar() or 0
+
+    # Segment 2: Gold users who bought boosts (near limit)
+    gold_boost_stmt = select(func.count(func.distinct(BoostPurchase.user_id))).join(
+        User, BoostPurchase.user_id == User.id
+    ).where(
+        and_(
+            User.subscription_tier == "gold",
+            BoostPurchase.created_at >= now - timedelta(days=30),
+        )
+    )
+    gold_boosters = (await db.execute(gold_boost_stmt)).scalar() or 0
+
+    # Segment 3: Lapsed premium — cancelled in last 60 days
+    lapsed_stmt = select(func.count(func.distinct(UserSubscription.user_id))).where(
+        and_(
+            UserSubscription.status.in_(["cancelled", "expired"]),
+            UserSubscription.cancelled_at >= now - timedelta(days=60),
+            UserSubscription.cancelled_at < now - timedelta(days=7),
+        )
+    )
+    lapsed = (await db.execute(lapsed_stmt)).scalar() or 0
+
+    # Segment 4: Users who bought superlikes (engaged free/gold)
+    superlike_buyers_stmt = select(func.count(func.distinct(SuperLikePurchase.user_id))).where(
+        and_(
+            SuperLikePurchase.source == "purchase",
+            SuperLikePurchase.created_at >= now - timedelta(days=30),
+        )
+    )
+    superlike_buyers = (await db.execute(superlike_buyers_stmt)).scalar() or 0
+
+    segments = []
+    if free_active > 0:
+        segments.append({
+            "segment": "Active Free Users",
+            "description": "Free users active in last 7 days",
+            "count": free_active,
+            "recommended_offer": "50% off Gold for first month",
+            "estimated_conversion": 12.5,
+            "potential_revenue": round(free_active * 0.125 * 9.99, 2),
+        })
+    if gold_boosters > 0:
+        segments.append({
+            "segment": "Gold Users Buying Boosts",
+            "description": "Gold users who purchased boosts this month",
+            "count": gold_boosters,
+            "recommended_offer": "Upgrade to Platinum — 30% off",
+            "estimated_conversion": 8.5,
+            "potential_revenue": round(gold_boosters * 0.085 * 19.99, 2),
+        })
+    if lapsed > 0:
+        segments.append({
+            "segment": "Lapsed Premium Users",
+            "description": "Former premium users cancelled 7-60 days ago",
+            "count": lapsed,
+            "recommended_offer": "Come back offer — 40% off",
+            "estimated_conversion": 15.2,
+            "potential_revenue": round(lapsed * 0.152 * 9.99, 2),
+        })
+    if superlike_buyers > 0:
+        segments.append({
+            "segment": "Super Like Buyers",
+            "description": "Users purchasing super likes this month",
+            "count": superlike_buyers,
+            "recommended_offer": "Gold plan includes 5 free super likes/day",
+            "estimated_conversion": 18.5,
+            "potential_revenue": round(superlike_buyers * 0.185 * 9.99, 2),
+        })
+
+    total_potential = sum(s["potential_revenue"] for s in segments)
+
+    return {"segments": segments, "total_potential_revenue": round(total_potential, 2)}
+
+
+# ============================================
+# PRICING A/B TESTS CRUD (Feature 67)
+# ============================================
+
+class PricingTestCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    variants: list
+    target_segment: str = "all"
+    traffic_split: list = []
+    start_date: datetime
+    end_date: datetime
+
+class PricingTestUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    variants: Optional[list] = None
+    target_segment: Optional[str] = None
+    traffic_split: Optional[list] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    status: Optional[str] = None
+    winner_variant: Optional[str] = None
+
+
+@router.get("/pricing-tests")
+async def get_pricing_tests(
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Get all pricing A/B tests"""
+    stmt = select(PricingTest).order_by(PricingTest.created_at.desc())
+    if status:
+        stmt = stmt.where(PricingTest.status == status)
+    result = await db.execute(stmt)
+    tests = result.scalars().all()
+
     return {
-        "segments": [
+        "tests": [
             {
-                "segment": "High-activity Free Users",
-                "description": "Free users with >50 swipes/day for 7+ days",
-                "count": 4521,
-                "recommended_offer": "50% off Gold for first month",
-                "estimated_conversion": 12.5,
-                "potential_revenue": 16953.75
-            },
-            {
-                "segment": "Gold Users Near Limit",
-                "description": "Gold users using all boosts and superlikes",
-                "count": 1234,
-                "recommended_offer": "Upgrade to Platinum - 30% off",
-                "estimated_conversion": 8.5,
-                "potential_revenue": 5246.75
-            },
-            {
-                "segment": "Lapsed Premium Users",
-                "description": "Former premium users inactive 30-60 days",
-                "count": 892,
-                "recommended_offer": "Come back offer - 40% off",
-                "estimated_conversion": 15.2,
-                "potential_revenue": 4064.32
-            },
-            {
-                "segment": "Match Seekers",
-                "description": "Users with low match rate but high activity",
-                "count": 2345,
-                "recommended_offer": "Free boost + Gold trial",
-                "estimated_conversion": 18.5,
-                "potential_revenue": 13004.78
+                "id": str(t.id),
+                "name": t.name,
+                "description": t.description,
+                "variants": t.variants,
+                "target_segment": t.target_segment,
+                "traffic_split": t.traffic_split,
+                "start_date": t.start_date.isoformat() if t.start_date else None,
+                "end_date": t.end_date.isoformat() if t.end_date else None,
+                "status": t.status,
+                "results": t.results,
+                "winner_variant": t.winner_variant,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
             }
+            for t in tests
         ],
-        "total_potential_revenue": 39269.60
+        "total": len(tests),
     }
+
+
+@router.post("/pricing-tests")
+async def create_pricing_test(
+    data: PricingTestCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Create a new pricing A/B test"""
+    test = PricingTest(
+        name=data.name,
+        description=data.description,
+        variants=data.variants,
+        target_segment=data.target_segment,
+        traffic_split=data.traffic_split or [50] * len(data.variants),
+        start_date=data.start_date,
+        end_date=data.end_date,
+        status="draft",
+        created_by=current_user.id,
+    )
+    db.add(test)
+    await db.commit()
+    await db.refresh(test)
+    return {"status": "success", "id": str(test.id)}
+
+
+@router.patch("/pricing-tests/{test_id}")
+async def update_pricing_test(
+    test_id: uuid.UUID,
+    data: PricingTestUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Update a pricing A/B test"""
+    test = await db.get(PricingTest, test_id)
+    if not test:
+        raise HTTPException(status_code=404, detail="Test not found")
+
+    update_data = data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        if hasattr(test, key):
+            setattr(test, key, value)
+
+    await db.commit()
+    await db.refresh(test)
+    return {"status": "success", "id": str(test.id)}
+
+
+@router.delete("/pricing-tests/{test_id}")
+async def delete_pricing_test(
+    test_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Delete a pricing A/B test"""
+    test = await db.get(PricingTest, test_id)
+    if not test:
+        raise HTTPException(status_code=404, detail="Test not found")
+    await db.delete(test)
+    await db.commit()
+    return {"status": "success"}
+
+
+@router.get("/pricing-tests/{test_id}/results")
+async def get_pricing_test_results(
+    test_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Get results for a specific pricing test"""
+    test = await db.get(PricingTest, test_id)
+    if not test:
+        raise HTTPException(status_code=404, detail="Test not found")
+
+    # Calculate real conversion data per variant from transactions
+    variant_results = []
+    for i, variant in enumerate(test.variants or []):
+        variant_name = variant.get("name", f"Variant {i}")
+        # Count transactions tagged with this test variant
+        stmt = select(
+            func.count(RevenueTransaction.id),
+            func.sum(RevenueTransaction.amount),
+        ).where(
+            and_(
+                RevenueTransaction.custom_metadata["pricing_test_id"].as_string() == str(test_id),
+                RevenueTransaction.custom_metadata["variant"].as_string() == variant_name,
+                RevenueTransaction.status == "completed",
+            )
+        )
+        try:
+            res = (await db.execute(stmt)).one_or_none()
+            conversions = res[0] or 0 if res else 0
+            revenue = float(res[1] or 0) if res else 0
+        except Exception:
+            conversions = 0
+            revenue = 0
+
+        variant_results.append({
+            "variant": variant_name,
+            "price": variant.get("price", 0),
+            "conversions": conversions,
+            "revenue": round(revenue, 2),
+        })
+
+    return {
+        "test_id": str(test.id),
+        "name": test.name,
+        "status": test.status,
+        "variants": variant_results,
+        "winner_variant": test.winner_variant,
+    }
+
+
+# ============================================
+# COUPON REDEMPTION TRACKING (Feature 73)
+# ============================================
+
+@router.get("/promo-redemptions")
+async def get_promo_redemptions(
+    promo_code_id: Optional[uuid.UUID] = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Get detailed promo code redemption tracking"""
+    stmt = select(PromoRedemption).order_by(PromoRedemption.redeemed_at.desc())
+    if promo_code_id:
+        stmt = stmt.where(PromoRedemption.promo_code_id == promo_code_id)
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    offset = (page - 1) * page_size
+    stmt = stmt.offset(offset).limit(page_size)
+    result = await db.execute(stmt)
+    redemptions = result.scalars().all()
+
+    items = []
+    for r in redemptions:
+        user = await db.get(User, r.user_id)
+        promo = await db.get(PromoCode, r.promo_code_id)
+        items.append({
+            "id": str(r.id),
+            "promo_code": promo.code if promo else "N/A",
+            "promo_name": promo.name if promo else "N/A",
+            "user_id": str(r.user_id),
+            "user_name": user.name if user else "Unknown",
+            "discount_applied": float(r.discount_applied),
+            "transaction_id": str(r.transaction_id),
+            "redeemed_at": r.redeemed_at.isoformat() if r.redeemed_at else None,
+        })
+
+    # Summary stats
+    total_discount_stmt = select(func.sum(PromoRedemption.discount_applied))
+    if promo_code_id:
+        total_discount_stmt = total_discount_stmt.where(PromoRedemption.promo_code_id == promo_code_id)
+    total_discount = float((await db.execute(total_discount_stmt)).scalar() or 0)
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_discount_given": round(total_discount, 2),
+    }
+
+
+@router.get("/promo-redemptions/analytics")
+async def get_promo_redemption_analytics(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Get promo code redemption analytics overview"""
+    # Per-code stats
+    stmt = (
+        select(
+            PromoCode.id,
+            PromoCode.code,
+            PromoCode.name,
+            PromoCode.discount_type,
+            PromoCode.discount_value,
+            PromoCode.max_uses,
+            PromoCode.current_uses,
+            PromoCode.is_active,
+            func.count(PromoRedemption.id).label("redemptions"),
+            func.sum(PromoRedemption.discount_applied).label("total_discount"),
+        )
+        .outerjoin(PromoRedemption, PromoCode.id == PromoRedemption.promo_code_id)
+        .group_by(PromoCode.id)
+        .order_by(func.count(PromoRedemption.id).desc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    codes = []
+    for r in rows:
+        conversion = round((r.current_uses / r.max_uses) * 100, 1) if r.max_uses else 0
+        codes.append({
+            "id": str(r.id),
+            "code": r.code,
+            "name": r.name,
+            "discount_type": r.discount_type,
+            "discount_value": float(r.discount_value),
+            "max_uses": r.max_uses,
+            "current_uses": r.current_uses,
+            "is_active": r.is_active,
+            "redemptions": r.redemptions or 0,
+            "total_discount": round(float(r.total_discount or 0), 2),
+            "usage_rate": conversion,
+        })
+
+    total_redemptions = sum(c["redemptions"] for c in codes)
+    total_discount = sum(c["total_discount"] for c in codes)
+
+    return {
+        "codes": codes,
+        "total_codes": len(codes),
+        "total_redemptions": total_redemptions,
+        "total_discount_given": round(total_discount, 2),
+    }
+
+
+# ============================================
+# ARPU/ARPPU TRENDS (Feature 78)
+# ============================================
+
+@router.get("/revenue/arpu-trends")
+async def get_arpu_trends(
+    months: int = 6,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Get ARPU/ARPPU historical trends"""
+    now = datetime.utcnow()
+    trends = []
+
+    for i in range(months - 1, -1, -1):
+        m_start = now - timedelta(days=30 * (i + 1))
+        m_end = now - timedelta(days=30 * i)
+
+        # Revenue in period
+        rev_stmt = select(func.sum(RevenueTransaction.amount)).where(
+            and_(
+                RevenueTransaction.status == "completed",
+                RevenueTransaction.created_at >= m_start,
+                RevenueTransaction.created_at < m_end,
+            )
+        )
+        revenue = float((await db.execute(rev_stmt)).scalar() or 0)
+
+        # Total active users in period
+        users_stmt = select(func.count(User.id)).where(
+            and_(User.created_at < m_end, User.is_active == True)
+        )
+        total_users = (await db.execute(users_stmt)).scalar() or 1
+
+        # Paying users in period
+        paying_stmt = select(func.count(func.distinct(RevenueTransaction.user_id))).where(
+            and_(
+                RevenueTransaction.status == "completed",
+                RevenueTransaction.created_at >= m_start,
+                RevenueTransaction.created_at < m_end,
+            )
+        )
+        paying_users = (await db.execute(paying_stmt)).scalar() or 0
+
+        arpu = round(revenue / total_users, 2) if total_users else 0
+        arppu = round(revenue / paying_users, 2) if paying_users else 0
+
+        trends.append({
+            "month": m_start.strftime("%b %Y"),
+            "revenue": round(revenue, 2),
+            "total_users": total_users,
+            "paying_users": paying_users,
+            "arpu": arpu,
+            "arppu": arppu,
+            "paying_ratio": round((paying_users / total_users) * 100, 1) if total_users else 0,
+        })
+
+    return {"trends": trends, "months": months}
+
+
+# ============================================
+# PAYMENT GATEWAY ENDPOINTS (Features 71-72)
+# ============================================
+
+@router.get("/payments/gateways")
+async def get_payment_gateways(
+    period: str = "month",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Get payment gateway stats (Real DB)"""
+    days = {"week": 7, "month": 30, "quarter": 90}.get(period, 30)
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    stmt = (
+        select(
+            PaymentGatewayLog.gateway,
+            func.count(PaymentGatewayLog.id).label("total_events"),
+            func.avg(PaymentGatewayLog.response_time_ms).label("avg_response_time"),
+            func.count(PaymentGatewayLog.id).filter(
+                PaymentGatewayLog.event_type == "payment_completed"
+            ).label("success_count"),
+            func.count(PaymentGatewayLog.id).filter(
+                PaymentGatewayLog.event_type == "payment_failed"
+            ).label("failure_count"),
+        )
+        .where(PaymentGatewayLog.created_at >= start_date)
+        .group_by(PaymentGatewayLog.gateway)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    gateways = []
+    for r in rows:
+        total = r.total_events or 1
+        success = r.success_count or 0
+        failure = r.failure_count or 0
+        gateways.append({
+            "gateway": r.gateway,
+            "total_events": total,
+            "success_count": success,
+            "failure_count": failure,
+            "success_rate": round((success / total) * 100, 1),
+            "failure_rate": round((failure / total) * 100, 1),
+            "avg_response_time_ms": round(float(r.avg_response_time or 0)),
+        })
+
+    return {"gateways": gateways, "period": period}
+
+
+@router.get("/payments/failed")
+async def get_failed_payments(
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Get failed payment transactions"""
+    stmt = (
+        select(RevenueTransaction)
+        .where(RevenueTransaction.status == "failed")
+        .order_by(RevenueTransaction.created_at.desc())
+    )
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    offset = (page - 1) * page_size
+    stmt = stmt.offset(offset).limit(page_size)
+    result = await db.execute(stmt)
+    transactions = result.scalars().all()
+
+    items = []
+    for t in transactions:
+        user = await db.get(User, t.user_id)
+        items.append({
+            "id": str(t.id),
+            "user_id": str(t.user_id),
+            "user_name": user.name if user else "Unknown",
+            "amount": float(t.amount),
+            "currency": t.currency,
+            "payment_gateway": t.payment_gateway,
+            "transaction_type": t.transaction_type,
+            "created_at": t.created_at.isoformat(),
+            "metadata": t.custom_metadata or {},
+        })
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.post("/payments/{transaction_id}/retry")
+async def retry_failed_payment(
+    transaction_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin)
+):
+    """Retry a failed payment transaction"""
+    tx = await db.get(RevenueTransaction, transaction_id)
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if tx.status != "failed":
+        raise HTTPException(status_code=400, detail="Only failed transactions can be retried")
+
+    # Create a new pending transaction as retry
+    retry_tx = RevenueTransaction(
+        user_id=tx.user_id,
+        transaction_type=tx.transaction_type,
+        amount=tx.amount,
+        currency=tx.currency,
+        status="pending",
+        payment_gateway=tx.payment_gateway,
+        subscription_id=tx.subscription_id,
+        promo_code_id=tx.promo_code_id,
+        custom_metadata={**(tx.custom_metadata or {}), "retry_of": str(tx.id)},
+    )
+    db.add(retry_tx)
+
+    # Mark original as retried
+    tx.custom_metadata = {**(tx.custom_metadata or {}), "retried": True, "retry_id": str(retry_tx.id)}
+
+    # Log gateway event
+    log = PaymentGatewayLog(
+        gateway=tx.payment_gateway or "unknown",
+        event_type="payment_retry",
+        transaction_id=tx.id,
+        request_data={"original_tx": str(tx.id), "admin": str(current_user.id)},
+    )
+    db.add(log)
+
+    await db.commit()
+    await db.refresh(retry_tx)
+
+    return {"status": "success", "retry_transaction_id": str(retry_tx.id)}
 
 
 # ============================================

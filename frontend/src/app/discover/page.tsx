@@ -12,6 +12,10 @@ import { useProfiles, useSwipeStatus, useLikeMutation, Profile } from "@/hooks/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { DailyPicks } from "@/components/discovery/DailyPicks";
+import { SmartFilters } from "@/components/discovery/SmartFilters";
+import { FALLBACK_AVATAR } from "@/lib/constants";
+import { Spotlight } from "@/components/discovery/Spotlight";
+import { Suggestions } from "@/components/discovery/Suggestions";
 
 // PERF: Dynamic imports for modals (code splitting)
 const SendGiftModal = dynamic(() => import("@/components/gifts").then(m => ({ default: m.SendGiftModal })), {
@@ -104,8 +108,8 @@ export default function DiscoverPage() {
                 <div className="w-24 h-24 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-6">
                     <Star size={40} className="text-slate-700" />
                 </div>
-                <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">No more profiles</h2>
-                <p className="text-slate-500 mb-8 max-w-xs">You've seen everyone in your area for now. Check back later!</p>
+                <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">Профили закончились</h2>
+                <p className="text-slate-500 mb-8 max-w-xs">Вы просмотрели всех в вашем районе. Загляните позже!</p>
                 <button
                     className="px-8 py-4 rounded-2xl bg-slate-900 border border-slate-700 text-white font-black uppercase tracking-widest hover:bg-slate-800 transition-colors"
                     onClick={() => {
@@ -113,8 +117,11 @@ export default function DiscoverPage() {
                         queryClient.invalidateQueries({ queryKey: ['profiles'] });
                     }}
                 >
-                    Refresh Feed
+                    Обновить ленту
                 </button>
+                <div className="w-full mt-8">
+                    <Suggestions limit={5} />
+                </div>
                 <BottomNav />
             </div>
         );
@@ -155,7 +162,9 @@ export default function DiscoverPage() {
             </AnimatePresence>
 
             <div className="mt-16">
+                <Spotlight />
                 <DailyPicks />
+                <SmartFilters />
             </div>
 
             {/* Main Swipe Area */}
@@ -166,7 +175,7 @@ export default function DiscoverPage() {
                         name={currentProfile.name}
                         age={currentProfile.age}
                         bio={currentProfile.bio || ""}
-                        image={currentProfile.photos[0] || "https://placehold.co/400x600/1a1a1a/white?text=No+Photo"}
+                        image={currentProfile.photos[0] || FALLBACK_AVATAR}
                         onSwipe={handleSwipe}
                         onGiftClick={() => {
                             setSelectedGiftProfile(currentProfile);
@@ -184,20 +193,13 @@ export default function DiscoverPage() {
                 {/* Chat with this person */}
                 <button
                     onClick={async () => {
-                        console.log("Chat button clicked, currentProfile:", currentProfile);
                         if (currentProfile) {
                             try {
-                                console.log("Calling startChat for user:", currentProfile.id);
                                 const result = await authService.startChat(currentProfile.id);
-                                console.log("startChat result:", result);
                                 router.push(`/chat/${result.match_id}`);
                             } catch (e) {
                                 console.error("Failed to start chat", e);
-                                alert("Не удалось начать чат. Попробуйте войти снова.");
                             }
-                        } else {
-                            console.log("No currentProfile available");
-                            alert("Профиль не загружен");
                         }
                     }}
                     className="w-12 h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-blue-400 shadow-lg active:scale-90 transition-transform hover:bg-slate-800"
@@ -221,8 +223,18 @@ export default function DiscoverPage() {
                     <Heart size={32} fill="white" strokeWidth={0} />
                 </button>
 
-                {/* Boost - placeholder for now */}
+                {/* Boost */}
                 <button
+                    onClick={async () => {
+                        try {
+                            await authService.activateBoost(1);
+                        } catch (e: unknown) {
+                            const err = e as { data?: { error?: string } };
+                            if (err?.data?.error === 'insufficient_balance') {
+                                setShowTopUpModal(true);
+                            }
+                        }
+                    }}
                     className="w-12 h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-purple-500 shadow-lg active:scale-90 transition-transform"
                 >
                     <Star size={20} fill="currentColor" strokeWidth={0} />

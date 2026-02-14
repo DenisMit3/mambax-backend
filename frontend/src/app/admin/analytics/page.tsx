@@ -122,6 +122,14 @@ const RetentionHeatmap = dynamic(() => import('@/components/admin/analytics/Rete
   ssr: false,
   loading: () => <div className="h-[300px] flex items-center justify-center bg-[var(--admin-glass-bg)] border border-[var(--admin-glass-border)] rounded-2xl animate-pulse text-[var(--admin-text-muted)]">Loading retention...</div>
 });
+const GeoHeatmap = dynamic(() => import('@/components/admin/analytics/GeoHeatmap'), {
+  ssr: false,
+  loading: () => <div className="h-[400px] flex items-center justify-center bg-[var(--admin-glass-bg)] border border-[var(--admin-glass-border)] rounded-2xl animate-pulse text-[var(--admin-text-muted)]">Loading geo...</div>
+});
+const LtvPrediction = dynamic(() => import('@/components/admin/analytics/LtvPrediction'), {
+  ssr: false,
+  loading: () => <div className="h-[400px] flex items-center justify-center bg-[var(--admin-glass-bg)] border border-[var(--admin-glass-border)] rounded-2xl animate-pulse text-[var(--admin-text-muted)]">Loading LTV...</div>
+});
 
 interface RealtimeData {
   timestamp: string;
@@ -219,8 +227,11 @@ export default function AnalyticsPage() {
 
   // Initial load
   useEffect(() => {
-    fetchAnalyticsData();
-    fetchRealtimeData();
+    let cancelled = false;
+    Promise.all([fetchAnalyticsData(), fetchRealtimeData()]).then(() => {
+      if (cancelled) return;
+    });
+    return () => { cancelled = true; };
   }, [fetchAnalyticsData, fetchRealtimeData]);
 
   // Refresh on date range change
@@ -387,6 +398,16 @@ export default function AnalyticsPage() {
           {/* Retention Row */}
           <div className="grid grid-cols-1 mb-8">
             <RetentionHeatmap data={retentionData} />
+          </div>
+
+          {/* Geo Heatmap Row */}
+          <div className="grid grid-cols-1 mb-8">
+            <GeoHeatmap />
+          </div>
+
+          {/* LTV Prediction Row */}
+          <div className="grid grid-cols-1 mb-8">
+            <LtvPrediction />
           </div>
         </>
       )}

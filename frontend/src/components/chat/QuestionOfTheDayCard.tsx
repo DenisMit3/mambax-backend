@@ -38,7 +38,7 @@ export function QuestionOfTheDayCard({
         setQuestion(res.question ?? '');
         setDate(res.date ?? '');
       })
-      .catch(() => {})
+      .catch((e) => console.warn('Operation failed:', e))
       .finally(() => setLoading(false));
   }, []);
 

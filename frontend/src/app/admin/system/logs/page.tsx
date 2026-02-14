@@ -192,9 +192,9 @@ export default function SystemLogsPage() {
 
     const levelFilters: { key: LogLevel; label: string; icon: React.ReactNode }[] = [
         { key: 'all', label: 'Все', icon: <FileText size={14} /> },
-        { key: 'info', label: 'Info', icon: <Info size={14} /> },
+        { key: 'info', label: 'Инфо', icon: <Info size={14} /> },
         { key: 'warn', label: 'Warn', icon: <AlertTriangle size={14} /> },
-        { key: 'error', label: 'Error', icon: <AlertCircle size={14} /> },
+        { key: 'error', label: 'Ошибка', icon: <AlertCircle size={14} /> },
     ];
 
     return (

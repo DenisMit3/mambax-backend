@@ -18,11 +18,11 @@ export default function SetupNamePage() {
     return (
         <div className="container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '100px' }}>
             <div style={{ width: '100%', maxWidth: '320px' }}>
-                <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '10px' }}>My name is</h1>
+                <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '10px' }}>Меня зовут</h1>
 
                 <input
                     type="text"
-                    placeholder="Your Name"
+                    placeholder="Ваше имя"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     autoFocus
@@ -41,7 +41,7 @@ export default function SetupNamePage() {
                 />
 
                 <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '40px' }}>
-                    This is how it will appear in MambaX.
+                    Так ваше имя будет отображаться в MambaX.
                 </p>
 
                 <button
@@ -50,7 +50,7 @@ export default function SetupNamePage() {
                     onClick={handleNext}
                     style={{ width: '100%', opacity: name.length < 2 ? 0.5 : 1 }}
                 >
-                    Next <ArrowRight size={18} style={{ marginLeft: '8px' }} />
+                    Далее <ArrowRight size={18} style={{ marginLeft: '8px' }} />
                 </button>
             </div>
         </div>

@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Heart, Zap, Loader2, X } from 'lucide-react';
 
 import { TopUpModal } from '@/components/ui/TopUpModal';
 import { authService } from '@/services/api';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { FALLBACK_AVATAR } from '@/lib/constants';
+import { Toast } from '@/components/ui/Toast';
 
 interface LikeUser {
     id: string;
@@ -17,15 +20,18 @@ interface LikeUser {
 }
 
 export default function LikesPage() {
+    const router = useRouter();
     const [isPremium, setIsPremium] = useState(false);
     const [showTopUp, setShowTopUp] = useState(false);
     const [likes, setLikes] = useState<LikeUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentBalance, setCurrentBalance] = useState(0);
     const [selectedUser, setSelectedUser] = useState<LikeUser | null>(null);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
     const prefersReducedMotion = useReducedMotion();
 
     useEffect(() => {
+        let cancelled = false;
         const fetchData = async () => {
             try {
                 const [likesRes, meRes] = await Promise.all([
@@ -33,32 +39,45 @@ export default function LikesPage() {
                     authService.getMe()
                 ]);
 
-                const likesData = (likesRes.likes || []).map((u: any) => ({
+                if (cancelled) return;
+
+                interface LikeUser {
+                    id: string;
+                    name?: string;
+                    age?: number;
+                    photos?: string[];
+                    isSuper?: boolean;
+                }
+
+                const likesData = (likesRes.likes || []).map((u: LikeUser) => ({
                     id: u.id,
                     name: u.name || 'Анон',
-                    age: u.age || 25,
+                    age: u.age,
                     photos: u.photos || [],
                     isSuper: u.isSuper || false
                 }));
                 setLikes(likesData);
                 setCurrentBalance(meRes.stars_balance || 0);
-            } catch (e: any) {
+            } catch (e: unknown) {
+                if (cancelled) return;
                 // Handle "User not found" or auth errors gracefully
-                if (e.message === 'User not found' || e.status === 404 || e.status === 401) {
+                const err = e as Error & { status?: number };
+                if (err.message === 'User not found' || err.status === 404 || err.status === 401) {
                     if (typeof window !== 'undefined') {
                         console.warn('User session invalid, redirecting to login...');
                         localStorage.removeItem('token');
                         localStorage.removeItem('accessToken');
-                        window.location.href = '/auth/phone';
+                        router.push('/auth/phone');
                         return;
                     }
                 }
                 console.error('Failed to load likes data:', e);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
         fetchData();
+        return () => { cancelled = true; };
     }, []);
 
     const handleUnlock = async () => {
@@ -71,7 +90,7 @@ export default function LikesPage() {
                 setCurrentBalance(prev => prev - 100);
             } catch (e) {
                 console.error(e);
-                alert("Ошибка списания звёзд");
+                setToast({message: "Ошибка списания звёзд", type: 'error'});
             }
         } else {
             setShowTopUp(true);
@@ -93,14 +112,15 @@ export default function LikesPage() {
             if (window.Telegram?.WebApp?.HapticFeedback) {
                 window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
             }
-        } catch (e: any) {
-            const errorMsg = e.message || e.data?.detail || '';
-            // If already swiped, it's fine
-            if (typeof errorMsg === 'string' && errorMsg.includes('Already swiped')) {
-                return;
-            }
-            console.error('Like error:', e);
-            alert("Ошибка при лайке: " + (errorMsg || "Unknown error"));
+            } catch (e: unknown) {
+                const err = e as Error;
+                const errorMsg = err.message || '';
+                // If already swiped, it's fine
+                if (typeof errorMsg === 'string' && errorMsg.includes('Already swiped')) {
+                    return;
+                }
+                console.error('Like error:', e);
+            setToast({message: "Ошибка при лайке: " + (errorMsg || "Unknown error"), type: 'error'});
             // Optionally revert state here, but simple retry is often better UX for swipes
         }
     };
@@ -117,12 +137,11 @@ export default function LikesPage() {
             await authService.swipe(userToProcess.id, 'dislike');
         } catch (e) {
             console.error(e);
-            // alert("Ошибка дизлайка");
         }
     };
 
     const getPhotoUrl = (photos: string[]) => {
-        if (!photos || photos.length === 0) return '/placeholder-user.jpg';
+        if (!photos || photos.length === 0) return FALLBACK_AVATAR;
         const photo = photos[0];
         if (photo.startsWith('/static/')) return `/api_proxy${photo}`; // Backend static
         if (photo.startsWith('http') || photo.startsWith('data:')) return photo;
@@ -313,7 +332,7 @@ export default function LikesPage() {
                                                 className="flex-1 py-4 bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] rounded-xl text-white font-bold shadow-lg flex items-center justify-center gap-2"
                                             >
                                                 <Heart size={20} fill="currentColor" />
-                                                Like
+                                                Нравится
                                             </motion.button>
                                         </div>
                                     </div>
@@ -328,6 +347,7 @@ export default function LikesPage() {
             </AnimatePresence>
 
             <TopUpModal isOpen={showTopUp} onClose={() => setShowTopUp(false)} currentBalance={currentBalance} />
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { advancedApi } from '@/services/advancedApi';
 import { Loader2, FileBarChart, Download, Settings, Check } from 'lucide-react';
+import { Toast } from '@/components/ui/Toast';
 
 export default function CustomReportsBuilder() {
     const [loading, setLoading] = useState(false);
@@ -12,6 +13,7 @@ export default function CustomReportsBuilder() {
     const [schedule, setSchedule] = useState('');
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [lastReportId, setLastReportId] = useState<string | null>(null);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
     const handleGenerate = async () => {
         setLoading(true);
@@ -25,10 +27,10 @@ export default function CustomReportsBuilder() {
             setLastReportId(response.report_id);
             // Simulate waiting for generation (since backend returns fast mock/generating status)
             // In real app, we might poll status.
-            alert(`Report generation started! ID: ${response.report_id}`);
+            setToast({message: `Report generation started! ID: ${response.report_id}`, type: 'success'});
         } catch (error) {
             console.error('Failed to generate report:', error);
-            alert('Failed to start report generation.');
+            setToast({message: 'Failed to start report generation.', type: 'error'});
         } finally {
             setLoading(false);
         }
@@ -144,6 +146,7 @@ export default function CustomReportsBuilder() {
                     </div>
                 )}
             </div>
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

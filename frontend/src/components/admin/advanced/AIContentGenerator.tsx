@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { advancedApi, AIGenerateRequest } from '@/services/advancedApi';
 import { Loader2, Wand2, Copy, Check } from 'lucide-react';
+import { Toast } from '@/components/ui/Toast';
 
 export default function AIContentGenerator() {
     const [loading, setLoading] = useState(false);
@@ -14,6 +15,7 @@ export default function AIContentGenerator() {
     });
     const [results, setResults] = useState<string[]>([]);
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
     const handleGenerate = async () => {
         setLoading(true);
@@ -22,7 +24,7 @@ export default function AIContentGenerator() {
             setResults(response.suggestions);
         } catch (error) {
             console.error('Failed to generate content:', error);
-            alert('Failed to generate content. Please check console for details.');
+            setToast({message: 'Failed to generate content. Please check console for details.', type: 'error'});
         } finally {
             setLoading(false);
         }
@@ -35,6 +37,7 @@ export default function AIContentGenerator() {
     };
 
     return (
+        <>
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-6">
                 <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
@@ -53,7 +56,7 @@ export default function AIContentGenerator() {
                         <select
                             className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
                             value={request.content_type}
-                            onChange={(e) => setRequest({ ...request, content_type: e.target.value as any })}
+                            onChange={(e) => setRequest({ ...request, content_type: e.target.value as AIGenerateRequest['content_type'] })}
                         >
                             <option value="bio">Profile Bio</option>
                             <option value="icebreaker">Icebreaker</option>
@@ -127,5 +130,7 @@ export default function AIContentGenerator() {
                 </div>
             )}
         </div>
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+        </>
     );
 }

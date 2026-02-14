@@ -7,6 +7,7 @@ import { SendGiftModal } from "@/components/gifts";
 import { ArrowLeft, Gift, Heart, MessageCircle, Shield, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { FALLBACK_AVATAR } from "@/lib/constants";
 
 interface UserProfile {
     id: string;
@@ -30,19 +31,23 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
 
     useEffect(() => {
+        let cancelled = false;
         const loadUser = async () => {
             try {
                 const data = await authService.getUser(userId);
-                setUser(data);
+                if (!cancelled) setUser(data);
             } catch (err) {
-                console.error("Failed to load user:", err);
-                setError("User not found");
+                if (!cancelled) {
+                    console.error("Failed to load user:", err);
+                    setError("Пользователь не найден");
+                }
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
 
         loadUser();
+        return () => { cancelled = true; };
     }, [userId]);
 
     if (loading) {
@@ -83,7 +88,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                 gap: '16px',
                 padding: '20px'
             }}>
-                <h2 style={{ fontSize: '24px', fontWeight: 700 }}>{error || "User not found"}</h2>
+                <h2 style={{ fontSize: '24px', fontWeight: 700 }}>{error || "Пользователь не найден"}</h2>
                 <button
                     onClick={() => router.back()}
                     style={{
@@ -95,13 +100,13 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                         cursor: 'pointer'
                     }}
                 >
-                    Go Back
+                    Назад
                 </button>
             </div>
         );
     }
 
-    const photos = user.photos?.length > 0 ? user.photos : ['https://placehold.co/600x800/1a1a1a/white?text=No+Photo'];
+    const photos = user.photos?.length > 0 ? user.photos : [FALLBACK_AVATAR];
 
     return (
         <div style={{
@@ -159,7 +164,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                     }}
                 >
                     <Gift size={18} color="white" />
-                    <span style={{ color: 'white', fontSize: '14px', fontWeight: 600 }}>Send Gift</span>
+                    <span style={{ color: 'white', fontSize: '14px', fontWeight: 600 }}>Отправить подарок</span>
                 </button>
             </div>
 
@@ -287,7 +292,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                             textTransform: 'uppercase',
                             letterSpacing: '0.5px'
                         }}>
-                            Interests
+                            Интересы
                         </h4>
                         <div style={{
                             display: 'flex',
@@ -296,7 +301,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                         }}>
                             {user.interests.map((interest, index) => (
                                 <span
-                                    key={index}
+                                    key={interest}
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -352,7 +357,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                         color: 'white',
                         fontSize: '16px',
                         fontWeight: 700
-                    }}>Send Gift</span>
+                    }}>Отправить подарок</span>
                 </button>
 
                 <Link href={`/chat`} style={{ textDecoration: 'none' }}>

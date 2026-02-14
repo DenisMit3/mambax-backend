@@ -319,8 +319,7 @@ export const advancedApi = {
         period: string = '30d',
         customSql: string = '',
         schedule: string = '',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        parameters: Record<string, any> = {}
+        parameters: Record<string, unknown> = {}
     ): Promise<GenerateReportResponse> {
         return httpClient.post<GenerateReportResponse>('/admin/advanced/reports/generate', {
             report_type: reportType,
@@ -332,8 +331,7 @@ export const advancedApi = {
     },
 
     // Web3
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async getWeb3Stats(): Promise<any> {
+    async getWeb3Stats(): Promise<Record<string, unknown>> {
         return httpClient.get('/admin/advanced/web3/stats');
     },
 
@@ -406,13 +404,11 @@ export const advancedApi = {
         return httpClient.get<PartnersResponse>('/admin/advanced/partners');
     },
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async createPartner(data: any): Promise<any> {
+    async createPartner(data: Record<string, unknown>): Promise<Partner> {
         return httpClient.post('/admin/advanced/partners', data);
     },
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async updatePartner(id: string, data: any): Promise<any> {
+    async updatePartner(id: string, data: Record<string, unknown>): Promise<Partner> {
         return httpClient.put(`/admin/advanced/partners/${id}`, data);
     },
 
@@ -421,8 +417,7 @@ export const advancedApi = {
     },
 
     // Events update/delete
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async updateEvent(id: string, data: any): Promise<any> {
+    async updateEvent(id: string, data: Record<string, unknown>): Promise<Event> {
         return httpClient.put(`/admin/advanced/events/${id}`, data);
     },
 
@@ -431,8 +426,7 @@ export const advancedApi = {
     },
 
     // Icebreakers update/delete
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async updateIcebreaker(id: string, data: any): Promise<any> {
+    async updateIcebreaker(id: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
         return httpClient.put(`/admin/advanced/icebreakers/${id}`, data);
     },
 

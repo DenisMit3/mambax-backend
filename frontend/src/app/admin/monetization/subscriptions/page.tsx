@@ -28,6 +28,7 @@ import {
 import { GlassCard } from '@/components/ui/GlassCard';
 import styles from '../../admin.module.css';
 import { adminApi, RevenueMetrics, SubscriptionPlan } from '@/services/adminApi';
+import { Toast } from '@/components/ui/Toast';
 
 interface Plan {
   id: string;
@@ -55,9 +56,9 @@ function SubscriptionStats({ metrics }: { metrics: RevenueMetrics | null }) {
 
   // Calculate change percentages (mocked for now as we don't have historical data in this response)
   const stats = [
-    { label: 'Total Subscribers', value: totalSubs.toLocaleString(), icon: <Users size={18} />, color: '#3b82f6', change: '+0%' },
-    { label: 'Premium Users', value: premiumSubs.toLocaleString(), icon: <Crown size={18} />, color: '#f59e0b', change: '+0%' },
-    { label: 'Monthly Revenue', value: `$${metrics.month.toLocaleString()}`, icon: <DollarSign size={18} />, color: '#10b981', change: '+0%' },
+    { label: 'Всего подписчиков', value: totalSubs.toLocaleString(), icon: <Users size={18} />, color: '#3b82f6', change: '+0%' },
+    { label: 'Премиум пользователи', value: premiumSubs.toLocaleString(), icon: <Crown size={18} />, color: '#f59e0b', change: '+0%' },
+    { label: 'Месячный доход', value: `$${metrics.month.toLocaleString()}`, icon: <DollarSign size={18} />, color: '#10b981', change: '+0%' },
     { label: 'ARPPU', value: `$${metrics.arppu.toFixed(2)}`, icon: <TrendingUp size={18} />, color: '#a855f7', change: '+0%' },
   ];
 
@@ -97,12 +98,12 @@ function PlanCard({ plan, onEdit }: { plan: Plan; onEdit: (plan: Plan) => void }
   const features = plan.features || {};
 
   const featureLabels: Record<string, string> = {
-    unlimited_swipes: 'Unlimited Swipes',
-    see_who_likes_you: 'See Who Likes You',
-    boosts_per_month: 'Boosts/Month',
-    super_likes_per_day: 'Super Likes/Day',
-    incognito_mode: 'Incognito Mode',
-    advanced_filters: 'Advanced Filters',
+    unlimited_swipes: 'Безлимитные свайпы',
+    see_who_likes_you: 'Кто тебя лайкнул',
+    boosts_per_month: 'Бустов/месяц',
+    super_likes_per_day: 'Суперлайков/день',
+    incognito_mode: 'Режим инкогнито',
+    advanced_filters: 'Расширенные фильтры',
   };
 
   return (
@@ -113,7 +114,7 @@ function PlanCard({ plan, onEdit }: { plan: Plan; onEdit: (plan: Plan) => void }
       {/* Popular Badge hardcoded for now or derived */}
       {plan.tier === 'gold' && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[11px] font-semibold rounded-full shadow-lg">
-          <Star size={12} fill="white" /> Most Popular
+          <Star size={12} fill="white" /> Самый популярный
         </div>
       )}
 
@@ -139,11 +140,11 @@ function PlanCard({ plan, onEdit }: { plan: Plan; onEdit: (plan: Plan) => void }
       <div className="grid grid-cols-2 gap-4 py-4 border-t border-b border-[var(--admin-glass-border)] mb-4">
         <div className="text-center">
           <span className="block text-lg font-bold text-[var(--admin-text-primary)]">{plan.subscribers.toLocaleString()}</span>
-          <span className="text-[11px] text-[var(--admin-text-muted)]">Subscribers</span>
+          <span className="text-[11px] text-[var(--admin-text-muted)]">Подписчики</span>
         </div>
         <div className="text-center">
           <span className="block text-lg font-bold text-[var(--admin-text-primary)]">{Math.round(plan.mrr).toLocaleString()}</span>
-          <span className="text-[11px] text-[var(--admin-text-muted)]">Est. Revenue</span>
+          <span className="text-[11px] text-[var(--admin-text-muted)]">Расч. доход</span>
         </div>
       </div>
 
@@ -164,9 +165,9 @@ function PlanCard({ plan, onEdit }: { plan: Plan; onEdit: (plan: Plan) => void }
 
       <div className="text-center">
         {plan.isActive ? (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-500"><CheckCircle size={12} /> Active</span>
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-500"><CheckCircle size={12} /> Активен</span>
         ) : (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-slate-500/15 text-slate-500"><XCircle size={12} /> Inactive</span>
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-slate-500/15 text-slate-500"><XCircle size={12} /> Неактивен</span>
         )}
       </div>
     </GlassCard>
@@ -202,7 +203,7 @@ function PlanEditor({ plan, onClose, onSave, onDelete }: { plan: Plan | null; on
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-5 border-b border-[var(--admin-glass-border)]">
-          <h3 className="text-xl font-semibold text-[var(--admin-text-primary)]">{plan ? 'Edit Plan' : 'Create Plan'}</h3>
+          <h3 className="text-xl font-semibold text-[var(--admin-text-primary)]">{plan ? 'Редактировать план' : 'Создать план'}</h3>
           <button className={styles.iconButton} onClick={onClose}>
             <X size={20} />
           </button>
@@ -211,7 +212,7 @@ function PlanEditor({ plan, onClose, onSave, onDelete }: { plan: Plan | null; on
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs text-[var(--admin-text-muted)] font-medium">Plan Name</label>
+              <label className="text-xs text-[var(--admin-text-muted)] font-medium">Название плана</label>
               <input
                 type="text"
                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-sm text-[var(--admin-text-primary)] focus:outline-none focus:border-blue-500"
@@ -222,20 +223,20 @@ function PlanEditor({ plan, onClose, onSave, onDelete }: { plan: Plan | null; on
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-[var(--admin-text-muted)] font-medium">Tier</label>
+              <label className="text-xs text-[var(--admin-text-muted)] font-medium">Уровень</label>
               <select
                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-sm text-[var(--admin-text-primary)] focus:outline-none focus:border-blue-500"
                 value={editedPlan.tier}
                 onChange={(e) => setEditedPlan({ ...editedPlan, tier: e.target.value as 'free' | 'gold' | 'platinum' })}
               >
-                <option value="free">Free</option>
+                <option value="free">Бесплатный</option>
                 <option value="gold">Gold</option>
                 <option value="platinum">Platinum</option>
               </select>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-[var(--admin-text-muted)] font-medium">Price (XTR)</label>
+              <label className="text-xs text-[var(--admin-text-muted)] font-medium">Цена (XTR)</label>
               <input
                 type="number"
                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-sm text-[var(--admin-text-primary)] focus:outline-none focus:border-blue-500"
@@ -246,7 +247,7 @@ function PlanEditor({ plan, onClose, onSave, onDelete }: { plan: Plan | null; on
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-[var(--admin-text-muted)] font-medium">Duration (days)</label>
+              <label className="text-xs text-[var(--admin-text-muted)] font-medium">Длительность (дни)</label>
               <input
                 type="number"
                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-xl text-sm text-[var(--admin-text-primary)] focus:outline-none focus:border-blue-500"
@@ -257,7 +258,7 @@ function PlanEditor({ plan, onClose, onSave, onDelete }: { plan: Plan | null; on
           </div>
 
           <div>
-            <h4 className="text-base font-semibold text-[var(--admin-text-primary)] mb-4">Features</h4>
+            <h4 className="text-base font-semibold text-[var(--admin-text-primary)] mb-4">Функции</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {Object.entries(editedPlan.features).map(([key, value]) => (
                 <div key={key} className="flex justify-between items-center p-3 bg-slate-800/40 rounded-xl">
@@ -295,19 +296,19 @@ function PlanEditor({ plan, onClose, onSave, onDelete }: { plan: Plan | null; on
               <button
                 className="px-4 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
                 onClick={() => {
-                  if (confirm('Are you sure you want to delete this plan?')) {
+                    if (confirm('Вы уверены, что хотите удалить этот план?')) {
                     onDelete(plan.id);
                   }
                 }}
               >
-                Delete Plan
+                Удалить план
               </button>
             )}
           </div>
           <div className="flex gap-3">
-            <button className={styles.secondaryButton} onClick={onClose}>Cancel</button>
+            <button className={styles.secondaryButton} onClick={onClose}>Отмена</button>
             <button className={styles.primaryButton} onClick={() => onSave(editedPlan)}>
-              {plan ? 'Save Changes' : 'Create Plan'}
+              {plan ? 'Сохранить' : 'Создать план'}
             </button>
           </div>
         </div>
@@ -322,6 +323,7 @@ export default function SubscriptionsPage() {
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [showEditor, setShowEditor] = useState(false);
+  const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
   const loadData = async () => {
     try {
@@ -410,7 +412,7 @@ export default function SubscriptionsPage() {
       setEditingPlan(null);
     } catch (e) {
       console.error("Failed to save plan", e);
-      alert("Failed to save plan");
+      setToast({message: "Не удалось сохранить план", type: 'error'});
     }
   };
 
@@ -422,23 +424,23 @@ export default function SubscriptionsPage() {
       setEditingPlan(null);
     } catch (e) {
       console.error("Failed to delete plan", e);
-      alert("Failed to delete plan");
+      setToast({message: "Не удалось удалить план", type: 'error'});
     }
   };
 
-  if (loading) return <div className="p-8"><Loader2 className="animate-spin" /> Loading...</div>;
+  if (loading) return <div className="p-8"><Loader2 className="animate-spin" /> Загрузка...</div>;
 
   return (
     <div className={styles.pageContainer}>
       {/* Header */}
       <div className={styles.headerSection}>
         <div className={styles.headerContent}>
-          <h1 className={styles.headerTitle}>Subscription Management</h1>
-          <p className={styles.headerDescription}>Manage subscription plans and pricing</p>
+          <h1 className={styles.headerTitle}>Управление подписками</h1>
+          <p className={styles.headerDescription}>Управление планами подписок и ценами</p>
         </div>
         <button className={styles.primaryButton} onClick={() => { setEditingPlan(null); setShowEditor(true); }}>
           <Plus size={16} />
-          Create Plan
+          Создать план
         </button>
       </div>
 
@@ -463,6 +465,7 @@ export default function SubscriptionsPage() {
           />
         )}
       </AnimatePresence>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

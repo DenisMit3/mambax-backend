@@ -5,6 +5,7 @@ import { authService } from "@/services/api"; // We'll use getBaseUrl logic if e
 import { ArrowLeft, Camera, Check, X, ShieldCheck, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { Toast } from '@/components/ui/Toast';
 
 // Helper to get API URL since it's not exported from api.ts
 // Ideally we should export it or add methods to authService.
@@ -14,13 +15,31 @@ import Image from "next/image";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api_proxy";
 
 export default function VerificationPage() {
-    const [status, setStatus] = useState<any>(null);
+    interface VerificationStatus {
+        is_verified: boolean;
+        active_session?: VerificationSession;
+    }
+
+    interface VerificationSession {
+        session_id: string;
+        gesture_emoji: string;
+        gesture_name: string;
+        instruction: string;
+    }
+
+    interface VerificationResult {
+        is_verified: boolean;
+        confidence?: number;
+    }
+
+    const [status, setStatus] = useState<VerificationStatus | null>(null);
     const [loading, setLoading] = useState(true);
-    const [session, setSession] = useState<any>(null);
+    const [session, setSession] = useState<VerificationSession | null>(null);
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
-    const [result, setResult] = useState<any>(null);
+    const [result, setResult] = useState<VerificationResult | null>(null);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
     const checkStatus = async () => {
         try {
@@ -58,10 +77,10 @@ export default function VerificationPage() {
             if (res.ok) {
                 setSession(data);
             } else {
-                alert(data.detail || "Failed to start");
+                setToast({message: data.detail || "Не удалось начать", type: 'error'});
             }
         } catch (e) {
-            alert("Error starting verification");
+            setToast({message: "Ошибка запуска верификации", type: 'error'});
         } finally {
             setLoading(false);
         }
@@ -110,17 +129,17 @@ export default function VerificationPage() {
                 setResult(subData);
                 checkStatus();
             } else {
-                alert(subData.detail || "Verification failed");
+                setToast({message: subData.detail || "Верификация не пройдена", type: 'error'});
             }
 
         } catch (e) {
-            alert("Submission error");
+            setToast({message: "Ошибка отправки", type: 'error'});
         } finally {
             setUploading(false);
         }
     };
 
-    if (loading && !status) return <div style={{ display: 'flex', height: '100dvh', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+    if (loading && !status) return <div style={{ display: 'flex', height: '100dvh', alignItems: 'center', justifyContent: 'center' }}>Загрузка...</div>;
 
     return (
         <div style={{ minHeight: '100dvh', background: '#fff', display: 'flex', flexDirection: 'column' }}>
@@ -129,7 +148,7 @@ export default function VerificationPage() {
                 <Link href="/profile">
                     <ArrowLeft color="#333" />
                 </Link>
-                <div style={{ marginLeft: '16px', fontWeight: 600 }}>Verification</div>
+                <div style={{ marginLeft: '16px', fontWeight: 600 }}>Верификация</div>
             </div>
 
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
@@ -139,10 +158,10 @@ export default function VerificationPage() {
                         <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                             <ShieldCheck size={40} color="#4CAF50" />
                         </div>
-                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>You're Verified!</h2>
-                        <p style={{ color: '#666', marginTop: '8px' }}>Your profile has the blue badge.</p>
+                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>Вы верифицированы!</h2>
+                        <p style={{ color: '#666', marginTop: '8px' }}>Ваш профиль получил синий значок.</p>
                         <Link href="/profile" style={{ display: 'inline-block', marginTop: '32px', padding: '12px 32px', background: '#000', color: 'white', borderRadius: '12px', textDecoration: 'none' }}>
-                            Go to Profile
+                            Перейти в профиль
                         </Link>
                     </div>
                 ) : result?.is_verified ? (
@@ -150,10 +169,10 @@ export default function VerificationPage() {
                         <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                             <Check size={40} color="#4CAF50" />
                         </div>
-                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>Success!</h2>
-                        <p style={{ color: '#666', marginTop: '8px' }}>Verification Successful.</p>
+                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>Успешно!</h2>
+                        <p style={{ color: '#666', marginTop: '8px' }}>Верификация пройдена.</p>
                         <Link href="/profile" style={{ display: 'inline-block', marginTop: '32px', padding: '12px 32px', background: '#000', color: 'white', borderRadius: '12px', textDecoration: 'none' }}>
-                            Done
+                            Готово
                         </Link>
                     </div>
                 ) : session ? (
@@ -170,11 +189,11 @@ export default function VerificationPage() {
                             overflow: 'hidden', position: 'relative', border: '2px dashed #ccc', marginBottom: '24px'
                         }}>
                             {preview ? (
-                                <img src={preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <Image src={preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Selfie preview" fill unoptimized />
                             ) : (
                                 <div style={{ color: '#999', flexDirection: 'column', display: 'flex', alignItems: 'center' }}>
                                     <Camera size={48} />
-                                    <span style={{ marginTop: '8px' }}>Take a selfie</span>
+                                    <span style={{ marginTop: '8px' }}>Сделайте селфи</span>
                                 </div>
                             )}
 
@@ -193,19 +212,19 @@ export default function VerificationPage() {
                                     onClick={() => { setPreview(null); setFile(null); }}
                                     style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', background: 'white', fontWeight: 600 }}
                                 >
-                                    Retake
+                                    Переснять
                                 </button>
                                 <button
                                     onClick={submitVerification}
                                     disabled={uploading}
                                     style={{ flex: 1, padding: '14px', borderRadius: '12px', background: '#000', color: 'white', fontWeight: 600, opacity: uploading ? 0.7 : 1 }}
                                 >
-                                    {uploading ? 'Checking...' : 'Submit'}
+                                    {uploading ? 'Проверка...' : 'Отправить'}
                                 </button>
                             </div>
                         ) : (
                             <div style={{ textAlign: 'center', color: '#666', fontSize: '14px' }}>
-                                Tap photo area to open camera
+                                Нажмите на область фото для камеры
                             </div>
                         )}
                     </div>
@@ -214,19 +233,19 @@ export default function VerificationPage() {
                         <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#F5F5F7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                             <ShieldCheck size={40} color="#333" />
                         </div>
-                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>Get Verified</h2>
+                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>Пройти верификацию</h2>
                         <p style={{ color: '#666', marginTop: '8px', lineHeight: '1.5' }}>
-                            Show others you're real. Verified profiles get 30% more matches and a blue badge.
+                            Покажите другим, что вы настоящий. Верифицированные профили получают на 30% больше матчей и синий значок.
                         </p>
 
                         <div style={{ marginTop: '32px', textAlign: 'left', background: '#f9f9f9', padding: '16px', borderRadius: '16px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
                                 <div style={{ minWidth: '24px', height: '24px', background: 'black', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', marginRight: '12px' }}>1</div>
-                                <span style={{ fontSize: '14px' }}>Copy the gesture shown on screen</span>
+                                <span style={{ fontSize: '14px' }}>Повторите жест на экране</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                 <div style={{ minWidth: '24px', height: '24px', background: 'black', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', marginRight: '12px' }}>2</div>
-                                <span style={{ fontSize: '14px' }}>Take a clear selfie</span>
+                                <span style={{ fontSize: '14px' }}>Сделайте чёткое селфи</span>
                             </div>
                         </div>
 
@@ -234,11 +253,12 @@ export default function VerificationPage() {
                             onClick={startVerification}
                             style={{ width: '100%', marginTop: '32px', padding: '16px', background: '#000', color: 'white', borderRadius: '16px', fontWeight: 600, fontSize: '16px' }}
                         >
-                            I'm Ready
+                            Я готов(а)
                         </button>
                     </div>
                 )}
             </div>
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

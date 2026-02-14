@@ -2,7 +2,7 @@ import { getWsUrl } from "@/utils/env";
 
 type WebSocketMessage = {
     type: string;
-    [key: string]: any;
+    [key: string]: unknown;
 };
 
 type WebSocketHandler = (data: WebSocketMessage) => void;
@@ -39,7 +39,6 @@ class WebSocketService {
             this.socket = new WebSocket(this.url);
 
             this.socket.onopen = () => {
-                console.log("WebSocket connected, sending auth...");
                 // Send auth message immediately after connection
                 this.socket?.send(JSON.stringify({ type: "auth", token: this.token }));
             };
@@ -50,7 +49,6 @@ class WebSocketService {
                     
                     // Handle auth success
                     if (data.type === "auth_success") {
-                        console.log("WebSocket authenticated");
                         this.isConnecting = false;
                         this.reconnectDelay = INITIAL_RECONNECT_DELAY;
                         if (this.reconnectTimeout) {
@@ -71,7 +69,6 @@ class WebSocketService {
             };
 
             this.socket.onclose = (event) => {
-                console.log("WebSocket closed", event.code, event.reason);
                 this.socket = null;
                 this.isConnecting = false;
 
@@ -79,7 +76,6 @@ class WebSocketService {
                 const jitter = Math.random() * 1000; // 0-1s random jitter
                 const delay = Math.min(this.reconnectDelay + jitter, MAX_RECONNECT_DELAY);
 
-                console.log(`Reconnecting in ${Math.round(delay)}ms...`);
                 this.reconnectTimeout = setTimeout(() => {
                     if (this.token) this.connect(this.token);
                 }, delay);
@@ -116,11 +112,9 @@ class WebSocketService {
         } else {
             // FIX (MEM): Limit queue size to prevent memory leak
             if (this.pendingMessages.length >= MAX_PENDING_MESSAGES) {
-                console.warn("WebSocket message queue full, dropping oldest message");
                 this.pendingMessages.shift(); // Remove oldest
             }
             this.pendingMessages.push(data);
-            console.log(`WebSocket not ready, message queued (${this.pendingMessages.length}/${MAX_PENDING_MESSAGES})`);
         }
     }
 

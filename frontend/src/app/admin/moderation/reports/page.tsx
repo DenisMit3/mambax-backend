@@ -90,7 +90,7 @@ function ReportCard({
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-sm font-semibold text-[var(--admin-text-primary)] truncate">
-              {report.user_name || 'Unknown'}
+              {report.user_name || 'Неизвестно'}
             </span>
             <span className="text-[11px] text-[var(--admin-text-muted)] truncate">
               ID: {report.user_id}
@@ -179,7 +179,7 @@ function ReportCard({
           ) : (
             <Ban size={16} />
           )}
-          <span className="hidden sm:inline">Ban</span>
+          <span className="hidden sm:inline">Заблокировать</span>
         </button>
       </div>
     </GlassCard>
@@ -270,7 +270,7 @@ export default function ReportsPage() {
       {error && !loading && (
         <GlassCard className="flex flex-col items-center justify-center py-20 text-center border-red-500/30">
           <AlertTriangle size={32} className="text-red-500 mb-4" />
-          <h3 className="text-lg font-bold text-white mb-2">Failed to load reports</h3>
+          <h3 className="text-lg font-bold text-white mb-2">Не удалось загрузить жалобы</h3>
           <p className="text-sm text-[var(--admin-text-secondary)] mb-6 max-w-md">{error}</p>
           <button className={styles.primaryButton} onClick={fetchReports}>
             <RotateCcw size={16} />

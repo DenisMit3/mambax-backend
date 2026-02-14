@@ -32,8 +32,6 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
           tg.expand();
           telegramInitialized = true;
 
-          console.log("Telegram Web App Initialized");
-
           // Sync Theme
           if (tg.colorScheme === 'dark') {
             document.documentElement.classList.add('dark');

@@ -48,7 +48,7 @@ const statusConfig: Record<Referral['status'], { label: string; className: strin
     className: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20',
   },
   pending: {
-    label: 'Pending',
+    label: 'Ожидание',
     className: 'bg-orange-500/15 text-orange-400 border border-orange-500/20',
   },
   expired: {
@@ -188,8 +188,8 @@ export default function ReferralsPage() {
               <tr className="text-left border-b border-[var(--admin-glass-border)] text-[var(--admin-text-muted)] text-sm">
                 <th className="p-3 font-medium">Referrer</th>
                 <th className="p-3 font-medium">Referred User</th>
-                <th className="p-3 font-medium">Date</th>
-                <th className="p-3 font-medium">Status</th>
+                <th className="p-3 font-medium">Дата</th>
+                <th className="p-3 font-medium">Статус</th>
                 <th className="p-3 font-medium">Reward</th>
               </tr>
             </thead>

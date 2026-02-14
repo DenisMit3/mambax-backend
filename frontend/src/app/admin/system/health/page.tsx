@@ -29,7 +29,7 @@ const statusConfig = {
     warning: {
         icon: <AlertTriangle size={16} />,
         color: '#f97316',
-        label: 'Warning',
+        label: 'Предупреждение',
         bg: 'bg-orange-500/10',
         border: 'border-orange-500/20',
         text: 'text-orange-400',
@@ -37,7 +37,7 @@ const statusConfig = {
     error: {
         icon: <XCircle size={16} />,
         color: '#ef4444',
-        label: 'Error',
+        label: 'Ошибка',
         bg: 'bg-red-500/10',
         border: 'border-red-500/20',
         text: 'text-red-400',
@@ -147,7 +147,7 @@ function ServiceCard({ service }: { service: SystemHealthService }) {
                 <div className="flex flex-col items-center gap-1 p-2.5 bg-slate-800/40 rounded-xl">
                     <Activity size={14} className="text-slate-500" />
                     <span className="text-sm font-bold text-slate-100">{service.response}</span>
-                    <span className="text-[9px] text-slate-500 uppercase">Response</span>
+                    <span className="text-[9px] text-slate-500 uppercase">Ответ</span>
                 </div>
             </div>
         </GlassCard>

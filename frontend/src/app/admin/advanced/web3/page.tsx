@@ -5,7 +5,7 @@ import { advancedApi } from '@/services/advancedApi';
 import { Loader2, Zap, Box, Link, Wallet } from 'lucide-react';
 
 export default function Web3Page() {
-    const [data, setData] = useState<any>(null);
+    const [data, setData] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {

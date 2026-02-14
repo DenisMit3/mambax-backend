@@ -69,7 +69,7 @@ export default function ReportsPage() {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold mb-4 text-zinc-800 dark:text-zinc-200">Builder</h2>
+          <h2 className="text-lg font-semibold mb-4 text-zinc-800 dark:text-zinc-200">Конструктор</h2>
           <CustomReportsBuilder />
         </div>
       </div>

@@ -11,8 +11,12 @@ interface PerformanceMetrics {
     cls?: number;
 }
 
+let _perfInitialized = false;
+
 export function measurePerformance(): void {
     if (typeof window === 'undefined') return;
+    if (_perfInitialized) return;
+    _perfInitialized = true;
     
     window.addEventListener('load', () => {
         // Wait for all metrics to be available
@@ -26,29 +30,9 @@ export function measurePerformance(): void {
                 loadTime: perfData ? perfData.loadEventEnd - perfData.fetchStart : undefined
             };
             
-            // Log metrics
-            console.log('📊 Performance Metrics:', metrics);
-            
-            // Check against targets
-            if (metrics.fcp !== undefined) {
-                if (metrics.fcp < 1500) {
-                    console.log('✅ FCP < 1.5s:', Math.round(metrics.fcp), 'ms');
-                } else {
-                    console.warn('⚠️ FCP > 1.5s:', Math.round(metrics.fcp), 'ms');
-                }
-            }
-            
-            if (metrics.tti !== undefined) {
-                if (metrics.tti < 3000) {
-                    console.log('✅ TTI < 3s:', Math.round(metrics.tti), 'ms');
-                } else {
-                    console.warn('⚠️ TTI > 3s:', Math.round(metrics.tti), 'ms');
-                }
-            }
-            
             // Send to analytics if available
-            if (typeof window !== 'undefined' && (window as any).posthog) {
-                (window as any).posthog.capture('performance_metrics', metrics);
+            if (typeof window !== 'undefined' && window.posthog) {
+                window.posthog.capture('performance_metrics', metrics);
             }
         }, 0);
     });
@@ -79,8 +63,9 @@ export function observeCLS(callback: (cls: number) => void): void {
     
     const observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
-            if (!(entry as any).hadRecentInput) {
-                clsValue += (entry as any).value;
+            const layoutShift = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number };
+            if (!layoutShift.hadRecentInput) {
+                clsValue += layoutShift.value ?? 0;
             }
         }
         callback(clsValue);

@@ -8,18 +8,18 @@ import { useEffect } from 'react';
  */
 export function RegisterServiceWorker() {
     useEffect(() => {
+        let intervalId: NodeJS.Timeout;
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js')
                 .then(reg => {
-                    console.log('SW registered:', reg.scope);
-                    
                     // Check for updates periodically
-                    setInterval(() => {
+                    intervalId = setInterval(() => {
                         reg.update();
                     }, 60 * 60 * 1000); // Check every hour
                 })
                 .catch(err => console.error('SW registration failed:', err));
         }
+        return () => clearInterval(intervalId);
     }, []);
     
     return null;

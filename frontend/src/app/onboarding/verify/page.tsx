@@ -1,13 +1,15 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { VerificationScanner } from '@/components/auth/VerificationScanner';
 
 export default function VerificationPage() {
+    const router = useRouter();
     return (
         <main>
             <VerificationScanner
-                onSuccess={() => window.location.href = '/'}
-                onCancel={() => window.history.back()}
+                onSuccess={() => router.push('/')}
+                onCancel={() => router.back()}
             />
         </main>
     );

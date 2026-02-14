@@ -24,7 +24,7 @@ export const ModerationTerminal = () => {
         queryFn: async () => {
             try {
                 const res = await adminApi.moderation.getQueue();
-                return (res && (res as any).items) ? res : { items: [] };
+                return (res && 'items' in res) ? res : { items: [] };
             } catch (e) {
                 console.error("Moderation queue fetch failed:", e);
                 return { items: [] };

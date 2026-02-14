@@ -5,9 +5,11 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { authService } from "@/services/api";
+import { Toast } from '@/components/ui/Toast';
 
 export default function SetupPhotosPage() {
     const [photos, setPhotos] = useState<string[]>([]);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
     const router = useRouter();
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -21,12 +23,12 @@ export default function SetupPhotosPage() {
         if (!file) return;
 
         if (photos.length >= 10) {
-            alert("Maximum 10 photos allowed");
+            setToast({message: "Максимум 10 фото", type: 'error'});
             return;
         }
 
         if (file.size > 5 * 1024 * 1024) {
-            alert("File is too large (max 5MB)");
+            setToast({message: "Файл слишком большой (макс. 5МБ)", type: 'error'});
             return;
         }
 
@@ -36,7 +38,7 @@ export default function SetupPhotosPage() {
             setPhotos([...photos, result.url]);
         } catch (e) {
             console.error("Upload failed", e);
-            alert("Upload failed. Please try again.");
+            setToast({message: "Ошибка загрузки. Попробуйте снова.", type: 'error'});
         }
 
         // Reset input so same file can be selected again if needed
@@ -76,8 +78,8 @@ export default function SetupPhotosPage() {
                     <ArrowLeft />
                 </button>
 
-                <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '10px' }}>Add Photos</h1>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>Add at least 1 photo to continue.</p>
+                <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '10px' }}>Добавить фото</h1>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>Добавьте хотя бы 1 фото.</p>
 
                 <div style={{
                     display: 'grid',
@@ -123,9 +125,10 @@ export default function SetupPhotosPage() {
                     onClick={handleFinish}
                     style={{ width: '100%', opacity: photos.length < 1 ? 0.5 : 1 }}
                 >
-                    {photos.length < 1 ? `Add a photo to continue` : "Continue →"}
+                    {photos.length < 1 ? `Добавьте фото` : "Продолжить →"}
                 </button>
             </div>
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

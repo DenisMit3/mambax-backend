@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { advancedApi, AlgorithmParams } from '@/services/advancedApi';
 import { Loader2, Save, Sliders, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Toast } from '@/components/ui/Toast';
 
 export default function AlgorithmPage() {
   const [loading, setLoading] = useState(true);
@@ -10,6 +11,7 @@ export default function AlgorithmPage() {
   const [params, setParams] = useState<AlgorithmParams | null>(null);
   const [version, setVersion] = useState('');
   const [error, setError] = useState('');
+  const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
   useEffect(() => {
     loadParams();
@@ -38,7 +40,7 @@ export default function AlgorithmPage() {
       // Re-fetch to be sure
       loadParams();
     } catch (e) {
-      alert('Failed to save parameters');
+      setToast({message: 'Failed to save parameters', type: 'error'});
     } finally {
       setSaving(false);
     }
@@ -140,7 +142,7 @@ export default function AlgorithmPage() {
             <h3 className="font-semibold mb-4">Experimental Flags</h3>
             <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800">
               <span className="text-sm">AI Compatibility Score</span>
-              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Active</span>
+              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Активен</span>
             </div>
             <div className="flex items-center justify-between py-2">
               <span className="text-sm">Photo Preference Learning</span>
@@ -149,6 +151,7 @@ export default function AlgorithmPage() {
           </div>
         </div>
       </div>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

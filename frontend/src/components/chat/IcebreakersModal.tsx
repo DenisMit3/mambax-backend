@@ -34,7 +34,7 @@ export function IcebreakersModal({
         .then((res) => {
           setIcebreakers(res.icebreakers || []);
         })
-        .catch(() => setIcebreakers([]))
+      .catch((e) => { console.warn('Silent catch:', e); setIcebreakers([]); })
         .finally(() => setLoading(false));
     }
   }, [isOpen, matchId]);
@@ -44,13 +44,13 @@ export function IcebreakersModal({
     authService
       .getIcebreakers(matchId, true)
       .then((res) => setIcebreakers(res.icebreakers || []))
-      .catch(() => {})
+      .catch((e) => console.warn('Operation failed:', e))
       .finally(() => setLoading(false));
   };
 
   const handleSelect = (text: string) => {
     haptic.medium();
-    authService.recordIcebreakerUsed(matchId).catch(() => {});
+    authService.recordIcebreakerUsed(matchId).catch((e) => console.warn('Operation failed:', e));
     onSelectIcebreaker(text);
     onClose();
   };
@@ -103,7 +103,7 @@ export function IcebreakersModal({
                 <ul className="space-y-3">
                   {icebreakers.map((text, index) => (
                     <motion.li
-                      key={index}
+                      key={text || index}
                       initial={prefersReducedMotion ? undefined : { opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}

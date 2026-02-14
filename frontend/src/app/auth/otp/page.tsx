@@ -13,6 +13,7 @@ function OtpContent() {
     // FIX: 6 digits OTP instead of 4
     const [otp, setOtp] = useState(["", "", "", "", "", ""]);
     const [loading, setLoading] = useState(false);
+    const [otpError, setOtpError] = useState<string | null>(null);
     const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
     useEffect(() => {
@@ -22,6 +23,7 @@ function OtpContent() {
 
     const handleChange = (index: number, value: string) => {
         if (!/^\d*$/.test(value)) return; // Numbers only
+        if (otpError) setOtpError(null); // Сброс ошибки при вводе
         if (value.length > 1) {
             // Handle paste somewhat properly if getting huge string, but basics first
             return;
@@ -61,8 +63,7 @@ function OtpContent() {
                 router.push("/onboarding");
             }
         } catch (error) {
-            // Dev hint - updated for 6 digits
-            alert("Код неверный (Попробуйте 000000)");
+            setOtpError("Неверный код. Попробуйте ещё раз");
             setOtp(["", "", "", "", "", ""]);
             setLoading(false);
             inputs.current[0]?.focus();
@@ -116,6 +117,13 @@ function OtpContent() {
                     ))}
                 </div>
 
+                {/* Inline ошибка OTP */}
+                {otpError && (
+                    <p className="mb-6 text-red-400 text-sm font-medium animate-pulse">
+                        {otpError}
+                    </p>
+                )}
+
                 {loading && (
                     <div className="mb-6 flex items-center gap-2 text-cyan-400 text-sm font-bold uppercase tracking-widest animate-pulse">
                         <span className="w-2 h-2 bg-cyan-400 rounded-full" />
@@ -130,10 +138,6 @@ function OtpContent() {
                     <ArrowLeft size={16} />
                     Изменить номер
                 </button>
-
-                <p className="mt-8 text-xs text-slate-600 font-mono">
-                    DEV HINT: Используйте код <span className="text-slate-400">000000</span>
-                </p>
             </div>
         </div>
     );

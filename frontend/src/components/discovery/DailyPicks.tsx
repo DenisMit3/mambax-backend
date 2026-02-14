@@ -1,12 +1,17 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Sparkles, RefreshCw } from "lucide-react";
+import { Sparkles, RefreshCw, Crown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { httpClient } from "@/lib/http-client";
+import { useSwipeStatus } from "@/hooks/useDiscovery";
+import { useHaptic } from "@/hooks/useHaptic";
+import { FALLBACK_AVATAR } from "@/lib/constants";
+import { Toast } from '@/components/ui/Toast';
 
 interface DailyPick {
     id: string;
@@ -19,8 +24,14 @@ interface DailyPick {
 }
 
 export function DailyPicks() {
+    const router = useRouter();
     const queryClient = useQueryClient();
+    const haptic = useHaptic();
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [vipRequired, setVipRequired] = useState(false);
+    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
+    const { data: swipeStatus } = useSwipeStatus();
+    const isVip = swipeStatus?.is_vip ?? false;
 
     const { data, isLoading } = useQuery({
         queryKey: ["daily-picks"],
@@ -33,15 +44,19 @@ export function DailyPicks() {
 
     const refreshMutation = useMutation({
         mutationFn: async () => {
-            // Используем httpClient вместо прямого fetch
-            return httpClient.post("/api/discover/daily-picks/refresh");
+            return httpClient.post<{ success: boolean; is_vip_feature?: boolean; message?: string }>("/api/discover/daily-picks/refresh");
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["daily-picks"] });
+        onSuccess: (data) => {
+            if (data.success === false && data.is_vip_feature) {
+                setVipRequired(true);
+                setTimeout(() => setVipRequired(false), 3000);
+            } else {
+                queryClient.invalidateQueries({ queryKey: ["daily-picks"] });
+            }
             setIsRefreshing(false);
         },
         onError: (error: Error) => {
-            alert(error.message);
+            setToast({message: error.message, type: 'error'});
             setIsRefreshing(false);
         },
     });
@@ -57,10 +72,11 @@ export function DailyPicks() {
                     {[1, 2, 3, 4, 5].map((i) => (
                         <Skeleton key={i} className="w-32 h-48 flex-shrink-0 rounded-2xl" />
                     ))}
-                </div>
-            </div>
-        );
-    }
+        </div>
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+    );
+}
 
     const picks = data?.picks || [];
     const prefersReducedMotion = useReducedMotion();
@@ -98,14 +114,29 @@ export function DailyPicks() {
                 </div>
                 <button
                     onClick={() => {
+                        haptic.medium();
                         setIsRefreshing(true);
                         refreshMutation.mutate();
                     }}
                     disabled={isRefreshing}
-                    className="p-2 rounded-full bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+                    className="relative p-2 rounded-full bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+                    title={isVip ? "Обновить подборку" : "VIP: обновить подборку"}
                 >
                     <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
+                    {!isVip && (
+                        <Crown size={10} className="absolute -top-1 -right-1 text-amber-400 fill-amber-400" />
+                    )}
                 </button>
+                {vipRequired && (
+                    <motion.span
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="text-[10px] text-amber-400 font-bold"
+                    >
+                        VIP only ✨
+                    </motion.span>
+                )}
             </div>
 
             {/* Picks Carousel */}
@@ -122,12 +153,12 @@ export function DailyPicks() {
                         className="relative flex-shrink-0 w-32 h-48 rounded-2xl overflow-hidden cursor-pointer group"
                         onClick={() => {
                             // Navigate to profile
-                            window.location.href = `/users/${pick.id}`;
+                            router.push(`/users/${pick.id}`);
                         }}
                     >
                         {/* Image */}
                         <img
-                            src={pick.photos[0] || "https://placehold.co/200x300"}
+                            src={pick.photos[0] || FALLBACK_AVATAR}
                             alt={pick.name}
                             loading="lazy"
                             className="w-full h-full object-cover"

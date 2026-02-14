@@ -18,10 +18,19 @@ class SoundService {
 
     preload(soundName: string, url: string): void {
         if (typeof window === 'undefined') return
-        const audio = new Audio(url)
-        audio.load()
-        this.sounds.set(soundName, audio)
-        this.loadedSounds.add(soundName)
+        try {
+            const audio = new Audio(url)
+            audio.addEventListener('canplaythrough', () => {
+                this.sounds.set(soundName, audio)
+                this.loadedSounds.add(soundName)
+            }, { once: true })
+            audio.addEventListener('error', () => {
+                // Sound file not found - skip gracefully
+            }, { once: true })
+            audio.load()
+        } catch {
+            // Audio creation failed - skip gracefully
+        }
     }
 
     preloadOptional(soundName: string, url: string): void {

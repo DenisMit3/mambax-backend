@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, Heart, X, Sparkles } from 'lucide-react';
 import { useHaptic } from '@/hooks/useHaptic';
 import { useSoundService } from '@/hooks/useSoundService';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { ContextualTooltip } from '@/components/onboarding/ContextualTooltip';
+import { FALLBACK_AVATAR } from '@/lib/constants';
 
 interface MatchModalProps {
     isOpen: boolean;
@@ -108,7 +110,7 @@ export const MatchModal = ({
                                 animate={{ x: 0, opacity: 1, rotate: -5 }}
                                 transition={{ type: 'spring', damping: 12, delay: 0.3 }}
                             >
-                                <img src={userAvatar || '/placeholder.jpg'} alt="You" loading="lazy" className="w-full h-full object-cover" />
+                                <Image src={userAvatar || FALLBACK_AVATAR} alt="You" loading="lazy" className="w-full h-full object-cover" fill unoptimized />
                             </motion.div>
 
                             <motion.div
@@ -126,7 +128,7 @@ export const MatchModal = ({
                                 animate={{ x: 0, opacity: 1, rotate: 5 }}
                                 transition={{ type: 'spring', damping: 12, delay: 0.3 }}
                             >
-                                <img src={matchAvatar || '/placeholder.jpg'} alt={matchName} loading="lazy" className="w-full h-full object-cover" />
+                                <Image src={matchAvatar || FALLBACK_AVATAR} alt={matchName} loading="lazy" className="w-full h-full object-cover" fill unoptimized />
                             </motion.div>
 
                             {/* Neon Pulse Rings */}
