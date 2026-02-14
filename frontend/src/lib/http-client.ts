@@ -129,7 +129,7 @@ class HttpClient {
     private handleUnauthorized() {
         // Only clear token in browser context to avoid side effects on server
         if (typeof window !== 'undefined') {
-            console.warn('Unauthorized access detected. Clearing token.');
+            console.warn('[HTTP] handleUnauthorized called! Stack:', new Error().stack?.split('\n').slice(0, 5).join(' | '));
             localStorage.removeItem('token');
             localStorage.removeItem('accessToken'); // Clear both just in case
             

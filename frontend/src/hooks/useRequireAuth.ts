@@ -18,7 +18,19 @@ export function useRequireAuth() {
         let cancelled = false;
 
         const check = async () => {
-            const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+            const accessToken = localStorage.getItem('accessToken');
+            const legacyToken = localStorage.getItem('token');
+            const token = accessToken || legacyToken;
+            
+            // DEBUG: Log state for remote debugging
+            console.log('[useRequireAuth] CHECK:', {
+                hasAccessToken: !!accessToken,
+                hasLegacyToken: !!legacyToken,
+                tokenLen: token ? token.length : 0,
+                path: window.location.pathname,
+                allKeys: Object.keys(localStorage),
+            });
+
             if (token) {
                 if (!cancelled) {
                     setIsAuthed(true);
@@ -28,24 +40,40 @@ export function useRequireAuth() {
             }
 
             // No token — try silent re-auth via Telegram initData
-            const initData = window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '';
+            const tgWebApp = window.Telegram?.WebApp?.initData || '';
+            const tgSession = sessionStorage.getItem('tg_init_data') || '';
+            const initData = tgWebApp || tgSession;
+            
+            console.log('[useRequireAuth] NO TOKEN, trying re-auth:', {
+                hasTgWebApp: !!tgWebApp,
+                tgWebAppLen: tgWebApp.length,
+                hasTgSession: !!tgSession,
+                tgSessionLen: tgSession.length,
+                authRedirectReason: sessionStorage.getItem('auth_redirect_reason'),
+            });
+
             if (initData && initData.trim()) {
-                console.log('[useRequireAuth] No token, attempting Telegram re-auth...');
+                console.log('[useRequireAuth] Attempting Telegram re-auth...');
                 try {
-                    await authService.telegramLogin(initData);
+                    const result = await authService.telegramLogin(initData);
                     const newToken = localStorage.getItem('accessToken');
+                    console.log('[useRequireAuth] Re-auth result:', {
+                        hasAccessToken: !!result?.access_token,
+                        storedToken: !!newToken,
+                    });
                     if (newToken && !cancelled) {
-                        console.log('[useRequireAuth] Re-auth success');
+                        console.log('[useRequireAuth] Re-auth SUCCESS');
                         setIsAuthed(true);
                         setIsChecking(false);
                         return;
                     }
                 } catch (e) {
-                    console.error('[useRequireAuth] Re-auth failed:', e);
+                    console.error('[useRequireAuth] Re-auth FAILED:', e);
                 }
             }
 
             // No token and re-auth failed — redirect
+            console.log('[useRequireAuth] REDIRECTING to /auth/phone');
             if (!cancelled) {
                 router.replace('/auth/phone');
                 setIsChecking(false);
