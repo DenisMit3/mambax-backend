@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import { authService } from '@/services/api';
 import { useHaptic } from '@/hooks/useHaptic';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 // Максимум 3 ответа (как в Hinge)
 const MAX_ANSWERS = 3;
@@ -18,6 +19,7 @@ interface Prompt {
 
 export default function PromptsPage() {
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
     const haptic = useHaptic();
 
     const [prompts, setPrompts] = useState<Prompt[]>([]);
@@ -31,6 +33,7 @@ export default function PromptsPage() {
 
     // Загрузка данных
     useEffect(() => {
+        if (!isAuthed) return;
         (async () => {
             try {
                 const [available, my] = await Promise.all([
@@ -45,7 +48,7 @@ export default function PromptsPage() {
                 setLoading(false);
             }
         })();
-    }, []);
+    }, [isAuthed]);
 
     // Раскрыть/свернуть карточку
     const toggle = useCallback((id: string) => {
@@ -95,7 +98,7 @@ export default function PromptsPage() {
 
     // ─── Рендер ───
 
-    if (loading) {
+    if (loading || isChecking) {
         return (
             <div className="flex items-center justify-center h-full bg-black">
                 <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />

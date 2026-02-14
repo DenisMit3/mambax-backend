@@ -203,7 +203,7 @@ export function SmartDiscoveryEngine({
             <header className="absolute top-0 left-0 right-0 h-16 z-30 flex items-center justify-between px-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
                 <button
                     onClick={() => setViewMode(prev => prev === 'stack' ? 'grid' : 'stack')}
-                    className="w-8 h-8 flex items-center justify-center text-white pointer-events-auto active:scale-95 transition-transform bg-white/10 backdrop-blur rounded-full"
+                    className="w-11 h-11 flex items-center justify-center text-white pointer-events-auto active:scale-95 transition-transform bg-white/10 backdrop-blur rounded-full"
                 >
                     {viewMode === 'stack' ? <Grid size={18} /> : <Layers size={18} />}
                 </button>
@@ -212,7 +212,7 @@ export function SmartDiscoveryEngine({
                 </h1>
                 <button
                     onClick={() => onFilterChange({})}
-                    className="w-8 h-8 flex items-center justify-center text-white pointer-events-auto active:scale-95 transition-transform"
+                    className="w-11 h-11 flex items-center justify-center text-white pointer-events-auto active:scale-95 transition-transform"
                 >
                     <SlidersHorizontal size={24} />
                 </button>

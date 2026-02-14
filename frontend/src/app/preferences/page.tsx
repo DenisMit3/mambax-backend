@@ -4,9 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SlidersHorizontal, MapPin, Users, Shield, ArrowLeft, Check } from 'lucide-react';
-import { httpClient } from '@/lib/http-client';
-import { useHaptic } from '@/hooks/useHaptic';
 import { authService } from '@/services/api';
+import { useHaptic } from '@/hooks/useHaptic';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 // ============================================
 // Типы
@@ -39,21 +40,28 @@ const DEFAULT_PREFS: MatchingPreferences = {
 export default function PreferencesPage() {
     const router = useRouter();
     const haptic = useHaptic();
+    const { isAuthed, isChecking } = useRequireAuth();
 
     const [prefs, setPrefs] = useState<MatchingPreferences>(DEFAULT_PREFS);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [saved, setSaved] = useState(false);
 
     // Ref для debounce-сохранения
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Загрузка настроек
-    useEffect(() => {
+    const loadPrefs = useCallback(() => {
+        setError(false);
         authService.getMatchingPreferences()
             .then((data) => setPrefs(prev => ({ ...prev, ...data })))
-            .catch(console.error)
+            .catch(() => setError(true))
             .finally(() => setLoading(false));
     }, []);
+
+    useEffect(() => {
+        if (isAuthed) loadPrefs();
+    }, [isAuthed, loadPrefs]);
 
     // Автосохранение с debounce
     const savePrefs = useCallback((updated: MatchingPreferences) => {
@@ -80,12 +88,16 @@ export default function PreferencesPage() {
         });
     }, [savePrefs]);
 
-    if (loading) {
+    if (isChecking || loading) {
         return (
             <div className="min-h-screen bg-black flex items-center justify-center">
                 <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
             </div>
         );
+    }
+
+    if (error) {
+        return <ErrorState onRetry={loadPrefs} />;
     }
 
     return (

@@ -6,6 +6,7 @@ import { ArrowLeft, Camera, Check, X, ShieldCheck, AlertCircle } from "lucide-re
 import Link from "next/link";
 import Image from "next/image";
 import { Toast } from '@/components/ui/Toast';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 // Helper to get API URL since it's not exported from api.ts
 // Ideally we should export it or add methods to authService.
@@ -15,6 +16,7 @@ import { Toast } from '@/components/ui/Toast';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api_proxy";
 
 export default function VerificationPage() {
+    const { isAuthed, isChecking } = useRequireAuth();
     interface VerificationStatus {
         is_verified: boolean;
         active_session?: VerificationSession;
@@ -62,8 +64,8 @@ export default function VerificationPage() {
     };
 
     useEffect(() => {
-        checkStatus();
-    }, []);
+        if (isAuthed) checkStatus();
+    }, [isAuthed]);
 
     const startVerification = async () => {
         setLoading(true);

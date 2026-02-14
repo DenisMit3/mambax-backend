@@ -8,8 +8,11 @@ import { Lock, Heart, Zap, Loader2, X } from 'lucide-react';
 import { TopUpModal } from '@/components/ui/TopUpModal';
 import { authService } from '@/services/api';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useHaptic } from '@/hooks/useHaptic';
 import { FALLBACK_AVATAR } from '@/lib/constants';
 import { Toast } from '@/components/ui/Toast';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 interface LikeUser {
     id: string;
@@ -21,16 +24,20 @@ interface LikeUser {
 
 export default function LikesPage() {
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
     const [isPremium, setIsPremium] = useState(false);
     const [showTopUp, setShowTopUp] = useState(false);
     const [likes, setLikes] = useState<LikeUser[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [currentBalance, setCurrentBalance] = useState(0);
     const [selectedUser, setSelectedUser] = useState<LikeUser | null>(null);
     const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
     const prefersReducedMotion = useReducedMotion();
+    const haptic = useHaptic();
 
     useEffect(() => {
+        if (!isAuthed) return;
         let cancelled = false;
         const fetchData = async () => {
             try {
@@ -60,17 +67,7 @@ export default function LikesPage() {
                 setCurrentBalance(meRes.stars_balance || 0);
             } catch (e: unknown) {
                 if (cancelled) return;
-                // Handle "User not found" or auth errors gracefully
-                const err = e as Error & { status?: number };
-                if (err.message === 'User not found' || err.status === 404 || err.status === 401) {
-                    if (typeof window !== 'undefined') {
-                        console.warn('User session invalid, redirecting to login...');
-                        localStorage.removeItem('token');
-                        localStorage.removeItem('accessToken');
-                        router.push('/auth/phone');
-                        return;
-                    }
-                }
+                setError(true);
                 console.error('Failed to load likes data:', e);
             } finally {
                 if (!cancelled) setLoading(false);
@@ -78,7 +75,7 @@ export default function LikesPage() {
         };
         fetchData();
         return () => { cancelled = true; };
-    }, []);
+    }, [isAuthed]);
 
     const handleUnlock = async () => {
         // FIX: Use cached balance instead of duplicate getMe() call
@@ -109,9 +106,7 @@ export default function LikesPage() {
             await authService.swipe(userToProcess.id, 'like');
 
             // Optional: haptic feedback
-            if (window.Telegram?.WebApp?.HapticFeedback) {
-                window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-            }
+            haptic.success();
             } catch (e: unknown) {
                 const err = e as Error;
                 const errorMsg = err.message || '';
@@ -148,6 +143,18 @@ export default function LikesPage() {
         return `/api_proxy/${photo}`; // Fallback helper
     };
 
+    if (isChecking || loading) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (error) {
+        return <ErrorState onRetry={() => window.location.reload()} />;
+    }
+
     return (
         <div className="h-full relative flex flex-col bg-black text-white">
             {/* Scrollable Main Content */}
@@ -178,7 +185,7 @@ export default function LikesPage() {
                             hidden: { opacity: 0 },
                             visible: {
                                 opacity: 1,
-                                transition: { staggerChildren: prefersReducedMotion ? 0 : 0.1 }
+                                transition: { staggerChildren: prefersReducedMotion ? 0 : 0.05, delayChildren: 0, staggerDirection: 1 }
                             }
                         }}
                     >

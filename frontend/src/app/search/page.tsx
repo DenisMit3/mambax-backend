@@ -6,6 +6,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SlidersHorizontal, MapPin, X, Heart, Star, Search, ChevronDown } from "lucide-react";
 import { authService, UserProfile, PaginatedResponse } from "@/services/api";
 import { FALLBACK_AVATAR } from "@/lib/constants";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { useHaptic } from '@/hooks/useHaptic';
 
 // --- Типы фильтров ---
 type FilterTag = "Онлайн" | "Новые" | "Рядом" | "Путешествия" | "С верификацией";
@@ -41,8 +44,11 @@ const getPhotoUrl = (photos: string[] | undefined) => {
 };
 
 export default function SearchPage() {
+    const { isAuthed, isChecking } = useRequireAuth();
+    const haptic = useHaptic();
     const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
     const [activeFilter, setActiveFilter] = useState<FilterTag | null>(null);
     const [showFilters, setShowFilters] = useState(false);
@@ -54,16 +60,18 @@ export default function SearchPage() {
 
     // Загрузка профилей
     useEffect(() => {
-        loadProfiles();
-    }, []);
+        if (isAuthed) loadProfiles();
+    }, [isAuthed]);
 
     const loadProfiles = async () => {
         setLoading(true);
+        setError(false);
         try {
             const response: PaginatedResponse<UserProfile> = await authService.getProfiles({ limit: 40 });
             setAllProfiles(response.items ?? []);
         } catch (error) {
             console.error("Не удалось загрузить профили", error);
+            setError(true);
             setAllProfiles([]);
         } finally {
             setLoading(false);
@@ -119,9 +127,7 @@ export default function SearchPage() {
     // Actions
     const handleLike = async (user: UserProfile) => {
         setSelectedUser(null);
-        if (window.Telegram?.WebApp?.HapticFeedback) {
-            window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-        }
+        haptic.success();
         try {
             await authService.swipe(user.id, 'like');
         } catch (e) {
@@ -137,6 +143,18 @@ export default function SearchPage() {
             console.error(e);
         }
     };
+
+    if (isChecking || loading) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (error) {
+        return <ErrorState onRetry={loadProfiles} />;
+    }
 
     return (
         <div className="h-full bg-black text-white relative flex flex-col">

@@ -8,6 +8,8 @@ import { ArrowLeft, Gift, Heart, MessageCircle, Shield, MapPin } from "lucide-re
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FALLBACK_AVATAR } from "@/lib/constants";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 interface UserProfile {
     id: string;
@@ -23,6 +25,7 @@ interface UserProfile {
 export default function UserProfilePage({ params }: { params: { id: string } }) {
     const { id: userId } = params;
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
 
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
@@ -31,6 +34,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
 
     useEffect(() => {
+        if (!isAuthed) return;
         let cancelled = false;
         const loadUser = async () => {
             try {
@@ -48,9 +52,9 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
 
         loadUser();
         return () => { cancelled = true; };
-    }, [userId]);
+    }, [userId, isAuthed]);
 
-    if (loading) {
+    if (isChecking || loading) {
         return (
             <div style={{
                 height: '100dvh',

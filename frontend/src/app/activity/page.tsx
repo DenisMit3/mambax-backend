@@ -6,6 +6,8 @@ import { authService } from '@/services/api';
 import { FALLBACK_AVATAR } from '@/lib/constants';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 interface BackendMatch {
     id: string;
@@ -21,6 +23,7 @@ interface BackendMatch {
 
 export default function ActivityPage() {
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
     interface UIMatch {
         id: string;
         user: { id: string; name: string; photo: string; age: number };
@@ -38,18 +41,16 @@ export default function ActivityPage() {
     const [matches, setMatches] = useState<UIMatch[]>([]);
     const [chats, setChats] = useState<UIChat[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [isPremium, setIsPremium] = useState(false);
 
     useEffect(() => {
-        loadData();
-        // Загрузка статуса подписки
-        authService.getMe().then(me => {
-            setIsPremium(me.subscription_tier !== 'free');
-        }).catch((e) => console.warn('Silent catch:', e));
-    }, []);
+        if (isAuthed) loadData();
+    }, [isAuthed]);
 
     const loadData = async () => {
         try {
+            setError(false);
             const matchesData = await authService.getMatches();
 
             // Map backend data to UI format
@@ -75,12 +76,22 @@ export default function ActivityPage() {
 
         } catch (error) {
             console.error('Failed to load activity data', error);
+            setError(true);
         } finally {
             setLoading(false);
         }
     };
 
-    if (loading) {
+    // Загрузка статуса подписки
+    useEffect(() => {
+        if (isAuthed) {
+            authService.getMe().then(me => {
+                setIsPremium(me.subscription_tier !== 'free');
+            }).catch((e) => console.warn('Silent catch:', e));
+        }
+    }, [isAuthed]);
+
+    if (isChecking || loading) {
         return (
             <div className="flex items-center justify-center h-screen bg-black">
                 <motion.div
@@ -90,6 +101,10 @@ export default function ActivityPage() {
                 />
             </div>
         );
+    }
+
+    if (error) {
+        return <ErrorState onRetry={loadData} />;
     }
 
     return (

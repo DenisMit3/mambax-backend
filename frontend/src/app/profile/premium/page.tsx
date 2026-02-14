@@ -7,9 +7,11 @@ import { TopUpModal } from "@/components/ui/TopUpModal";
 import { ArrowLeft, Star, Check, Zap, Crown, Shield } from "lucide-react";
 import Link from "next/link";
 import { Toast } from '@/components/ui/Toast';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function PremiumPage() {
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState<string | null>(null);
@@ -25,10 +27,11 @@ export default function PremiumPage() {
     };
 
     useEffect(() => {
+        if (!isAuthed) return;
         const cancelled = { current: false };
         fetchUser(cancelled);
         return () => { cancelled.current = true; };
-    }, []);
+    }, [isAuthed]);
 
     const handleUpgrade = async (tier: string) => {
         if (user?.subscription_tier === tier) return;
@@ -53,7 +56,7 @@ export default function PremiumPage() {
         }
     };
 
-    if (loading) {
+    if (loading || isChecking) {
         return (
             <div style={{
                 minHeight: '100vh',

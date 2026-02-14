@@ -7,6 +7,7 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import QueryProvider from '@/providers/QueryProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BadgeEarnedToast } from '@/components/ui/BadgeEarnedToast';
+import { UserProvider } from '@/context/UserContext';
 import { useTelegram } from '@/lib/telegram';
 import { measurePerformance } from '@/lib/performance';
 
@@ -117,6 +118,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return (
         <ErrorBoundary>
             <QueryProvider>
+                <UserProvider>
                 {/* PERF-016: LazyMotion reduces framer-motion bundle by ~30KB */}
                 {/* NOTE: strict mode disabled - requires replacing all 'motion' with 'm' across 70+ files */}
                 <LazyMotion features={domAnimation}>
@@ -134,7 +136,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     {/* iPhone-style Mobile Container */}
                     <div className="fixed inset-0 flex items-center justify-center z-10">
                         <div className="w-full h-full sm:h-[90vh] sm:max-w-[420px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-[#1c1c1e] sm:shadow-2xl relative flex flex-col overflow-hidden transform">
-                            <div className={`flex-1 w-full min-h-0 overflow-y-auto scrollbar-hide relative ${showGlobalNav ? 'pb-28' : ''}`}>
+                            <div className={`flex-1 w-full min-h-0 overflow-y-auto scrollbar-hide relative`} style={showGlobalNav ? { paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
                                 {children}
                             </div>
 
@@ -146,6 +148,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         </div>
                     </div>
                 </LazyMotion>
+                </UserProvider>
             </QueryProvider>
         </ErrorBoundary>
     );

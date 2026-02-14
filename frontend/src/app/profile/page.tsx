@@ -15,6 +15,8 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { TopUpModal } from "@/components/ui/TopUpModal";
 import { BoostModal } from "@/components/ui/BoostModal";
 import { DailyRewards } from "@/components/rewards/DailyRewards";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 export default function ProfilePage() {
     interface UserProfile {
@@ -29,33 +31,41 @@ export default function ProfilePage() {
 
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [showTopUp, setShowTopUp] = useState(false);
     const [showBoost, setShowBoost] = useState(false);
     const [showDailyRewards, setShowDailyRewards] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
 
     useEffect(() => {
-        loadProfile();
-    }, []);
+        if (isAuthed) loadProfile();
+    }, [isAuthed]);
 
     const loadProfile = async () => {
+        setError(false);
         try {
             const data = await authService.getMe();
             setProfile(data);
         } catch (error: unknown) {
             console.error('Failed to load profile:', error);
+            setError(true);
         } finally {
             setLoading(false);
         }
     };
 
-    if (loading) {
+    if (isChecking || loading) {
         return (
             <div className="flex items-center justify-center h-full bg-transparent">
                 <div className="w-8 h-8 rounded-full border-2 border-primary-500 border-t-transparent animate-spin"></div>
             </div>
         );
+    }
+
+    if (error) {
+        return <ErrorState onRetry={loadProfile} />;
     }
 
     // Editing Mode
@@ -130,7 +140,11 @@ export default function ProfilePage() {
                     <h2 className="text-2xl font-bold text-white mb-1">
                         {profile?.name}, <span className="text-slate-400 font-normal">{profile?.age}</span>
                     </h2>
-                    <p className="text-sm text-slate-500 font-medium">Новичок • Moscow</p>
+                    <p className="text-sm text-slate-500 font-medium">
+                        {profile?.subscription_tier === 'free' ? 'Новичок' : (profile?.subscription_tier || 'Новичок')}
+                        {' • '}
+                        {(profile?.city as string) || 'Не указан'}
+                    </p>
                 </div>
 
                 {/* Stars Wallet Card */}

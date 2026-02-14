@@ -19,6 +19,7 @@ import {
 import { authService } from "@/services/api";
 import { FALLBACK_AVATAR } from "@/lib/constants";
 import { useHaptic } from "@/hooks/useHaptic";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 // ============================================
 // Типы
@@ -117,8 +118,8 @@ function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
                 >
                     {iconMap[toast.type]}
                     <span className="text-sm font-medium flex-1">{toast.message}</span>
-                    <button onClick={onClose} className="p-1 rounded-full hover:bg-white/10">
-                        <X className="w-4 h-4 text-slate-400" />
+                    <button onClick={onClose} className="p-2.5 rounded-full hover:bg-white/10">
+                        <X className="w-5 h-5 text-slate-400" />
                     </button>
                 </motion.div>
             )}
@@ -133,6 +134,7 @@ function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
 export default function EventsPage() {
     const router = useRouter();
     const haptic = useHaptic();
+    const { isAuthed, isChecking } = useRequireAuth();
 
     // Состояния
     const [activeCategory, setActiveCategory] = useState<Category>("All");
@@ -205,12 +207,13 @@ export default function EventsPage() {
     }, [getCoords]);
 
     useEffect(() => {
+        if (!isAuthed) return;
         cancelledRef.current = false;
         loadEvents();
         return () => {
             cancelledRef.current = true;
         };
-    }, [loadEvents]);
+    }, [isAuthed, loadEvents]);
 
     // ============================================
     // Регистрация на событие

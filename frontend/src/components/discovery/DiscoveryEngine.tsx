@@ -505,9 +505,9 @@ const FiltersModal = ({ filters, onFiltersChange, onClose, isPremium }: FiltersM
                     <h2 className="text-xl font-bold text-white">Фильтры поиска</h2>
                     <button
                         onClick={onClose}
-                        className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center"
+                        className="w-11 h-11 rounded-full bg-gray-700 flex items-center justify-center"
                     >
-                        <X className="w-4 h-4 text-white" />
+                        <X className="w-5 h-5 text-white" />
                     </button>
                 </div>
 

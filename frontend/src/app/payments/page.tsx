@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { authService } from '@/services/api';
 import { useHaptic } from '@/hooks/useHaptic';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 // Типы платежей
 interface Payment {
@@ -75,26 +77,31 @@ function monthLabel(iso: string) {
 export default function PaymentsPage() {
   const router = useRouter();
   const haptic = useHaptic();
+  const { isAuthed, isChecking } = useRequireAuth();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
 
+  const loadPayments = async () => {
+    try {
+      setError(false);
+      const data = await authService.getPaymentHistory();
+      const sorted = (data.payments || []).sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setPayments(sorted);
+    } catch (e) {
+      console.error('Не удалось загрузить историю платежей', e);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      try {
-        const data = await authService.getPaymentHistory();
-        // Сортировка: новые сверху
-        const sorted = (data.payments || []).sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        setPayments(sorted);
-      } catch (e) {
-        console.error('Не удалось загрузить историю платежей', e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    if (isAuthed) loadPayments();
+  }, [isAuthed]);
 
   // Фильтрация
   const filtered = useMemo(
@@ -114,7 +121,7 @@ export default function PaymentsPage() {
   }, [filtered]);
 
   // Лоадер
-  if (loading) {
+  if (isChecking || loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-black">
         <motion.div
@@ -124,6 +131,10 @@ export default function PaymentsPage() {
         />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState onRetry={loadPayments} />;
   }
 
   return (

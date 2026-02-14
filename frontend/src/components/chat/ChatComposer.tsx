@@ -40,18 +40,18 @@ export const ChatComposer = ({
                     <AnimatedButton
                         variant="ghost"
                         size="sm"
-                        className="text-gray-400"
+                        className="text-gray-400 min-w-[44px] min-h-[44px]"
                     >
-                        <Image className="w-4 h-4" />
+                        <Image className="w-5 h-5" />
                     </AnimatedButton>
 
                     {isPremium && (
                         <AnimatedButton
                             variant="ghost"
                             size="sm"
-                            className="text-pink-400"
+                            className="text-pink-400 min-w-[44px] min-h-[44px]"
                         >
-                            <Gift className="w-4 h-4" />
+                            <Gift className="w-5 h-5" />
                         </AnimatedButton>
                     )}
                 </div>
@@ -63,15 +63,18 @@ export const ChatComposer = ({
                         type="text"
                         value={message}
                         onChange={(e) => onMessageChange(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && onSendMessage()}
+                        onKeyDown={(e) => e.key === 'Enter' && onSendMessage()}
                         placeholder="Напишите сообщение..."
+                    autoComplete="off"
+                    autoCapitalize="sentences"
+                    enterKeyHint="send"
                         className="w-full bg-gray-800 text-white rounded-full px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
                         onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
                     >
-                        <Smile className="w-4 h-4" />
+                        <Smile className="w-5 h-5" />
                     </button>
                 </div>
 

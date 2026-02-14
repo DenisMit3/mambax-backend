@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Globe, Search, Check, ArrowLeft } from 'lucide-react';
 import { useHaptic } from '@/hooks/useHaptic';
 import { authService } from '@/services/api';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 // ============================================
 // Список языков с флагами
@@ -29,6 +30,7 @@ const LANGUAGES = [
 export default function LanguagePage() {
     const router = useRouter();
     const haptic = useHaptic();
+    const { isAuthed, isChecking } = useRequireAuth();
 
     const [selected, setSelected] = useState('ru');
     const [search, setSearch] = useState('');
@@ -60,6 +62,14 @@ export default function LanguagePage() {
             setSaving(false);
         }
     };
+
+    if (isChecking) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-black text-white pb-24">
@@ -94,6 +104,10 @@ export default function LanguagePage() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Поиск языка..."
+                        inputMode="search"
+                        autoComplete="off"
+                        autoCapitalize="off"
+                        enterKeyHint="search"
                         className="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-950 border border-white/5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-purple-500/40 transition"
                     />
                 </motion.div>

@@ -8,6 +8,7 @@ import { Hash, ArrowLeft, Check, Search } from 'lucide-react';
 import { authService } from '@/services/api';
 import { httpClient } from '@/lib/http-client';
 import { useHaptic } from '@/hooks/useHaptic';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 const MAX_INTERESTS = 10;
 
@@ -18,6 +19,7 @@ interface Category {
 
 export default function InterestsPage() {
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
     const haptic = useHaptic();
 
     const [categories, setCategories] = useState<Category[]>([]);
@@ -28,6 +30,7 @@ export default function InterestsPage() {
 
     // Загрузка категорий и текущих интересов
     useEffect(() => {
+        if (!isAuthed) return;
         const load = async () => {
             try {
                 const [catData, me] = await Promise.all([
@@ -45,7 +48,7 @@ export default function InterestsPage() {
             }
         };
         load();
-    }, []);
+    }, [isAuthed]);
 
     // Фильтрация по поиску
     const filtered = useMemo(() => {
@@ -91,7 +94,7 @@ export default function InterestsPage() {
         }
     };
 
-    if (loading) {
+    if (loading || isChecking) {
         return (
             <div className="flex items-center justify-center h-full bg-black">
                 <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
@@ -121,6 +124,10 @@ export default function InterestsPage() {
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         placeholder="Поиск интересов..."
+                        inputMode="search"
+                        autoComplete="off"
+                        autoCapitalize="off"
+                        enterKeyHint="search"
                         className="w-full bg-slate-950 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-slate-600 border border-white/5 focus:border-purple-500/50 focus:outline-none transition"
                     />
                 </div>

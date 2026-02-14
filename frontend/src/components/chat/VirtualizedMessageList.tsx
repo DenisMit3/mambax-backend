@@ -103,7 +103,7 @@ const MessageItem = memo(function MessageItem({
                         <div className="flex items-center space-x-2 min-w-[150px]">
                             <button
                                 onClick={(e) => { e.stopPropagation(); onToggleAudio(msg.audioUrl || ''); }}
-                                className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0"
+                                className="w-11 h-11 rounded-full bg-white/20 flex items-center justify-center shrink-0"
                             >
                                 {playingAudio === msg.audioUrl ?
                                     <Pause className="w-4 h-4 text-white" /> :

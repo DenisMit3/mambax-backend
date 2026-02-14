@@ -13,6 +13,7 @@ import { Lightbulb, Phone, Video } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { EphemeralToggle } from '@/components/chat/EphemeralMessages';
 import { Toast } from '@/components/ui/Toast';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 
 const CallScreen = dynamic(() => import('@/components/chat/CallScreen').then(m => ({ default: m.CallScreen })), {
     ssr: false,
@@ -23,6 +24,7 @@ export default function ChatPage() {
     const { id } = useParams() as { id: string };
     const router = useRouter();
     const { hapticFeedback } = useTelegram();
+    const { isAuthed, isChecking } = useRequireAuth();
     const [showGiftPicker, setShowGiftPicker] = useState(false);
     const [showGifPicker, setShowGifPicker] = useState(false);
     const [showIcebreakers, setShowIcebreakers] = useState(false);
@@ -58,7 +60,7 @@ export default function ChatPage() {
     const currentUserIdRef = useRef<string | null>(null);
 
     useEffect(() => {
-        if (id) {
+        if (id && isAuthed) {
             loadInitialData();
             connectWebSocket();
         }
@@ -439,7 +441,7 @@ export default function ChatPage() {
         }
     };
 
-    if (loading) return (
+    if (isChecking || loading) return (
         <div className="h-screen bg-black flex flex-col items-center justify-center text-white font-mono space-y-4">
             <div className="w-12 h-12 border-2 border-primary-red/30 border-t-primary-red rounded-full animate-spin" />
             <p className="text-primary-red animate-pulse">Установка защищенного соединения...</p>

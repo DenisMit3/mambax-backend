@@ -65,7 +65,9 @@ export const viewport: Viewport = {
     maximumScale: 5,
     userScalable: true,
     themeColor: '#000000',
-    interactiveWidget: 'resizes-content'
+    interactiveWidget: 'resizes-content',
+    // FIX (UX): Enable safe area insets on iOS (without this env() values are always 0)
+    viewportFit: 'cover',
 };
 
 export default function RootLayout({

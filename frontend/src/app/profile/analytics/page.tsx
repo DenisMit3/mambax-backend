@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdvancedAnalyticsDashboard } from '@/components/analytics/AdvancedAnalyticsDashboard';
 import { authService } from '@/services/api';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 // Тип данных аналитики профиля
 interface AnalyticsData {
@@ -47,6 +48,7 @@ interface AnalyticsData {
 
 export default function AnalyticsPage() {
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [isPremium, setIsPremium] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -73,11 +75,12 @@ export default function AnalyticsPage() {
     }, []);
 
     useEffect(() => {
+        if (!isAuthed) return;
         fetchData();
-    }, [fetchData]);
+    }, [isAuthed, fetchData]);
 
     // Состояние загрузки
-    if (loading) {
+    if (loading || isChecking) {
         return (
             <main className="flex items-center justify-center min-h-[60vh]">
                 <div className="flex flex-col items-center gap-3">

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Heart, MessageCircle, Gift, Star, Rocket, Eye, Zap, Bell, CheckCheck, Loader2 } from "lucide-react";
 import { authService } from "@/services/api";
-import { BottomNav } from "@/components/layout/BottomNav";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 interface Notification {
     id: string;
@@ -43,15 +44,18 @@ function timeAgo(dateStr: string): string {
 
 export default function NotificationsPage() {
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
 
     const fetchNotifications = useCallback(async (p: number, append = false) => {
         try {
+            setError(false);
             const res = await authService.getNotifications(p, 20);
             if (append) {
                 setNotifications(prev => [...prev, ...res.notifications]);
@@ -62,6 +66,7 @@ export default function NotificationsPage() {
             setHasMore(res.notifications.length === 20);
         } catch (e) {
             console.error(e);
+            if (!append) setError(true);
         } finally {
             setLoading(false);
             setLoadingMore(false);
@@ -69,12 +74,13 @@ export default function NotificationsPage() {
     }, []);
 
     useEffect(() => {
+        if (!isAuthed) return;
         let cancelled = false;
         fetchNotifications(1).then(() => {
             if (cancelled) return;
         });
         return () => { cancelled = true; };
-    }, [fetchNotifications]);
+    }, [fetchNotifications, isAuthed]);
 
     const loadMore = () => {
         if (loadingMore || !hasMore) return;
@@ -105,12 +111,16 @@ export default function NotificationsPage() {
         }
     };
 
-    if (loading) {
+    if (isChecking || loading) {
         return (
             <div className="min-h-screen bg-black flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
         );
+    }
+
+    if (error) {
+        return <ErrorState onRetry={() => fetchNotifications(1)} />;
     }
 
     return (
@@ -160,7 +170,7 @@ export default function NotificationsPage() {
                                 key={n.id}
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: i * 0.02 }}
+                                transition={{ delay: Math.min(i * 0.02, 0.3) }}
                                 onClick={() => handleTap(n)}
                                 className={`w-full flex items-start gap-3 px-4 py-4 text-left transition hover:bg-white/5 ${
                                     !n.is_read ? "bg-white/[0.02]" : ""
@@ -216,7 +226,6 @@ export default function NotificationsPage() {
                 </div>
             )}
 
-            <BottomNav />
         </div>
     );
 }

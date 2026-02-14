@@ -9,10 +9,14 @@ import Link from "next/link";
 import { useUser } from "@/context/UserContext";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { Toast } from '@/components/ui/Toast';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 export default function EditProfilePage() {
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
 
@@ -49,7 +53,8 @@ export default function EditProfilePage() {
     // UI State
     const [newInterest, setNewInterest] = useState("");
 
-    useEffect(() => {
+    const loadProfile = () => {
+        setError(false);
         authService.getMe()
             .then((data) => {
                 setName(data.name);
@@ -58,9 +63,13 @@ export default function EditProfilePage() {
                 setInterests(data.interests || []);
                 setPhotos(data.photos || []);
             })
-            .catch(err => console.error(err))
+            .catch(() => setError(true))
             .finally(() => setLoading(false));
-    }, []);
+    };
+
+    useEffect(() => {
+        if (isAuthed) loadProfile();
+    }, [isAuthed]);
 
     const handleSave = async () => {
         setSaving(true);
@@ -126,7 +135,9 @@ export default function EditProfilePage() {
         setNewInterest("");
     };
 
-    if (loading) return <div className="flex-center h-screen">Загрузка...</div>;
+    if (isChecking || loading) return <div className="flex-center h-screen">Загрузка...</div>;
+
+    if (error) return <ErrorState onRetry={loadProfile} />;
 
     return (
         <div style={{ paddingBottom: '80px', minHeight: '100dvh', background: 'var(--background)' }}>
@@ -328,6 +339,9 @@ export default function EditProfilePage() {
                                 onChange={e => setName(e.target.value)}
                                 style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '16px', outline: 'none' }}
                                 placeholder="Ваше имя"
+                    autoComplete="name"
+                    autoCapitalize="words"
+                    enterKeyHint="next"
                             />
                         </div>
 
@@ -339,6 +353,8 @@ export default function EditProfilePage() {
                                 style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '16px', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
                                 rows={4}
                                 placeholder="Расскажите о себе..."
+                    autoCapitalize="sentences"
+                    enterKeyHint="done"
                             />
                         </div>
                     </div>
@@ -397,6 +413,9 @@ export default function EditProfilePage() {
                                 value={newInterest}
                                 onChange={e => setNewInterest(e.target.value)}
                                 placeholder="+ Добавить интерес"
+                    autoComplete="off"
+                    autoCapitalize="off"
+                    enterKeyHint="done"
                                 onKeyDown={e => e.key === 'Enter' && addInterest()}
                                 style={{
                                     background: 'transparent',

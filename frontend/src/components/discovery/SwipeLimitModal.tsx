@@ -29,10 +29,10 @@ export const SwipeLimitModal = ({
             {isOpen && (
                 <motion.div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md"
-                    initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
-                    animate={{ opacity: 1, backdropFilter: 'blur(12px)' }}
-                    exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
-                    transition={{ duration: 0.3 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
                     onClick={onClose}
                 >
                     <motion.div
@@ -46,9 +46,9 @@ export const SwipeLimitModal = ({
                         {/* Close Button */}
                         <button
                             onClick={onClose}
-                            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center"
+                            className="absolute top-4 right-4 w-11 h-11 rounded-full bg-gray-700 flex items-center justify-center"
                         >
-                            <X className="w-4 h-4 text-white" />
+                            <X className="w-5 h-5 text-white" />
                         </button>
 
                         {/* Icon */}

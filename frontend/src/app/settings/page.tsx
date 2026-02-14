@@ -12,6 +12,7 @@ import { SettingsSecurity } from './SettingsSecurity';
 import { SettingsBlocked } from './SettingsBlocked';
 import { SettingsDevices } from './SettingsDevices';
 import { SettingsDeleteAccount } from './SettingsDeleteAccount';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 
 // Заголовки секций
 const sectionTitles: Record<SettingsSection, string> = {
@@ -26,7 +27,16 @@ const sectionTitles: Record<SettingsSection, string> = {
 
 export default function SettingsPage() {
     const router = useRouter();
+    const { isChecking } = useRequireAuth();
     const [section, setSection] = useState<SettingsSection>('main');
+
+    if (isChecking) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="h-full overflow-y-auto scrollbar-hide bg-transparent pb-24">

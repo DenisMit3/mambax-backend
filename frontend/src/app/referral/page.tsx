@@ -6,6 +6,8 @@ import { motion } from "framer-motion";
 import { Copy, Share2, Gift, Users, Star, ArrowLeft, Check, Loader2 } from "lucide-react";
 import { authService } from "@/services/api";
 import { useHaptic } from "@/hooks/useHaptic";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 // Типы ответов API
 interface ReferralCode {
@@ -33,33 +35,38 @@ const fadeUp = {
 export default function ReferralPage() {
   const router = useRouter();
   const haptic = useHaptic();
+  const { isAuthed, isChecking } = useRequireAuth();
 
   const [referral, setReferral] = useState<ReferralCode | null>(null);
   const [stats, setStats] = useState<ReferralStats | null>(null);
   const [inputCode, setInputCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Загрузка данных
-  useEffect(() => {
-    async function load() {
-      try {
-        const [codeData, statsData] = await Promise.all([
-          authService.getReferralCode(),
-          authService.getReferralStats(),
-        ]);
-        setReferral(codeData);
-        setStats(statsData);
-      } catch (e) {
-        console.error("Ошибка загрузки реферальных данных", e);
-      } finally {
-        setLoading(false);
-      }
+  const loadData = useCallback(async () => {
+    try {
+      setError(false);
+      const [codeData, statsData] = await Promise.all([
+        authService.getReferralCode(),
+        authService.getReferralStats(),
+      ]);
+      setReferral(codeData);
+      setStats(statsData);
+    } catch (e) {
+      console.error("Ошибка загрузки реферальных данных", e);
+      setError(true);
+    } finally {
+      setLoading(false);
     }
-    load();
   }, []);
+
+  useEffect(() => {
+    if (isAuthed) loadData();
+  }, [isAuthed, loadData]);
 
   // Копирование кода
   const copyCode = useCallback(async () => {
@@ -111,12 +118,16 @@ export default function ReferralPage() {
     }
   }, [inputCode, applying, haptic]);
 
-  if (loading) {
+  if (isChecking || loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState onRetry={loadData} />;
   }
 
   return (
@@ -199,7 +210,11 @@ export default function ReferralPage() {
               type="text"
               value={inputCode}
               onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-              placeholder="Введи код"
+                    placeholder="Введи код"
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    enterKeyHint="send"
+                    spellCheck={false}
               className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 transition-colors"
             />
             <button

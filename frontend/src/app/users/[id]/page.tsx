@@ -8,16 +8,19 @@ import { ArrowLeft, Gift, MapPin, Briefcase, GraduationCap } from "lucide-react"
 import { BottomNav } from "@/components/layout/BottomNav";
 import { CompatibilityScore } from "@/components/profile/CompatibilityScore";
 import { FALLBACK_AVATAR } from "@/lib/constants";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
     const { id } = params;
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
     const [user, setUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [showGiftModal, setShowGiftModal] = useState(false);
 
     useEffect(() => {
+        if (!isAuthed) return;
         authService.getUser(id)
             .then((data) => {
                 setUser(data);
@@ -26,9 +29,9 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                 console.error("Failed to fetch user", err);
             })
             .finally(() => setLoading(false));
-    }, [id]);
+    }, [isAuthed, id]);
 
-    if (loading) {
+    if (loading || isChecking) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh' }}>
                 Загрузка...

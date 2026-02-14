@@ -12,19 +12,24 @@ import { useSoundService } from '@/hooks/useSoundService';
 import { useHaptic } from '@/hooks/useHaptic';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { FALLBACK_AVATAR } from '@/lib/constants';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 export default function ChatListPage() {
     const [matches, setMatches] = useState<Match[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const soundService = useSoundService();
     const haptic = useHaptic();
     const prefersReducedMotion = useReducedMotion();
+    const { isAuthed, isChecking } = useRequireAuth();
     // FIX: Use deferred value to prevent UI blocking during search
     const deferredSearchQuery = useDeferredValue(searchQuery);
 
     const fetchMatches = async () => {
         try {
+            setError(false);
             const data = await authService.getMatches();
             if (data && Array.isArray(data)) {
                 setMatches(data);
@@ -33,6 +38,7 @@ export default function ChatListPage() {
             }
         } catch (err) {
             console.error('Matches error', err);
+            setError(true);
             setMatches([]);
         } finally {
             setLoading(false);
@@ -40,12 +46,13 @@ export default function ChatListPage() {
     };
 
     useEffect(() => {
+        if (!isAuthed) return;
         let cancelled = false;
         fetchMatches().then(() => {
             if (cancelled) return;
         });
         return () => { cancelled = true; };
-    }, []);
+    }, [isAuthed]);
 
     const handleRefresh = async () => {
         haptic.medium();
@@ -63,6 +70,29 @@ export default function ChatListPage() {
     return (
         <PullToRefresh onRefresh={handleRefresh}>
             <div className="min-h-full relative bg-transparent">
+                {/* Loading skeleton */}
+                {(isChecking || loading) && (
+                    <div className="px-4 pt-20 space-y-3">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className="flex items-center gap-3 p-2">
+                                <div className="w-[52px] h-[52px] rounded-full bg-white/5 animate-pulse flex-shrink-0" />
+                                <div className="flex-1 space-y-2">
+                                    <div className="h-4 w-24 bg-white/5 rounded animate-pulse" />
+                                    <div className="h-3 w-40 bg-white/5 rounded animate-pulse" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Error state */}
+                {!isChecking && !loading && error && (
+                    <ErrorState onRetry={fetchMatches} />
+                )}
+
+                {/* Content */}
+                {!isChecking && !loading && !error && (
+                <>
                 {/* STICKY: Header */}
                 <div className="px-5 pt-6 pb-2 space-y-3 bg-[#0f0f11] border-b border-white/5 sticky top-0 z-30">
                     <div className="flex justify-between items-end">
@@ -84,6 +114,10 @@ export default function ChatListPage() {
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Поиск..."
+                            inputMode="search"
+                            autoComplete="off"
+                            autoCapitalize="off"
+                            enterKeyHint="search"
                             className="w-full bg-black/40 border border-white/5 rounded-xl py-2 pl-9 pr-3 text-white text-[13px] outline-none focus:border-white/20 focus:bg-white/5 transition-all placeholder:text-slate-600"
                         />
                     </div>
@@ -200,10 +234,14 @@ export default function ChatListPage() {
                                     <div className="flex-1 min-w-0 border-b border-white/5 pb-3 group-hover:border-transparent transition-colors">
                                         <div className="flex justify-between items-baseline mb-0.5">
                                             <h4 className="text-white font-bold text-[15px] truncate pr-2">{m.user.name}</h4>
-                                            <span className="text-[10px] font-medium text-slate-500 whitespace-nowrap">12:42</span>
+                                            <span className="text-[10px] font-medium text-slate-500 whitespace-nowrap">
+                                                {m.last_message?.created_at
+                                                    ? new Date(m.last_message.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+                                                    : ''}
+                                            </span>
                                         </div>
                                         <p className="text-[13px] text-slate-400 truncate pr-4 leading-tight line-clamp-1">
-                                            {m.last_message || <span className="text-blue-400 font-medium opacity-80">Написать первое сообщение...</span>}
+                                            {m.last_message?.text || <span className="text-blue-400 font-medium opacity-80">Написать первое сообщение...</span>}
                                         </p>
                                     </div>
                                 </Link>
@@ -218,6 +256,8 @@ export default function ChatListPage() {
                         )}
                     </motion.div>
                 </div>
+                </>
+                )}
             </div>
         </PullToRefresh>
     );

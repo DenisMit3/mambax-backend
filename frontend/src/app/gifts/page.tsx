@@ -7,6 +7,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { GiftRevealAnimation } from "@/components/ui/GiftRevealAnimation";
 import { Gift, Inbox, Send, Star, Clock, User, EyeOff, ChevronRight, ShoppingBag, RefreshCw, AlertTriangle } from "lucide-react";
 import dynamic from 'next/dynamic';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 const GiftCatalog = dynamic(() => import('@/components/gifts/GiftCatalog').then(mod => mod.GiftCatalog), {
     loading: () => (
@@ -46,6 +47,7 @@ interface GiftTransaction {
 type TabType = "received" | "sent" | "shop";
 
 export default function GiftsPage() {
+    const { isAuthed, isChecking } = useRequireAuth();
     const [activeTab, setActiveTab] = useState<TabType>("received");
     const [receivedGifts, setReceivedGifts] = useState<GiftTransaction[]>([]);
     const [sentGifts, setSentGifts] = useState<GiftTransaction[]>([]);
@@ -60,8 +62,8 @@ export default function GiftsPage() {
     const [revealGift, setRevealGift] = useState<GiftTransaction | null>(null);
 
     useEffect(() => {
-        loadGifts();
-    }, []);
+        if (isAuthed) loadGifts();
+    }, [isAuthed]);
 
     const loadGifts = async () => {
         try {

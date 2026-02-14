@@ -35,6 +35,9 @@ export default function SetupAgePage() {
                     value={age}
                     onChange={(e) => setAge(e.target.value)}
                     autoFocus
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    enterKeyHint="next"
                     style={{
                         width: '100%',
                         background: 'transparent',

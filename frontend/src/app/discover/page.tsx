@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { BottomNav } from "@/components/layout/BottomNav";
 import { SwipeCard } from "@/components/ui/SwipeCard";
 import { X, Heart, Star, MessageCircle } from "lucide-react";
 import { authService } from "@/services/api";
@@ -16,6 +15,7 @@ import { SmartFilters } from "@/components/discovery/SmartFilters";
 import { FALLBACK_AVATAR } from "@/lib/constants";
 import { Spotlight } from "@/components/discovery/Spotlight";
 import { Suggestions } from "@/components/discovery/Suggestions";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 // PERF: Dynamic imports for modals (code splitting)
 const SendGiftModal = dynamic(() => import("@/components/gifts").then(m => ({ default: m.SendGiftModal })), {
@@ -36,6 +36,7 @@ const TopUpModal = dynamic(() => import("@/components/ui/TopUpModal").then(m => 
 export default function DiscoverPage() {
     const router = useRouter();
     const queryClient = useQueryClient();
+    const { isChecking } = useRequireAuth();
 
     // Data Hooks
     const { data: profiles = [], isLoading: isLoadingProfiles } = useProfiles();
@@ -122,7 +123,14 @@ export default function DiscoverPage() {
                 <div className="w-full mt-8">
                     <Suggestions limit={5} />
                 </div>
-                <BottomNav />
+            </div>
+        );
+    }
+
+    if (isChecking) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
         );
     }
@@ -240,8 +248,6 @@ export default function DiscoverPage() {
                     <Star size={20} fill="currentColor" strokeWidth={0} />
                 </button>
             </div>
-
-            <BottomNav />
 
             {/* Modals */}
             {selectedGiftProfile && (

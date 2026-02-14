@@ -121,8 +121,8 @@ export function GifPicker({ isOpen, onClose, onSelectGif }: GifPickerProps) {
                     {/* Header */}
                     <div className="px-4 pb-3 flex items-center justify-between">
                         <h3 className="text-white font-black text-sm uppercase tracking-widest">GIF</h3>
-                        <button onClick={onClose} className="p-1.5 rounded-full bg-slate-800 text-slate-400">
-                            <X size={16} />
+                        <button onClick={onClose} className="p-2.5 rounded-full bg-slate-800 text-slate-400">
+                            <X size={18} />
                         </button>
                     </div>
 

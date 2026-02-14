@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Star, Crown, Clock, ArrowLeft, Zap, Info, RefreshCw, AlertTriangle } from "lucide-react";
 import { authService } from "@/services/api";
 import { useHaptic } from "@/hooks/useHaptic";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 interface SuperlikeInfo {
     remaining: number;
@@ -17,14 +18,15 @@ interface SuperlikeInfo {
 export default function SuperlikePage() {
     const router = useRouter();
     const haptic = useHaptic();
+    const { isAuthed, isChecking } = useRequireAuth();
     const [info, setInfo] = useState<SuperlikeInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [countdown, setCountdown] = useState("");
 
     useEffect(() => {
-        loadInfo();
-    }, []);
+        if (isAuthed) loadInfo();
+    }, [isAuthed]);
 
     const loadInfo = async () => {
         try {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Crown, Check, Zap, Star, Shield, Eye, Rocket, X, AlertTriangle } from "lucide-react";
 import { authService } from "@/services/api";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 interface Subscription {
     plan: string | null;
@@ -44,6 +45,7 @@ const PLANS = [
 
 export default function SubscriptionPage() {
     const router = useRouter();
+    const { isAuthed, isChecking } = useRequireAuth();
     const [subscription, setSubscription] = useState<Subscription | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -51,11 +53,12 @@ export default function SubscriptionPage() {
     const [processing, setProcessing] = useState(false);
 
     useEffect(() => {
+        if (!isAuthed) return;
         authService.getSubscription()
             .then(setSubscription)
             .catch(() => setSubscription({ plan: null, status: null, expires_at: null, auto_renew: false, features: [] }))
             .finally(() => setLoading(false));
-    }, []);
+    }, [isAuthed]);
 
     const handleSubscribe = async (planId: string) => {
         if (planId === "basic") return;
@@ -86,7 +89,7 @@ export default function SubscriptionPage() {
         }
     };
 
-    if (loading) {
+    if (loading || isChecking) {
         return (
             <div className="min-h-screen bg-black flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />

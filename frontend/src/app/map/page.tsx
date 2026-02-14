@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { authService } from "@/services/api";
 import dynamic from "next/dynamic";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 // Import Leaflet CSS
 import "leaflet/dist/leaflet.css";
@@ -25,6 +26,7 @@ interface NearbyUser {
 }
 
 export default function MapPage() {
+    const { isAuthed, isChecking } = useRequireAuth();
     const [position, setPosition] = useState<[number, number] | null>(null);
     const [others, setOthers] = useState<NearbyUser[]>([]);
     // Leaflet Icon type is complex and dynamic-imported, using unknown here
@@ -32,6 +34,7 @@ export default function MapPage() {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
+        if (!isAuthed) return;
         setMounted(true);
 
         // Import Leaflet and create icon only on client side
@@ -70,7 +73,7 @@ export default function MapPage() {
                 }
             });
         }
-    }, []);
+    }, [isAuthed]);
 
     // Don't render map until we have the icon (client-side only)
     if (!mounted || !leafletIcon) {

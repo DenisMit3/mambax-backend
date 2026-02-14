@@ -119,7 +119,9 @@ export function QuestionOfTheDayCard({
                 <textarea
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
-                  placeholder="Ваш ответ..."
+                    placeholder="Ваш ответ..."
+                    autoCapitalize="sentences"
+                    enterKeyHint="send"
                   className="w-full min-h-[72px] px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-red/50"
                   rows={3}
                   disabled={sending}

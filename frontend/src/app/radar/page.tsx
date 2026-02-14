@@ -3,16 +3,19 @@
 import { useState, useEffect } from 'react';
 import { GeoMapRadar } from '@/components/discovery/GeoMapRadar';
 import { authService, UserProfile, PaginatedResponse } from '@/services/api';
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 // Координаты Москвы как фоллбэк
 const MOSCOW_LAT = 55.7558;
 const MOSCOW_LON = 37.6173;
 
 export default function RadarPage() {
+    const { isAuthed, isChecking } = useRequireAuth();
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!isAuthed) return;
         const loadRadar = async (lat: number, lon: number) => {
             try {
                 const data: PaginatedResponse<UserProfile> = await authService.getProfiles({ lat, lon, limit: 50 });
@@ -46,7 +49,7 @@ export default function RadarPage() {
             // Браузер не поддерживает geolocation
             loadRadar(MOSCOW_LAT, MOSCOW_LON);
         }
-    }, []);
+    }, [isAuthed]);
 
     return (
         <main className="h-full">

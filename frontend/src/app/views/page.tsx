@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Eye, Lock, Crown, ArrowLeft, Clock, Users, RefreshCw } from "lucide-react";
 import { authService } from "@/services/api";
 import { useHaptic } from "@/hooks/useHaptic";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 // Тип просмотра профиля
 interface Viewer {
@@ -32,21 +34,25 @@ function timeAgo(dateStr: string): string {
 export default function WhoViewedMePage() {
     const router = useRouter();
     const haptic = useHaptic();
+    const { isAuthed, isChecking } = useRequireAuth();
 
     const [viewers, setViewers] = useState<Viewer[]>([]);
     const [total, setTotal] = useState(0);
     const [isVip, setIsVip] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
     const fetchViewers = useCallback(async () => {
         try {
+            setError(false);
             const data = await authService.getWhoViewedMe(20);
             setViewers(data.viewers);
             setTotal(data.total);
             setIsVip(data.is_vip);
         } catch (e) {
             console.error("[Views] Ошибка загрузки:", e);
+            setError(true);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -54,8 +60,8 @@ export default function WhoViewedMePage() {
     }, []);
 
     useEffect(() => {
-        fetchViewers();
-    }, [fetchViewers]);
+        if (isAuthed) fetchViewers();
+    }, [fetchViewers, isAuthed]);
 
     const handleRefresh = () => {
         haptic.light();
@@ -70,7 +76,7 @@ export default function WhoViewedMePage() {
     };
 
     // Скелетон загрузки
-    if (loading) {
+    if (isChecking || loading) {
         return (
             <div className="min-h-screen bg-black">
                 <header className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-slate-800/50 px-4 py-3 flex items-center gap-3">
@@ -84,6 +90,10 @@ export default function WhoViewedMePage() {
                 </div>
             </div>
         );
+    }
+
+    if (error) {
+        return <ErrorState onRetry={fetchViewers} />;
     }
 
     return (

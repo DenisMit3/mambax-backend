@@ -9,9 +9,11 @@ import { StoryHeader, StorySkeleton } from "./StoryHeader";
 import StoryCarousel from "./StoryCarousel";
 import StoryEmptyState from "./StoryEmptyState";
 import StoryViewer from "./StoryViewer";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function StoriesPage() {
   const haptic = useHaptic();
+  const { isAuthed, isChecking } = useRequireAuth();
 
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +26,7 @@ export default function StoriesPage() {
 
   // ─── Загрузка историй ───
   useEffect(() => {
+    if (!isAuthed) return;
     let cancelled = false;
     const fetchStories = async () => {
       setLoading(true);
@@ -40,7 +43,7 @@ export default function StoriesPage() {
     };
     fetchStories();
     return () => { cancelled = true; };
-  }, []);
+  }, [isAuthed]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);

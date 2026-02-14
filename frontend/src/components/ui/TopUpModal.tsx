@@ -88,12 +88,12 @@ export function TopUpModal({ isOpen, onClose, currentBalance, onSuccess }: TopUp
                 <>
                     {/* Backdrop */}
                     <motion.div
-                        initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
-                        animate={{ opacity: 1, backdropFilter: 'blur(12px)' }}
-                        exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
-                        transition={{ duration: 0.3 }}
+                    initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
                         onClick={onClose}
-                        className="absolute inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"
+                        className="absolute inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4"
                     >
                         {/* Modal Container */}
                         <motion.div

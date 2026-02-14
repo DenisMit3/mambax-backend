@@ -26,6 +26,9 @@ export default function SetupNamePage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     autoFocus
+                    autoComplete="name"
+                    autoCapitalize="words"
+                    enterKeyHint="next"
                     style={{
                         width: '100%',
                         background: 'transparent',

@@ -147,7 +147,7 @@ export const VIPComposer = ({
       <div className="p-2 pb-6 border-t border-white/5">
         <div className="flex items-end gap-2">
           <div className="flex-1 bg-[#212121] rounded-[22px] px-1 py-1 flex items-end border border-white/5 focus-within:border-primary-red/30 transition-all min-h-[36px]">
-            <AnimatedButton variant="ghost" size="sm" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-8 h-8 hover:bg-white/5 rounded-full shrink-0 mb-0.5">
+            <AnimatedButton variant="ghost" size="sm" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-11 h-11 hover:bg-white/5 rounded-full shrink-0 mb-0.5">
               <Smile className="w-5 h-5 text-gray-400" />
             </AnimatedButton>
             <textarea
@@ -164,12 +164,15 @@ export const VIPComposer = ({
                   handleSend();
                 }
               }}
-              placeholder="Сообщение..."
+                    placeholder="Сообщение..."
+                    autoComplete="off"
+                    autoCapitalize="sentences"
+                    enterKeyHint="send"
               rows={1}
               className="flex-1 bg-transparent border-none outline-none text-white text-[16px] leading-[20px] px-2 py-2 min-w-0 resize-none overflow-y-hidden scrollbar-hide placeholder:text-gray-500"
             />
             <input type="file" ref={fileInputRef} className="hidden" onChange={handleImageUpload} accept="image/*" multiple />
-            <AnimatedButton variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} className="w-8 h-8 hover:bg-white/5 rounded-full shrink-0 mb-0.5">
+            <AnimatedButton variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} className="w-11 h-11 hover:bg-white/5 rounded-full shrink-0 mb-0.5">
               <ImageIcon className="w-5 h-5 text-gray-400" />
             </AnimatedButton>
           </div>

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { authService } from "@/services/api";
 import { useHaptic } from "@/hooks/useHaptic";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 // Типы обратной связи
 const feedbackTypes = [
@@ -27,6 +28,7 @@ const feedbackTypes = [
 export default function FeedbackPage() {
   const router = useRouter();
   const haptic = useHaptic();
+  const { isAuthed, isChecking } = useRequireAuth();
 
   const [type, setType] = useState("");
   const [rating, setRating] = useState(0);
@@ -198,7 +200,9 @@ export default function FeedbackPage() {
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Опишите подробнее (мин. 10 символов)..."
+                    placeholder="Опишите подробнее (мин. 10 символов)..."
+                    autoCapitalize="sentences"
+                    enterKeyHint="send"
                 rows={5}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-purple-500/60 focus:ring-1 focus:ring-purple-500/30 resize-none transition-all"
               />
