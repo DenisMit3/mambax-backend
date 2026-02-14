@@ -9,6 +9,9 @@ type RequestConfig = RequestInit & {
 class HttpClient {
     private baseUrl: string;
     private customToken: string | null = null;
+    
+    // Re-auth mutex: prevents multiple parallel 401 handlers from firing
+    private reAuthPromise: Promise<boolean> | null = null;
 
     constructor(baseUrl: string) {
         this.baseUrl = baseUrl;
@@ -17,7 +20,6 @@ class HttpClient {
     private get token(): string | null {
         if (this.customToken) return this.customToken;
         if (typeof window !== 'undefined') {
-            // FIX: Standardize on 'accessToken' to match other components
             return localStorage.getItem('accessToken') || localStorage.getItem('token');
         }
         return null;
@@ -27,21 +29,69 @@ class HttpClient {
         if (typeof window !== 'undefined') {
             if (value) {
                 localStorage.setItem('accessToken', value);
-                // remove legacy key to avoid confusion
                 localStorage.removeItem('token');
             } else {
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('token');
             }
         }
-        // Also set internal state for potential server-side persistence in same lifecycle (rare case)
         this.customToken = value;
     }
+
+    /**
+     * Try to re-authenticate using Telegram initData.
+     * Uses a mutex so only one re-auth runs at a time.
+     */
+    private async tryReAuth(): Promise<boolean> {
+        // If re-auth is already in progress, wait for it
+        if (this.reAuthPromise) {
+            return this.reAuthPromise;
+        }
+
+        this.reAuthPromise = this._doReAuth();
+        try {
+            return await this.reAuthPromise;
+        } finally {
+            this.reAuthPromise = null;
+        }
+    }
+
+    private async _doReAuth(): Promise<boolean> {
+        if (typeof window === 'undefined') return false;
+
+        const initData = window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '';
+        if (!initData || !initData.trim()) return false;
+
+        try {
+            console.log('[HTTP] Attempting Telegram re-auth...');
+            const res = await fetch(`${this.baseUrl}/api/auth/telegram`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ init_data: initData }),
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.access_token) {
+                    this.setToken(data.access_token);
+                    console.log('[HTTP] Re-auth success');
+                    return true;
+                }
+            }
+            console.warn('[HTTP] Re-auth failed, status:', res.status);
+            return false;
+        } catch (err) {
+            console.error('[HTTP] Re-auth error:', err);
+            return false;
+        }
+    }
+
     public async request<T>(endpoint: string, config: RequestConfig = {}): Promise<T> {
         const { skipAuth, silent, headers, ...customConfig } = config;
         const url = `${this.baseUrl}${endpoint}`;
 
-        // Use Headers object to manage headers robustly
+        console.log(`[HTTP] ${customConfig.method || 'GET'} ${endpoint} (skipAuth=${!!skipAuth}, hasToken=${!!this.token})`);
+
         const reqHeaders = new Headers(headers);
 
         if (!skipAuth) {
@@ -51,14 +101,13 @@ class HttpClient {
             }
         }
 
-        // Set Content-Type only if not FormData (browser sets boundary automatically)
+        // Set Content-Type only if not FormData
         if (!(customConfig.body instanceof FormData)) {
             if (!reqHeaders.has('Content-Type')) {
                 reqHeaders.set('Content-Type', 'application/json');
             }
         }
 
-        // Create the final config object
         const mergedConfig: RequestInit = {
             ...customConfig,
             headers: reqHeaders,
@@ -67,54 +116,32 @@ class HttpClient {
         try {
             const response = await fetch(url, mergedConfig);
 
-            if (response.status === 401) {
-                console.error('[HTTP] 401 on', endpoint, '- token present:', !!this.token);
+            if (response.status === 401 && !skipAuth && !endpoint.includes('/auth/')) {
+                // Try re-auth via Telegram (with mutex)
+                const reAuthed = await this.tryReAuth();
                 
-                // If inside Telegram WebApp, try to re-authenticate before giving up
-                const initData = typeof window !== 'undefined' 
-                    ? (window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '')
-                    : '';
-                
-                if (initData && initData.trim() && !endpoint.includes('/auth/')) {
-                    console.log('[HTTP] 401 but have Telegram initData, attempting re-auth...');
-                    try {
-                        const reAuthRes = await fetch(`${this.baseUrl}/api/auth/telegram`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ init_data: initData }),
-                        });
-                        if (reAuthRes.ok) {
-                            const reAuthData = await reAuthRes.json();
-                            if (reAuthData.access_token) {
-                                this.setToken(reAuthData.access_token);
-                                console.log('[HTTP] Re-auth success, retrying original request');
-                                // Retry original request with new token
-                                reqHeaders.set('Authorization', `Bearer ${reAuthData.access_token}`);
-                                const retryResponse = await fetch(url, { ...mergedConfig, headers: reqHeaders });
-                                if (retryResponse.ok) {
-                                    if (retryResponse.status === 204) return {} as T;
-                                    return await retryResponse.json();
-                                }
-                                // Re-auth worked but retry failed with non-401 — don't clear the new valid token
-                                if (retryResponse.status !== 401) {
-                                    const retryError = await retryResponse.json().catch(() => ({}));
-                                    const err = new Error((retryError as Record<string, string>).detail || 'Retry failed') as Error & { status: number };
-                                    err.status = retryResponse.status;
-                                    throw err;
-                                }
-                            }
-                        }
-                    } catch (reAuthErr) {
-                        // If it's a rethrown retry error (not a network error), propagate it
-                        if (reAuthErr instanceof Error && (reAuthErr as Error & { status?: number }).status) {
-                            throw reAuthErr;
-                        }
-                        console.error('[HTTP] Re-auth failed:', reAuthErr);
+                if (reAuthed) {
+                    // Retry the original request with new token
+                    reqHeaders.set('Authorization', `Bearer ${this.token}`);
+                    const retryResponse = await fetch(url, { ...mergedConfig, headers: reqHeaders });
+                    
+                    if (retryResponse.ok) {
+                        if (retryResponse.status === 204) return {} as T;
+                        return await retryResponse.json();
                     }
+                    
+                    // Retry also failed — throw with status
+                    const retryError = await retryResponse.json().catch(() => ({}));
+                    const err = new Error((retryError as Record<string, string>).detail || 'Request failed after re-auth') as Error & { status: number };
+                    err.status = retryResponse.status;
+                    throw err;
                 }
                 
-                this.handleUnauthorized();
-                throw new Error('Unauthorized');
+                // Re-auth failed — clear token, let React components handle redirect
+                this.clearToken();
+                const err = new Error('Unauthorized') as Error & { status: number };
+                err.status = 401;
+                throw err;
             }
 
             if (!response.ok) {
@@ -125,7 +152,6 @@ class HttpClient {
                 throw error;
             }
 
-            // Handle empty responses (like 204 No Content)
             if (response.status === 204) {
                 return {} as T;
             }
@@ -137,58 +163,28 @@ class HttpClient {
         }
     }
 
-    private handleUnauthorized() {
-        // Only clear token in browser context to avoid side effects on server
-        if (typeof window !== 'undefined') {
-            console.warn('[HTTP] handleUnauthorized: clearing token (no redirect — let React handle it)');
-            localStorage.removeItem('token');
-            localStorage.removeItem('accessToken');
-        }
-        this.customToken = null;
-    }
-
     private handleError(error: unknown, silent?: boolean) {
         if (silent) {
-            // FIX: Don't completely swallow silent errors, log them at debug level
             if (process.env.NODE_ENV === 'development') {
                 console.debug('[API Silent Error]', error);
             }
             return;
         }
 
-        const err = error as Error & { status?: number; data?: { detail?: string }; url?: string; message?: string };
-        // Отправлять критические ошибки аутентификации Telegram в Sentry
-        if (err.status === 401 && typeof window !== 'undefined') {
-            const hasTelegramData = !!window.Telegram?.WebApp?.initData;
-            const isTelegramAuthError = err.message?.toLowerCase().includes('telegram') || 
-                                        err.data?.detail?.toLowerCase().includes('telegram') ||
-                                        hasTelegramData;
-            
-            if (isTelegramAuthError) {
-                Sentry.captureException(err, {
-                    tags: {
-                        error_type: 'telegram_auth_failure',
-                        initData_present: hasTelegramData,
-                        error_message: err.message || 'Unknown'
-                    },
-                    extra: {
-                        url: err.url,
-                        status: err.status,
-                        detail: err.data?.detail
-                    }
-                });
-            }
-        }
+        const err = error as Error & { status?: number; data?: { detail?: string }; message?: string };
 
         if (process.env.NODE_ENV === 'development') {
-            // Use warn for typical API errors to reduce console noise, error for unexpected
             if (err.status && err.status >= 400 && err.status < 500) {
-                console.warn('[API Warn]', err.message);
+                console.warn('[API]', err.status, err.message);
             } else {
                 console.error('[API Error]', err);
             }
         } else {
-            Sentry.captureException(err);
+            // Send to Sentry in production
+            Sentry.captureException(err, {
+                tags: { error_type: 'api_error' },
+                extra: { status: err.status, detail: err.data?.detail }
+            });
         }
     }
 

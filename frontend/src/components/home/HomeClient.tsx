@@ -1,15 +1,14 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authService, UserProfile } from '@/services/api';
 import { motion } from 'framer-motion';
-import { httpClient } from "@/lib/http-client"; // Import httpClient
 import { useRouter } from 'next/navigation';
 import { useTelegram } from '@/lib/telegram';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { MatchModal } from '@/components/discovery/MatchModal';
-import { TelegramAuthError } from '@/components/auth/TelegramAuthError';
 import { FALLBACK_AVATAR } from '@/lib/constants';
 import { Toast } from '@/components/ui/Toast';
 // Photo URL prefix — uses Next.js proxy to avoid exposing backend URL
@@ -34,136 +33,14 @@ const SmartDiscoveryEngine = dynamic(() => import('@/components/discovery/SmartD
 export function HomeClient() {
     const router = useRouter();
     const queryClient = useQueryClient();
-    const { user, hapticFeedback } = useTelegram(); // Assuming useTelegram provides user context or similar
-    const [isAuth, setIsAuth] = useState(false);
-    const [matchData, setMatchData] = useState<{ isOpen: boolean; user?: UserProfile; partner?: UserProfile } | null>(null);
+    const { user, hapticFeedback } = useTelegram();
+    const { isAuthed, isChecking } = useRequireAuth();
     
     // Реальные данные: суперлайки и буст
     const [superLikesLeft, setSuperLikesLeft] = useState(0);
     const [boostActive, setBoostActive] = useState(false);
-    
-    // Telegram auth error handling states
-    const [authError, setAuthError] = useState<string | null>(null);
-    const [retryCount, setRetryCount] = useState(0);
-    const [isRetrying, setIsRetrying] = useState(false);
+    const [matchData, setMatchData] = useState<{ isOpen: boolean; user?: UserProfile; partner?: UserProfile } | null>(null);
     const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
-    const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    
-    // Max retry attempts for Telegram auth
-    const MAX_RETRY_ATTEMPTS = 2;
-
-    // Cleanup retry timeout on unmount
-    useEffect(() => {
-        return () => {
-            if (retryTimeoutRef.current) {
-                clearTimeout(retryTimeoutRef.current);
-            }
-        };
-    }, []);
-
-    // Check authentication function - extracted for reuse
-    const checkAuth = useCallback(async () => {
-        console.log('[AUTH] checkAuth started, retryCount:', retryCount);
-        
-        // Helper to check if profile is complete
-        const isProfileComplete = (profile: { photos?: string[]; gender?: string; is_complete?: boolean }): boolean => {
-            const hasPhotos = profile.photos && profile.photos.length > 0;
-            const hasRealGender = profile.gender && profile.gender !== 'other';
-            return profile.is_complete === true && hasPhotos && hasRealGender;
-        };
-        
-        // Priority 1: Check for existing valid token FIRST
-        const hasToken = httpClient.isAuthenticated();
-        console.log('[AUTH] hasToken:', hasToken);
-        
-        if (hasToken) {
-            try {
-                const me = await authService.getMe();
-                console.log('[AUTH] getMe success, is_complete:', me.is_complete, 'photos:', me.photos?.length, 'gender:', me.gender);
-                
-                if (!isProfileComplete(me)) {
-                    console.log('[AUTH] profile incomplete, redirecting to onboarding');
-                    router.replace('/onboarding');
-                    return;
-                }
-                
-                console.log('[AUTH] authenticated with token');
-                setIsAuth(true);
-                setAuthError(null);
-                return;
-            } catch (e: unknown) {
-                console.error('[AUTH] getMe failed:', e);
-                // Don't clear token here — http-client handles 401 re-auth automatically
-            }
-        }
-
-        // Priority 2: No token - try Telegram Init Data (Native Flow)
-        const initData = window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '';
-        console.log('[AUTH] initData present:', !!initData, 'length:', initData.length);
-        if (initData && initData.trim()) {
-            
-            try {
-                setIsRetrying(true);
-                console.log('[AUTH] attempting Telegram login...');
-                const loginResult = await authService.telegramLogin(initData);
-                console.log('[AUTH] Telegram login success, has_profile:', loginResult.has_profile);
-                
-                // FIX: Always verify actual profile state, not just has_profile flag
-                const me = await authService.getMe();
-                
-                if (!isProfileComplete(me)) {
-                    router.replace('/onboarding');
-                    return;
-                }
-                
-                setIsAuth(true);
-                setAuthError(null);
-                setRetryCount(0);
-                setIsRetrying(false);
-                return;
-            } catch (e: unknown) {
-                console.error("[Home] Telegram Login Failed:", e);
-                setIsRetrying(false);
-                
-                if (retryCount < MAX_RETRY_ATTEMPTS) {
-                    const nextRetry = retryCount + 1;
-                    setRetryCount(nextRetry);
-                    
-                    retryTimeoutRef.current = setTimeout(() => {
-                        checkAuth();
-                    }, 1000 * nextRetry);
-                    return;
-                }
-                
-                const errorMessage = (e instanceof Error ? e.message : '') || ((e as Record<string, unknown>)?.data as Record<string, unknown>)?.detail as string || '';
-                setAuthError(
-                    errorMessage.toLowerCase().includes("auth_date") || errorMessage.toLowerCase().includes("expired")
-                        ? "Данные Telegram устарели. Пожалуйста, перезапустите бот командой /start"
-                        : "Ошибка входа через Telegram. Попробуйте позже или используйте вход по телефону."
-                );
-                return;
-            }
-        }
-
-        // No token and no Telegram data - redirect to login
-        router.replace('/auth/phone');
-    }, [retryCount, router]);
-
-    // Check authentication on mount
-    useEffect(() => {
-        console.log('[HOME] mounted, build:', '2026-02-14-v2', 'path:', window.location.pathname);
-        checkAuth().catch((err: unknown) => {
-            console.error('[Home] checkAuth crash:', err);
-        });
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
-    
-    // Handler for retry button
-    const handleRetry = useCallback(() => {
-        setAuthError(null);
-        setRetryCount(0);
-        setIsRetrying(true);
-        checkAuth();
-    }, [checkAuth]);
 
     // Filters state - ideally persist this in URL or LocalStorage
     const [filters, setFilters] = useState({
@@ -191,7 +68,7 @@ export function HomeClient() {
 
     // 0. Update Location on Mount
     useEffect(() => {
-        if (isAuth && typeof navigator !== 'undefined' && navigator.geolocation) {
+        if (isAuthed && typeof navigator !== 'undefined' && navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     authService.updateLocation(
@@ -203,11 +80,11 @@ export function HomeClient() {
                 { timeout: 10000, maximumAge: 60000 }
             );
         }
-    }, [isAuth]);
+    }, [isAuthed]);
 
     // 0.1 Загрузка данных суперлайков и буста
     useEffect(() => {
-        if (!isAuth) return;
+        if (!isAuthed) return;
         let cancelled = false;
         const fetchExtra = async () => {
             try {
@@ -225,7 +102,7 @@ export function HomeClient() {
         };
         fetchExtra();
         return () => { cancelled = true; };
-    }, [isAuth]);
+    }, [isAuthed]);
 
     // 0.2 Check Profile Status (Onboarding Guard)
     const { data: me, error: meError } = useQuery({
@@ -233,7 +110,7 @@ export function HomeClient() {
         queryFn: authService.getMe,
         retry: false,
         staleTime: 1000 * 60 * 5,
-        enabled: isAuth // Only fetch if authenticated
+        enabled: isAuthed // Only fetch if authenticated
     });
 
     useEffect(() => {
@@ -310,7 +187,7 @@ export function HomeClient() {
         },
         staleTime: 1000 * 60 * 5, // 5 mins
         retry: 1,
-        enabled: isAuth
+        enabled: isAuthed
     });
 
     useEffect(() => {
@@ -393,22 +270,8 @@ export function HomeClient() {
         }
     }, [profiles, isLoading, cachedProfiles, queryClient, filters]);
 
-    // Show Telegram Auth Error screen
-    if (authError) {
-        return (
-            <>
-            <TelegramAuthError 
-                error={authError}
-                onRetry={handleRetry}
-                retryCount={retryCount}
-                isRetrying={isRetrying}
-            />
-            </>
-        );
-    }
-
     // Handle Loading
-    if (isLoading) {
+    if (isChecking || isLoading) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-black p-6">
                 <div className="relative">
@@ -419,11 +282,6 @@ export function HomeClient() {
                     />
                     <div className="mt-8 text-center text-primary-red font-mono text-[10px] uppercase tracking-[0.3em]">
                         Загрузка анкет...
-                        {retryCount > 0 && (
-                            <div className="text-gray-500 mt-2 normal-case tracking-normal">
-                                Попытка {retryCount + 1} из {MAX_RETRY_ATTEMPTS + 1}
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>

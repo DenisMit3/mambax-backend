@@ -47,55 +47,76 @@ async def decode_jwt(token: str) -> Optional[str]:
 def validate_telegram_data(init_data: str) -> dict | None:
     """
     Validates the data received from Telegram Web App.
+    Uses HMAC-SHA256 as per official Telegram docs:
+    https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
     """
     try:
         if not TELEGRAM_BOT_TOKEN:
-             logger.error("TELEGRAM_BOT_TOKEN not configured - Telegram auth will fail")
+             logger.error("[VALIDATE-TG] TELEGRAM_BOT_TOKEN not configured")
              raise ValueError("TELEGRAM_BOT_TOKEN not configured")
         
-        parsed_data = dict(parse_qsl(init_data))
+        parsed_data = dict(parse_qsl(init_data, keep_blank_values=True))
+        logger.info(f"[VALIDATE-TG] Parsed keys: {sorted(parsed_data.keys())}")
         if "hash" not in parsed_data:
-            logger.warning("Telegram validation failed: hash not found in initData")
+            logger.warning("[VALIDATE-TG] FAIL: hash not found in initData")
             return None
 
         received_hash = parsed_data.pop("hash")
         
-        # FIX: Check auth_date to prevent replay attacks
-        # Increased to 24 hours (86400s) because Telegram may cache initData longer,
-        # especially on slow connections, when Mini App is backgrounded,
-        # or when users have time sync issues on their devices
+        # Remove signature field if present (used for Ed25519 third-party validation, not HMAC)
+        had_signature = "signature" in parsed_data
+        parsed_data.pop("signature", None)
+        if had_signature:
+            logger.info("[VALIDATE-TG] Removed 'signature' field from data")
+        
+        # Check auth_date to prevent replay attacks
         auth_date = int(parsed_data.get("auth_date", 0))
         current_time = datetime.utcnow().timestamp()
-        max_age = 86400  # 24 hours - balance between security and UX
+        max_age = 86400  # 24 hours
         age_seconds = current_time - auth_date
         
-        # В режиме разработки пропускаем проверку auth_date для удобства отладки
+        logger.info(f"[VALIDATE-TG] auth_date={auth_date}, age={age_seconds:.0f}s, env={app_settings.ENVIRONMENT}")
+        
         if app_settings.ENVIRONMENT == "development":
-            logger.info(f"Development mode: skipping auth_date validation (age: {age_seconds:.0f}s)")
+            logger.info(f"[VALIDATE-TG] Dev mode: skipping auth_date validation")
         else:
             if age_seconds > max_age:
-                logger.warning(f"Telegram auth_date too old: {age_seconds:.0f}s (max: {max_age}s)")
+                logger.warning(f"[VALIDATE-TG] FAIL: auth_date too old: {age_seconds:.0f}s > {max_age}s")
                 return None
-            logger.debug(f"Telegram auth_date valid: {age_seconds:.0f}s (max: {max_age}s)")
         
-        # Sort keys alphabetically
+        # Step 1: Sort keys alphabetically and build data_check_string
         data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
+        logger.info(f"[VALIDATE-TG] data_check_string (first 200 chars): {data_check_string[:200]}")
         
-        # Calculate HMAC-SHA256
+        # Step 2: secret_key = HMAC-SHA256(key="WebAppData", data=bot_token)
         secret_key = hmac.new(b"WebAppData", TELEGRAM_BOT_TOKEN.encode(), hashlib.sha256).digest()
+        
+        # Step 3: calculated_hash = HMAC-SHA256(key=secret_key, data=data_check_string)
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         
-        if calculated_hash == received_hash:
-            user_data = json.loads(parsed_data["user"])
-            return {
+        logger.info(f"[VALIDATE-TG] Hash compare: calculated={calculated_hash[:16]}... received={received_hash[:16]}...")
+        
+        # Step 4: Constant-time comparison to prevent timing attacks
+        if hmac.compare_digest(calculated_hash, received_hash):
+            user_data = json.loads(parsed_data.get("user", "{}"))
+            if not user_data.get("id"):
+                logger.warning("[VALIDATE-TG] FAIL: user data missing 'id'")
+                return None
+            result = {
                 "id": str(user_data.get("id")),
                 "username": user_data.get("username"),
                 "first_name": user_data.get("first_name"),
                 "last_name": user_data.get("last_name"),
+                "language_code": user_data.get("language_code"),
+                "is_premium": user_data.get("is_premium", False),
             }
+            logger.info(f"[VALIDATE-TG] SUCCESS: user_id={result['id']}, username={result['username']}")
+            return result
+        
+        logger.warning("[VALIDATE-TG] FAIL: hash mismatch")
         return None
     except Exception as e:
-        logger.error(f"Validation Error: {e}")
+        logger.error(f"[VALIDATE-TG] EXCEPTION: {e}", exc_info=True)
         return None
 
 

@@ -314,12 +314,14 @@ async def login_telegram(
             detail="Empty Telegram data. Please restart the bot with /start command."
         )
     
+    logger.info(f"[AUTH-FLOW] Step 1: Calling validate_telegram_data, initData length={init_data_length}")
     auth_data = validate_telegram_data(data.init_data)
+    logger.info(f"[AUTH-FLOW] Step 2: validate_telegram_data returned: {auth_data is not None}")
     
     if not auth_data:
         # Логируем первые 50 символов для отладки (без чувствительных данных)
         safe_preview = data.init_data[:50] if len(data.init_data) > 50 else data.init_data
-        logger.error(f"Telegram validation failed for initData: {safe_preview}...")
+        logger.error(f"[AUTH-FLOW] FAIL: Telegram validation failed for initData: {safe_preview}...")
         raise HTTPException(
             status_code=401, 
             detail="Invalid Telegram data. Please restart the bot with /start command."
@@ -328,14 +330,17 @@ async def login_telegram(
     telegram_id = str(auth_data["id"])
     username = auth_data.get("username")
     
-    logger.info(f"Telegram validation successful for user: {telegram_id} (username: {username})")
+    logger.info(f"[AUTH-FLOW] Step 3: Validated tg_id={telegram_id}, username={username}, auth_data={auth_data}")
     
     # Find or Create User
+    logger.info(f"[AUTH-FLOW] Step 4: Looking up user by telegram_id={telegram_id}")
     user = await get_user_by_telegram_id(db, telegram_id)
+    logger.info(f"[AUTH-FLOW] Step 5: get_user_by_telegram_id returned: {user is not None} (user_id={user.id if user else 'N/A'})")
     
     if not user:
         # Generate random password placeholder for security
         import secrets
+        from backend.core.security import hash_password
         random_pwd = secrets.token_urlsafe(32)
         
         logger.info(f"Creating new user from Telegram: {telegram_id} (username: {username})")
@@ -343,14 +348,14 @@ async def login_telegram(
         user = User(
             telegram_id=telegram_id,
             username=username or f"user_{telegram_id}",
-            email=None, # Allow NULL as per model nullable=True
-            hashed_password=random_pwd, # Must be string
+            email=None,
+            hashed_password=hash_password(random_pwd),  # Properly hashed
             name=auth_data.get("first_name", username or "Telegram User"),
-            age=18, # FIXME: Schema requires age, but we don't know it yet. Ask later.
+            age=18,
             gender=Gender.OTHER,
             is_active=True,
             is_verified=False,
-            is_complete=False # Explicitly mark incomplete
+            is_complete=False
         )
         db.add(user)
         await db.commit()
@@ -368,5 +373,5 @@ async def login_telegram(
             raise HTTPException(status_code=401, detail="User account is disabled or banned")
     
     access_token = create_access_token(user.id)
-    logger.info(f"Telegram login successful for user: {user.id}")
+    logger.info(f"[AUTH-FLOW] Step 7: Token created for user_id={user.id}, has_profile={user.is_complete}, is_active={user.is_active}, role={user.role}")
     return TokenResponse(access_token=access_token, has_profile=user.is_complete)

@@ -3,11 +3,17 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/services/api';
+import { httpClient } from '@/lib/http-client';
 
 /**
- * Hook that checks for auth token and redirects to /auth/phone if missing.
- * If no token but Telegram initData is available, attempts silent re-auth first.
- * Returns { isAuthed, isChecking } so pages can show a loading skeleton.
+ * Hook that ensures the user is authenticated.
+ * 
+ * Flow:
+ * 1. Check localStorage for existing JWT token
+ * 2. If no token but Telegram initData available → silent re-auth
+ * 3. If still no token → redirect to /auth/phone
+ * 
+ * Returns { isAuthed, isChecking } for loading states.
  */
 export function useRequireAuth() {
     const router = useRouter();
@@ -18,20 +24,10 @@ export function useRequireAuth() {
         let cancelled = false;
 
         const check = async () => {
-            const accessToken = localStorage.getItem('accessToken');
-            const legacyToken = localStorage.getItem('token');
-            const token = accessToken || legacyToken;
-            
-            // DEBUG: Log state for remote debugging
-            console.log('[useRequireAuth] CHECK:', {
-                hasAccessToken: !!accessToken,
-                hasLegacyToken: !!legacyToken,
-                tokenLen: token ? token.length : 0,
-                path: window.location.pathname,
-                allKeys: Object.keys(localStorage),
-            });
-
-            if (token) {
+            console.log('[AUTH-FLOW] useRequireAuth: starting check');
+            // 1. Already have a token?
+            if (httpClient.isAuthenticated()) {
+                console.log('[AUTH-FLOW] useRequireAuth: token exists, authed=true');
                 if (!cancelled) {
                     setIsAuthed(true);
                     setIsChecking(false);
@@ -39,41 +35,31 @@ export function useRequireAuth() {
                 return;
             }
 
-            // No token — try silent re-auth via Telegram initData
-            const tgWebApp = window.Telegram?.WebApp?.initData || '';
-            const tgSession = sessionStorage.getItem('tg_init_data') || '';
-            const initData = tgWebApp || tgSession;
-            
-            console.log('[useRequireAuth] NO TOKEN, trying re-auth:', {
-                hasTgWebApp: !!tgWebApp,
-                tgWebAppLen: tgWebApp.length,
-                hasTgSession: !!tgSession,
-                tgSessionLen: tgSession.length,
-                authRedirectReason: sessionStorage.getItem('auth_redirect_reason'),
-            });
+            // 2. No token — try Telegram initData
+            const initData = (typeof window !== 'undefined')
+                ? (window.Telegram?.WebApp?.initData || sessionStorage.getItem('tg_init_data') || '')
+                : '';
+
+            console.log('[AUTH-FLOW] useRequireAuth: no token, initData length=', initData.length);
 
             if (initData && initData.trim()) {
-                console.log('[useRequireAuth] Attempting Telegram re-auth...');
                 try {
-                    const result = await authService.telegramLogin(initData);
-                    const newToken = localStorage.getItem('accessToken');
-                    console.log('[useRequireAuth] Re-auth result:', {
-                        hasAccessToken: !!result?.access_token,
-                        storedToken: !!newToken,
-                    });
-                    if (newToken && !cancelled) {
-                        console.log('[useRequireAuth] Re-auth SUCCESS');
+                    console.log('[AUTH-FLOW] useRequireAuth: calling telegramLogin...');
+                    await authService.telegramLogin(initData);
+                    console.log('[AUTH-FLOW] useRequireAuth: telegramLogin done, isAuthenticated=', httpClient.isAuthenticated());
+                    if (httpClient.isAuthenticated() && !cancelled) {
                         setIsAuthed(true);
                         setIsChecking(false);
                         return;
                     }
                 } catch (e) {
-                    console.error('[useRequireAuth] Re-auth FAILED:', e);
+                    console.error('[AUTH-FLOW] useRequireAuth: telegramLogin failed:', e);
+                    // Re-auth failed, fall through to redirect
                 }
             }
 
-            // No token and re-auth failed — redirect
-            console.log('[useRequireAuth] REDIRECTING to /auth/phone');
+            // 3. No auth possible — redirect
+            console.log('[AUTH-FLOW] useRequireAuth: no auth, redirecting to /auth/phone');
             if (!cancelled) {
                 router.replace('/auth/phone');
                 setIsChecking(false);

@@ -21,16 +21,19 @@ export default function AuthGatePage() {
     useEffect(() => {
         if (!isReady || !initData || telegramLoading || isLoading) return;
         
+        console.log('[AUTH-FLOW] AuthGatePage: useEffect triggered, isReady=', isReady, 'initData length=', initData?.length);
+        
         // FIX: Check if we were redirected due to 401 - prevent auto-login loop
         const redirectReason = sessionStorage.getItem('auth_redirect_reason');
         if (redirectReason === 'unauthorized') {
+            console.log('[AUTH-FLOW] AuthGatePage: skipping auto-login (redirect reason: unauthorized)');
             sessionStorage.removeItem('auth_redirect_reason');
-            // Don't auto-login, let user click the button manually
             return;
         }
         
-        // Проверяем, есть ли уже токен - если да, валидируем его перед редиректом
+        // Проверяем, есть ли уже токен
         const existingToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+        console.log('[AUTH-FLOW] AuthGatePage: existingToken=', !!existingToken);
         if (existingToken) {
             // Validate token by calling /users/me before redirecting
             authService.getMe()
@@ -56,10 +59,12 @@ export default function AuthGatePage() {
         
         function performTelegramLogin() {
             if (!initData) return; // Guard against undefined
+            console.log('[AUTH-FLOW] AuthGatePage: performTelegramLogin starting, initData length=', initData.length);
             setTelegramLoading(true);
             authService
                 .telegramLogin(initData)
                 .then(async (data) => {
+                    console.log('[AUTH-FLOW] AuthGatePage: telegramLogin response:', JSON.stringify(data));
                     
                     // FIX: Even if has_profile is true, verify profile is actually complete
                     // by checking for photos and real data

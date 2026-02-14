@@ -189,7 +189,7 @@ export interface PaginatedResponse<T> {
 export const authService = {
     async login(phone: string, otp: string) {
         const data = await httpClient.post<AuthResponse>("/api/auth/login", { identifier: phone, otp }, { skipAuth: true });
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && data.access_token) {
             httpClient.setToken(data.access_token);
         }
         return data;
@@ -201,7 +201,7 @@ export const authService = {
      */
     async adminLogin(email: string, password: string) {
         const data = await httpClient.post<AuthResponse>("/api/auth/login/email", { email, password }, { skipAuth: true });
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && data.access_token) {
             httpClient.setToken(data.access_token);
         }
         return data;
@@ -212,9 +212,12 @@ export const authService = {
     },
 
     async telegramLogin(initData: string) {
+        console.log('[AUTH-FLOW] api.telegramLogin: calling /api/auth/telegram, initData length=', initData.length);
         const data = await httpClient.post<AuthResponse>("/api/auth/telegram", { init_data: initData }, { skipAuth: true });
-        if (typeof window !== 'undefined') {
+        console.log('[AUTH-FLOW] api.telegramLogin: response:', JSON.stringify({ has_token: !!data.access_token, has_profile: data.has_profile }));
+        if (typeof window !== 'undefined' && data.access_token) {
             httpClient.setToken(data.access_token);
+            console.log('[AUTH-FLOW] api.telegramLogin: token saved to localStorage');
         }
         return data;
     },
