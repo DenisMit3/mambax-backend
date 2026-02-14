@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Phone, Send } from "lucide-react";
 import { authService } from "@/services/api";
 import { useTelegram } from "@/lib/telegram";
-import { Toast } from '@/components/ui/Toast'; из env или дефолтное
+import { Toast } from '@/components/ui/Toast';
+// из env или дефолтное
 const TELEGRAM_BOT_NAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME || "YouMeMeet_bot";
 
 export default function AuthGatePage() {

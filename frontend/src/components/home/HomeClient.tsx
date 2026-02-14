@@ -11,7 +11,8 @@ import { useTelegram } from '@/lib/telegram';
 import { MatchModal } from '@/components/discovery/MatchModal';
 import { TelegramAuthError } from '@/components/auth/TelegramAuthError';
 import { FALLBACK_AVATAR } from '@/lib/constants';
-import { Toast } from '@/components/ui/Toast'; outside component to avoid recreation
+import { Toast } from '@/components/ui/Toast';
+// outside component to avoid recreation
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 // FIX (UX): Deterministic hash function for stable compatibility scores
