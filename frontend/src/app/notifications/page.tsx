@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Heart, MessageCircle, Gift, Star, Rocket, Eye, Zap, Bell, CheckCheck, Loader2 } from "lucide-react";
@@ -52,6 +52,8 @@ export default function NotificationsPage() {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
+    // Ref-гард от дублирования запросов при двойном клике
+    const loadingMoreRef = useRef(false);
 
     const fetchNotifications = useCallback(async (p: number, append = false) => {
         try {
@@ -83,11 +85,14 @@ export default function NotificationsPage() {
     }, [fetchNotifications, isAuthed]);
 
     const loadMore = () => {
-        if (loadingMore || !hasMore) return;
+        if (loadingMoreRef.current || !hasMore) return;
+        loadingMoreRef.current = true;
         setLoadingMore(true);
         const next = page + 1;
         setPage(next);
-        fetchNotifications(next, true);
+        fetchNotifications(next, true).finally(() => {
+            loadingMoreRef.current = false;
+        });
     };
 
     const handleMarkAllRead = async () => {

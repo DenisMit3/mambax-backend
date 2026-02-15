@@ -39,3 +39,8 @@ build/
 npm-debug.log*
 .vercel
 .env*.local
+
+# Env overrides
+backend/.env
+backend/.env.vercel
+**/.env.vercel

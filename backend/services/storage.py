@@ -4,6 +4,7 @@
 
 import uuid
 import logging
+import asyncio
 from typing import Optional
 
 from fastapi import UploadFile, HTTPException
@@ -15,11 +16,11 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
-async def _process_image(content: bytes) -> tuple[bytes, str]:
+def _process_image_sync(content: bytes) -> tuple[bytes, str]:
     """
-    Validate, sanitize and optimize image using Pillow.
+    Синхронная обработка изображения через Pillow.
+    Валидация, удаление EXIF, конвертация в WebP.
     Returns (processed_bytes, content_type).
-    Strips EXIF, converts to WebP for optimal size.
     """
     from PIL import Image, ImageOps
     import io
@@ -29,7 +30,7 @@ async def _process_image(content: bytes) -> tuple[bytes, str]:
         image.load()  # Force full decode to catch corrupt files
     except Exception as e:
         logger.warning(f"Invalid image rejected: {e}")
-        raise HTTPException(status_code=400, detail="Invalid or corrupt image file")
+        raise ValueError("Invalid or corrupt image file")
 
     # Strip EXIF, fix orientation
     image = ImageOps.exif_transpose(image)
@@ -51,6 +52,17 @@ async def _process_image(content: bytes) -> tuple[bytes, str]:
     buf.seek(0)
 
     return buf.getvalue(), "image/webp"
+
+
+async def _process_image(content: bytes) -> tuple[bytes, str]:
+    """
+    Async-обёртка: запускает тяжёлую обработку Pillow в отдельном потоке,
+    чтобы не блокировать event loop.
+    """
+    try:
+        return await asyncio.to_thread(_process_image_sync, content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 class StorageService:
@@ -159,12 +171,22 @@ class StorageService:
     async def save_gift_image(self, file: UploadFile, db: AsyncSession) -> str:
         return await self.save_photo(file, db, category="gifts")
 
+    # Допустимые аудио-форматы для голосовых сообщений
+    ALLOWED_AUDIO_TYPES = {"audio/ogg", "audio/webm", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-wav"}
+
     async def save_voice_message(self, file: UploadFile, db: AsyncSession) -> tuple[str, int]:
         """
         Save voice message as blob (no image processing).
         Returns (url, duration). Duration detection is best-effort.
         """
         from backend.models.user import PhotoBlob
+
+        # Валидация content-type аудиофайла
+        if file.content_type and file.content_type not in self.ALLOWED_AUDIO_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid audio format '{file.content_type}'. Allowed: {', '.join(self.ALLOWED_AUDIO_TYPES)}"
+            )
 
         content = await file.read()
         if len(content) > MAX_FILE_SIZE:

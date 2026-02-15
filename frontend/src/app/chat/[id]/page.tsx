@@ -59,6 +59,8 @@ export default function ChatPage() {
     const ws = useRef<WebSocket | null>(null);
     const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
     const currentUserIdRef = useRef<string | null>(null);
+    // Флаг монтирования — предотвращает phantom reconnect после unmount
+    const mountedRef = useRef(true);
 
     // Ref для актуального user (избегаем stale closure в handleWebSocketMessage)
     const userRef = useRef(user);
@@ -71,8 +73,9 @@ export default function ChatPage() {
         }
 
         return () => {
-            if (ws.current) ws.current.close();
+            mountedRef.current = false;
             if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+            if (ws.current) ws.current.close();
         };
     }, [id, isAuthed]);
 
@@ -210,7 +213,10 @@ export default function ChatPage() {
 
         socket.onclose = () => {
             ws.current = null;
-            reconnectTimeout.current = setTimeout(connectWebSocket, 3000);
+            // Не запускаем reconnect если компонент уже размонтирован
+            if (mountedRef.current) {
+                reconnectTimeout.current = setTimeout(connectWebSocket, 3000);
+            }
         };
 
         socket.onerror = (err) => {

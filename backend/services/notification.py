@@ -90,7 +90,8 @@ async def send_push_notification(
                     try:
                         await db.delete(sub)
                         await db.commit()
-                    except:
+                    except Exception as e:
+                        logger.error(f"Error cleaning up expired subscription: {e}")
                         await db.rollback()
             except Exception as e:
                 logger.error(f"Push error: {e}")

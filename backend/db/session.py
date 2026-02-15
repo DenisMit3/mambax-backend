@@ -33,10 +33,16 @@ elif _async_url.startswith("postgresql://") and "+asyncpg" not in _async_url:
 if "sslmode=" in _async_url:
     _async_url = _async_url.replace("sslmode=require", "ssl=require")
 
-# Create SSL context for Neon
+# SSL-контекст для Neon PostgreSQL
 ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
+if settings.is_production:
+    # В production — полная проверка сертификатов Neon
+    ssl_context.check_hostname = True
+    ssl_context.verify_mode = ssl.CERT_REQUIRED
+else:
+    # В dev — без проверки (self-signed / локальные сертификаты)
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
 
 # Engine configuration for Neon PostgreSQL
 engine_kwargs = {

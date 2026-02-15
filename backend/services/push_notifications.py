@@ -406,29 +406,12 @@ async def send_push_to_users(
     data: Optional[Dict[str, str]] = None
 ) -> Dict[str, Any]:
     """
-    Send push notification to specific users.
-    Fetches their FCM tokens from the database.
+    Отправка push-уведомлений пользователям.
+    Сейчас отключено — у модели User нет поля fcm_token.
+    TODO: реализовать через таблицу push_subscriptions (Web Push)
     """
-    from backend.models.user import User
-    
-    # Fetch user tokens
-    result = await db.execute(
-        select(User.fcm_token).where(
-            User.id.in_(user_ids),
-            User.fcm_token.isnot(None)
-        )
-    )
-    tokens = [row[0] for row in result.all() if row[0]]
-    
-    if not tokens:
-        return {"success": False, "error": "No valid tokens found", "sent": 0}
-    
-    return await push_service.send_to_tokens_batch(
-        tokens=tokens,
-        title=title,
-        body=body,
-        data=data
-    )
+    logger.info(f"Push notifications disabled (no fcm_token field). Users: {len(user_ids)}")
+    return {"success": False, "error": "Push notifications not configured (no fcm_token)", "sent": 0}
 
 
 async def send_push_to_segment(
@@ -439,34 +422,9 @@ async def send_push_to_segment(
     data: Optional[Dict[str, str]] = None
 ) -> Dict[str, Any]:
     """
-    Send push notification to a user segment.
-    Segments: 'all', 'premium', 'inactive', 'new_users'
+    Отправка push-уведомлений сегменту пользователей.
+    Сейчас отключено — у модели User нет поля fcm_token.
+    TODO: реализовать через таблицу push_subscriptions (Web Push)
     """
-    from backend.models.user import User
-    from datetime import timedelta
-    
-    now = datetime.utcnow()
-    query = select(User.fcm_token).where(
-        User.fcm_token.isnot(None),
-        User.status == 'active'
-    )
-    
-    if segment == "premium":
-        query = query.where(User.subscription_tier.in_(['gold', 'platinum']))
-    elif segment == "inactive":
-        week_ago = now - timedelta(days=7)
-        query = query.where(User.updated_at < week_ago)
-    elif segment == "new_users":
-        week_ago = now - timedelta(days=7)
-        query = query.where(User.created_at >= week_ago)
-    # 'all' = no additional filter
-    
-    result = await db.execute(query)
-    tokens = [row[0] for row in result.all() if row[0]]
-    
-    return await push_service.send_to_tokens_batch(
-        tokens=tokens,
-        title=title,
-        body=body,
-        data=data
-    )
+    logger.info(f"Push notifications disabled (no fcm_token field). Segment: {segment}")
+    return {"success": False, "error": "Push notifications not configured (no fcm_token)", "sent": 0}

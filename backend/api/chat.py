@@ -230,13 +230,17 @@ async def websocket_endpoint(websocket: WebSocket):
             except json.JSONDecodeError:
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})
             except Exception as e:
-                print(f"WS Error: {e}")
+                logger.error(f"WS Error: {e}")
                 await websocket.send_json({"type": "error", "message": "Internal error"})
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket, user_id)
-        ACTIVE_USERS_GAUGE.dec()
         logger.info(f"User {user_id} disconnected from WebSocket")
+    except Exception as e:
+        logger.error(f"WS unexpected error for user {user_id}: {e}")
+    finally:
+        # Гарантированный декремент gauge и отключение — при любом исходе
+        ACTIVE_USERS_GAUGE.dec()
+        manager.disconnect(websocket, user_id)
         
         # Update last_seen in database
         try:
@@ -247,7 +251,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     user.last_seen = datetime.utcnow()
                     await db.commit()
         except Exception as e:
-            print(f"Failed to update last_seen: {e}")
+            logger.error(f"Failed to update last_seen: {e}")
 
 
 # ============================================================================
@@ -428,9 +432,9 @@ async def handle_message(websocket: WebSocket, sender_id: str, data: dict):
                         }
                         
                         await manager.send_personal(_sender_id, bot_ws_msg)
-                        print(f"🤖 Bot replied to {_sender_id[:8]}...: {bot_text}")
+                        logger.info(f"Bot replied to {_sender_id[:8]}...: {bot_text}")
                 except Exception as e:
-                    print(f"❌ Bot reply error: {e}")
+                    logger.error(f"Bot reply error: {e}")
             
             # Run bot reply in background (fire and forget)
             asyncio.create_task(send_bot_reply())
@@ -522,7 +526,7 @@ async def handle_gift_read(user_id: str, data: dict, websocket: WebSocket):
                         "status": "success"
                     })
         except Exception as e:
-            print(f"Error marking gift as read: {e}")
+            logger.error(f"Error marking gift as read: {e}")
 
 # --- Call Handlers ---
 async def handle_call(user_id: str, data: dict):

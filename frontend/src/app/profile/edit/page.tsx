@@ -82,7 +82,8 @@ export default function EditProfilePage() {
                 photos
             });
             setToast({message: "Профиль обновлён!", type: 'success'});
-            router.push("/profile");
+            // Даём время тосту отобразиться перед навигацией
+            setTimeout(() => router.push("/profile"), 1500);
         } catch (err) {
             setToast({message: "Не удалось обновить профиль", type: 'error'});
             console.error(err);

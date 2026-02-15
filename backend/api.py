@@ -2437,7 +2437,7 @@ async def resolve_verification(
 # DEV ENDPOINTS (only in development)
 # ============================================
 
-ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "production")
 
 
 @app.post("/api/dev/add-stars")

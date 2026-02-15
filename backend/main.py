@@ -176,11 +176,13 @@ async def rate_limit_middleware(request: Request, call_next):
         if await is_ip_banned(client_ip):
             return JSONResponse(status_code=403, content={"detail": "Access Permanently Suspended"})
 
-        # Anti-Scraping
+        # Anti-Scraping (пропускаем webhook, health, ping, bot endpoints)
+        exempt_paths = ["/webhook", "/health", "/ping", "/api/bot"]
         user_agent = request.headers.get("user-agent", "").lower()
         bot_signatures = ["python-requests", "curl/", "wget/", "scrapy", "urllib"]
         if any(sig in user_agent for sig in bot_signatures):
-            return JSONResponse(status_code=403, content={"detail": "Access denied (Anti-Bot)"})
+            if not any(request.url.path.startswith(p) for p in exempt_paths):
+                return JSONResponse(status_code=403, content={"detail": "Access denied (Anti-Bot)"})
 
         # Rate Limiting
         endpoint_type = "default"

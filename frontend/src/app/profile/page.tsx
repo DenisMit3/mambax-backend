@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 
 import { authService } from "@/services/api";
 import { httpClient } from "@/lib/http-client";
+import { wsService } from "@/services/websocket";
 import { ProfileMasterEditor } from "@/components/profile/ProfileMasterEditor";
 import { BadgesSection } from "@/components/profile/BadgesSection";
 // PERF-007: BottomNav import removed - already in ClientLayout
@@ -308,6 +309,7 @@ export default function ProfilePage() {
                     </button>
                     <button
                         onClick={() => {
+                            wsService.disconnect();
                             httpClient.logout();
                             router.push('/auth/phone');
                         }}

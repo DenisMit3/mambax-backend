@@ -187,7 +187,7 @@ async def verify_otp(identifier: str, otp: str) -> bool:
     if redis_manager._configured:
         try:
             stored_otp = await redis_manager.get_value(f"otp:{identifier}")
-            if stored_otp and stored_otp == otp:
+            if stored_otp and hmac.compare_digest(stored_otp, otp):
                 await redis_manager.delete(f"otp:{identifier}")
                 return True
         except Exception as e:
@@ -202,7 +202,7 @@ async def verify_otp(identifier: str, otp: str) -> bool:
              del _memory_otp[identifier]
              return False
              
-    if data["otp"] == otp:
+    if hmac.compare_digest(data["otp"], otp):
         del _memory_otp[identifier]
         return True
     return False

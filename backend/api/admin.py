@@ -179,26 +179,52 @@ class SegmentCreate(BaseModel):
 # ============================================
 
 @router.websocket("/ws")
-async def admin_websocket(websocket: WebSocket, token: str = Query(...)):
+async def admin_websocket(websocket: WebSocket):
     """
-    Real-time Admin Dashboard updates
+    Real-time Admin Dashboard updates.
+    
+    SEC-002: Токен передаётся через первое WS-сообщение, а не через URL query,
+    чтобы избежать утечки токена в логах и истории браузера.
+    
+    Первое сообщение: {"type": "auth", "token": "..."}
     """
+    import asyncio
+    import json as _json
+
+    # Принимаем соединение, чтобы получить auth-сообщение
+    await websocket.accept()
+
     try:
-        # 1. Verify Token
-        payload = decode_jwt(token)
-        user_id = payload.get("sub")
+        # Ждём auth-сообщение (таймаут 10 секунд)
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+            auth_msg = _json.loads(raw)
+
+            if auth_msg.get("type") != "auth" or not auth_msg.get("token"):
+                await websocket.close(code=4001, reason="First message must be auth")
+                return
+
+            token = auth_msg["token"]
+        except asyncio.TimeoutError:
+            await websocket.close(code=4001, reason="Auth timeout")
+            return
+        except _json.JSONDecodeError:
+            await websocket.close(code=4001, reason="Invalid auth message")
+            return
+
+        # 1. Верификация токена (decode_jwt — async, возвращает user_id строкой)
+        user_id = await decode_jwt(token)
         if not user_id:
             await websocket.close(code=4003, reason="Invalid token")
             return
             
-        # 2. Verify Role (DB Check)
+        # 2. Проверка роли (DB)
         from backend.db.session import async_session_maker
         async with async_session_maker() as db:
             result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
             user = result.scalar_one_or_none()
             
             if not user or user.role not in (UserRole.ADMIN, UserRole.MODERATOR):
-                print(f"WS Connection rejected: User {user_id} is not admin")
                 await websocket.close(code=4003, reason="Forbidden")
                 return
 
@@ -207,12 +233,11 @@ async def admin_websocket(websocket: WebSocket, token: str = Query(...)):
         await websocket.close(code=4003, reason="Authentication failed")
         return
 
-    await websocket.accept()
-    # print(f"WS Admin Connection accepted: {user_id}")
+    # Подтверждаем успешную аутентификацию
+    await websocket.send_json({"type": "auth_success", "user_id": user_id})
     
     try:
         while True:
-            # Just keep connection open and respond to pings
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_json({"type": "pong"})
@@ -2830,17 +2855,40 @@ admin_manager = AdminConnectionManager()
 @router.websocket("/ws")
 async def admin_websocket_endpoint(
     websocket: WebSocket,
-    token: Optional[str] = Query(None)
 ):
     """
     WebSocket endpoint for live admin updates.
+    
+    SEC-002: Токен передаётся через первое WS-сообщение, а не через URL query,
+    чтобы избежать утечки токена в логах и истории браузера.
+    
+    Первое сообщение: {"type": "auth", "token": "..."}
     """
-    # Verify token and initial role
+    import asyncio
+    import json as _json
+
+    # Принимаем соединение, чтобы получить auth-сообщение
+    await websocket.accept()
+
     try:
-        if not token:
-             await websocket.close(code=4001, reason="Missing token")
-             return
-             
+        # Ждём auth-сообщение (таймаут 10 секунд)
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+            auth_msg = _json.loads(raw)
+
+            if auth_msg.get("type") != "auth" or not auth_msg.get("token"):
+                await websocket.close(code=4001, reason="First message must be auth")
+                return
+
+            token = auth_msg["token"]
+        except asyncio.TimeoutError:
+            await websocket.close(code=4001, reason="Auth timeout")
+            return
+        except _json.JSONDecodeError:
+            await websocket.close(code=4001, reason="Invalid auth message")
+            return
+
+        # Верификация токена (decode_jwt — async, возвращает user_id строкой)
         user_id_str = await decode_jwt(token)
         if not user_id_str:
             await websocket.close(code=4001, reason="Invalid token")
@@ -2848,7 +2896,7 @@ async def admin_websocket_endpoint(
             
         user_id = uuid.UUID(user_id_str)
         
-        # Initial role check
+        # Проверка роли
         async with async_session_maker() as session:
             user = await session.get(User, user_id)
             if not user or user.role not in ("admin", "moderator"):
@@ -2863,7 +2911,11 @@ async def admin_websocket_endpoint(
         await websocket.close(code=4001, reason="Auth failed")
         return
 
-    await admin_manager.connect(websocket)
+    # Подтверждаем успешную аутентификацию
+    await websocket.send_json({"type": "auth_success", "user_id": user_id_str})
+
+    # accept() уже вызван выше — добавляем в список напрямую
+    admin_manager.active_connections.append(websocket)
     
     # 1. Initial Data Send
     async with async_session_maker() as db:

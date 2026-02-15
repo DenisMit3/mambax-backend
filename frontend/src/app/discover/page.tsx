@@ -71,6 +71,9 @@ export default function DiscoverPage() {
 
         if (direction === "right") {
             likeMutation.mutate({ userId: profile.id });
+        } else {
+            // Отправляем dislike на бэкенд, чтобы профиль не появлялся повторно
+            authService.swipe(profile.id, 'dislike').catch(() => {});
         }
     };
 
