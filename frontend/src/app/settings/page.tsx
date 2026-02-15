@@ -39,7 +39,7 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="h-full overflow-y-auto scrollbar-hide bg-transparent pb-24">
+        <div className="h-full bg-transparent">
             {/* Шапка */}
             <div className="px-6 pt-8 pb-4 flex items-center gap-4">
                 <button

@@ -453,13 +453,13 @@ export default function ChatPage() {
     };
 
     if (isChecking || loading) return (
-        <div className="h-screen bg-black flex flex-col items-center justify-center text-white font-mono space-y-4">
+        <div className="h-full bg-black flex flex-col items-center justify-center text-white font-mono space-y-4">
             <div className="w-12 h-12 border-2 border-primary-red/30 border-t-primary-red rounded-full animate-spin" />
             <p className="text-primary-red animate-pulse">Установка защищенного соединения...</p>
         </div>
     );
 
-    if (!user) return <div className="h-screen bg-black flex items-center justify-center text-white">Чат не найден</div>;
+    if (!user) return <div className="h-full bg-black flex items-center justify-center text-white">Чат не найден</div>;
 
     return (
         <div className="absolute inset-0 flex flex-col bg-black overflow-hidden">
@@ -468,7 +468,7 @@ export default function ChatPage() {
                     matchId={id}
                     onBothAnswered={() => { /* No action needed after both answer */ }}
                 />
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 overflow-x-auto">
                     {/* Call Buttons */}
                     <button
                         type="button"

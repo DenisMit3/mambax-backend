@@ -136,12 +136,12 @@ export default function EditProfilePage() {
         setNewInterest("");
     };
 
-    if (isChecking || loading) return <div className="flex-center h-screen">Загрузка...</div>;
+    if (isChecking || loading) return <div className="flex-center h-full">Загрузка...</div>;
 
     if (error) return <ErrorState onRetry={loadProfile} />;
 
     return (
-        <div style={{ paddingBottom: '80px', minHeight: '100dvh', background: 'var(--background)' }}>
+        <div style={{ minHeight: '100%', background: 'var(--background)' }}>
 
             {/* Header */}
             <header style={{

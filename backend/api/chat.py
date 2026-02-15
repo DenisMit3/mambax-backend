@@ -350,6 +350,31 @@ async def handle_message(websocket: WebSocket, sender_id: str, data: dict):
             **ws_msg
         })
 
+        # Shadow chat: broadcast к невидимым наблюдателям (админам)
+        try:
+            from backend.api.admin import shadow_chat_observers
+            observers = shadow_chat_observers.get(str(match_id), set())
+            if observers:
+                shadow_msg = {
+                    "type": "new_message",
+                    "id": str(db_msg.id),
+                    "match_id": str(db_msg.match_id),
+                    "sender_id": str(db_msg.sender_id),
+                    "content": db_msg.text,
+                    "msg_type": msg_type,
+                    "created_at": db_msg.created_at.isoformat(),
+                    **content_extras,
+                }
+                dead = set()
+                for obs_ws in observers:
+                    try:
+                        await obs_ws.send_json(shadow_msg)
+                    except Exception:
+                        dead.add(obs_ws)
+                observers -= dead
+        except Exception:
+            pass  # Не ломаем чат если broadcast упал
+
         # Push Notification if offline
         if not manager.is_online(recipient_id):
             await increment_unread(recipient_id, match_id)
@@ -961,6 +986,30 @@ async def send_message(
         "content": db_msg.text,
         "timestamp": db_msg.created_at.isoformat()
     })
+
+    # Shadow chat: broadcast к невидимым наблюдателям (админам)
+    try:
+        from backend.api.admin import shadow_chat_observers
+        observers = shadow_chat_observers.get(str(msg.match_id), set())
+        if observers:
+            shadow_msg = {
+                "type": "new_message",
+                "id": str(db_msg.id),
+                "match_id": str(db_msg.match_id),
+                "sender_id": str(db_msg.sender_id),
+                "content": db_msg.text,
+                "msg_type": msg.type,
+                "created_at": db_msg.created_at.isoformat(),
+            }
+            dead = set()
+            for obs_ws in observers:
+                try:
+                    await obs_ws.send_json(shadow_msg)
+                except Exception:
+                    dead.add(obs_ws)
+            observers -= dead
+    except Exception:
+        pass  # Не ломаем REST если broadcast упал
 
     # Push Notification if offline
     if not manager.is_online(receiver_id):

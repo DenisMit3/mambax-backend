@@ -95,7 +95,7 @@ export default function ProfilePage() {
 
     // Dashboard Mode
     return (
-        <div className="h-full overflow-y-auto scrollbar-hide bg-transparent pb-24 relative">
+        <div className="h-full bg-transparent pb-0 relative">
             {/* Ambient Background */}
             <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-blue-900/20 via-slate-900/50 to-slate-950 pointer-events-none" />
 

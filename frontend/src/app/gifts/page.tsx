@@ -156,7 +156,7 @@ export default function GiftsPage() {
     const currentGifts = activeTab === "received" ? receivedGifts : sentGifts;
 
     return (
-        <div className="min-h-[100dvh] bg-background pb-[100px]">
+        <div className="min-h-full bg-background">
             {/* Header */}
             <div className="p-5 bg-gradient-to-br from-primary/15 to-accent/8 border-b border-border">
                 <h1 className="flex items-center gap-2.5 m-0 text-2xl font-bold text-foreground">

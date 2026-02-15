@@ -106,7 +106,7 @@ export default function HelpPage() {
     };
 
     return (
-        <div className="min-h-screen bg-black text-white pb-24">
+        <div className="min-h-full bg-black text-white">
             {/* Header */}
             <div className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5">
                 <div className="flex items-center gap-4 px-4 py-4">

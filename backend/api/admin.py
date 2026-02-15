@@ -6,7 +6,7 @@ user management, moderation, monetization, marketing, and system operations.
 All endpoints use AsyncSession for database operations and require admin privileges.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, desc, and_, or_, select, delete, cast, case, Date, text
 from sqlalchemy.orm import aliased
@@ -51,7 +51,7 @@ async def get_current_admin(
     if not is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
+            detail="Требуются права администратора"
         )
         
     return current_user
@@ -201,7 +201,7 @@ async def admin_websocket(websocket: WebSocket):
             auth_msg = _json.loads(raw)
 
             if auth_msg.get("type") != "auth" or not auth_msg.get("token"):
-                await websocket.close(code=4001, reason="First message must be auth")
+                await websocket.close(code=4001, reason="Первое сообщение должно быть auth")
                 return
 
             token = auth_msg["token"]
@@ -209,13 +209,13 @@ async def admin_websocket(websocket: WebSocket):
             await websocket.close(code=4001, reason="Auth timeout")
             return
         except _json.JSONDecodeError:
-            await websocket.close(code=4001, reason="Invalid auth message")
+            await websocket.close(code=4001, reason="Некорректное сообщение авторизации")
             return
 
         # 1. Верификация токена (decode_jwt — async, возвращает user_id строкой)
         user_id = await decode_jwt(token)
         if not user_id:
-            await websocket.close(code=4003, reason="Invalid token")
+            await websocket.close(code=4003, reason="Недействительный токен")
             return
             
         # 2. Проверка роли (DB)
@@ -225,12 +225,12 @@ async def admin_websocket(websocket: WebSocket):
             user = result.scalar_one_or_none()
             
             if not user or user.role not in (UserRole.ADMIN, UserRole.MODERATOR):
-                await websocket.close(code=4003, reason="Forbidden")
+                await websocket.close(code=4003, reason="Доступ запрещён")
                 return
 
     except Exception as e:
         print(f"WS Auth Error: {e}")
-        await websocket.close(code=4003, reason="Authentication failed")
+        await websocket.close(code=4003, reason="Ошибка аутентификации")
         return
 
     # Подтверждаем успешную аутентификацию
@@ -355,11 +355,11 @@ async def get_live_activity(
     for user in recent_users:
         delta = now - user.created_at
         mins = int(delta.total_seconds() // 60)
-        time_str = f"{mins} mins ago" if mins < 60 else f"{mins // 60} hours ago"
+        time_str = f"{mins} мин. назад" if mins < 60 else f"{mins // 60} ч. назад"
         activities.append({
             "id": str(user.id), 
             "type": "user", 
-            "message": "New user registered", 
+            "message": "Новый пользователь зарегистрирован", 
             "time": time_str, 
             "ts": user.created_at
         })
@@ -372,11 +372,11 @@ async def get_live_activity(
     for match in recent_matches:
         delta = now - match.created_at
         mins = int(delta.total_seconds() // 60)
-        time_str = f"{mins} mins ago" if mins < 60 else f"{mins // 60} hours ago"
+        time_str = f"{mins} мин. назад" if mins < 60 else f"{mins // 60} ч. назад"
         activities.append({
             "id": str(match.id), 
             "type": "match", 
-            "message": "New match created", 
+            "message": "Новый мэтч создан", 
             "time": time_str, 
             "ts": match.created_at
         })
@@ -389,11 +389,11 @@ async def get_live_activity(
     for report in recent_reports:
         delta = now - report.created_at
         mins = int(delta.total_seconds() // 60)
-        time_str = f"{mins} mins ago" if mins < 60 else f"{mins // 60} hours ago"
+        time_str = f"{mins} мин. назад" if mins < 60 else f"{mins // 60} ч. назад"
         activities.append({
             "id": str(report.id), 
             "type": "report", 
-            "message": "New report submitted", 
+            "message": "Новая жалоба подана", 
             "time": time_str, 
             "ts": report.created_at
         })
@@ -408,11 +408,11 @@ async def get_live_activity(
     for tx in recent_transactions:
         delta = now - tx.created_at
         mins = int(delta.total_seconds() // 60)
-        time_str = f"{mins} mins ago" if mins < 60 else f"{mins // 60} hours ago"
+        time_str = f"{mins} мин. назад" if mins < 60 else f"{mins // 60} ч. назад"
         activities.append({
             "id": str(tx.id), 
             "type": "payment", 
-            "message": f"Payment received: ${tx.amount}", 
+            "message": f"Получен платёж: {tx.amount}⭐", 
             "time": time_str, 
             "ts": tx.created_at
         })
@@ -785,10 +785,10 @@ async def get_user_segments(
     # For now, we'll return common segments logic
     return {
         "segments": [
-            {"id": "new_users", "name": "New Users", "count": 145, "description": "Registered in last 7 days"},
-            {"id": "power_users", "name": "Power Users", "count": 56, "description": "Daily active, >100 messages"},
-            {"id": "at_risk", "name": "At Risk", "count": 230, "description": "No activity in 14 days"},
-            {"id": "whales", "name": "Whales", "count": 12, "description": "Spent >$100 this month"}
+            {"id": "new_users", "name": "Новые пользователи", "count": 145, "description": "Зарегистрированы за последние 7 дней"},
+            {"id": "power_users", "name": "Активные пользователи", "count": 56, "description": "Ежедневно активны, >100 сообщений"},
+            {"id": "at_risk", "name": "В зоне риска", "count": 230, "description": "Нет активности 14 дней"},
+            {"id": "whales", "name": "Киты", "count": 12, "description": "Потратили >$100 в этом месяце"}
         ]
     }
 
@@ -854,12 +854,12 @@ async def get_user_details(
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID format")
+        raise HTTPException(status_code=400, detail="Некорректный формат ID пользователя")
     
     result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     
     # Get fraud score if exists
     result = await db.execute(select(FraudScore).where(FraudScore.user_id == uid))
@@ -935,17 +935,17 @@ async def manage_user_stars(
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID format")
+        raise HTTPException(status_code=400, detail="Некорректный формат ID пользователя")
     
     result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
         
     current_balance = user.stars_balance or 0
     
     if request.amount < 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
+        raise HTTPException(status_code=400, detail="Сумма должна быть положительной")
 
     if request.action == "add":
         new_balance = current_balance + request.amount
@@ -958,7 +958,7 @@ async def manage_user_stars(
         new_balance = max(0, current_balance - request.amount)
         user.stars_balance = new_balance
     else:
-        raise HTTPException(status_code=400, detail="Invalid action")
+        raise HTTPException(status_code=400, detail="Недопустимое действие")
         
     # Audit Log
     audit_log = AuditLog(
@@ -979,7 +979,7 @@ async def manage_user_stars(
     return {
         "status": "success", 
         "new_balance": new_balance,
-        "message": f"Successfully {request.action}ed {request.amount} stars"
+        "message": f"Успешно {request.action}: {request.amount} звёзд"
     }
 
 
@@ -996,12 +996,12 @@ async def perform_user_action(
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID format")
+        raise HTTPException(status_code=400, detail="Некорректный формат ID пользователя")
     
     result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     
     if action == "verify":
         user.is_verified = True
@@ -1016,7 +1016,7 @@ async def perform_user_action(
         # Create ban record
         ban = BannedUser(
             user_id=uid,
-            reason=reason or "Admin action",
+            reason=reason or "Действие администратора",
             banned_by=current_user.id
         )
         db.add(ban)
@@ -1027,7 +1027,7 @@ async def perform_user_action(
     elif action == "activate":
         user.status = UserStatus.ACTIVE
     else:
-        raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+        raise HTTPException(status_code=400, detail=f"Неизвестное действие: {action}")
     
     # Create audit log
     audit_log = AuditLog(
@@ -1042,7 +1042,7 @@ async def perform_user_action(
     
     return {
         "status": "success",
-        "message": f"User {action} successful"
+        "message": f"Действие '{action}' выполнено"
     }
 
 
@@ -1079,7 +1079,7 @@ async def perform_bulk_user_action(
     
     return {
         "status": "success",
-        "message": f"Action performed on {success_count} users"
+        "message": f"Действие выполнено для {success_count} пользователей"
     }
 
 
@@ -1154,13 +1154,13 @@ async def review_verification_request(
     try:
         rid = uuid_module.UUID(request_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID")
         
     result = await db.execute(select(VerificationRequest).where(VerificationRequest.id == rid))
     req = result.scalar_one_or_none()
     
     if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
+        raise HTTPException(status_code=404, detail="Запрос не найден")
         
     if review_data.action == "approve":
         req.status = "approved"
@@ -1180,14 +1180,14 @@ async def review_verification_request(
             user.is_verified = False
             user.verified_at = None
     else:
-        raise HTTPException(status_code=400, detail="Invalid action")
+        raise HTTPException(status_code=400, detail="Недопустимое действие")
         
     req.reviewed_by = current_user.id
     req.reviewed_at = datetime.utcnow()
     
     await db.commit()
     
-    return {"status": "success", "message": f"Verification {review_data.action}d"}
+    return {"status": "success", "message": f"Верификация {review_data.action} выполнена"}
 
 
 # ============================================
@@ -1270,7 +1270,7 @@ async def get_moderation_queue(
                 "content_type": item[0].content_type,
                 "content": item[0].content_snapshot,
                 "user_id": str(item[0].user_id),
-                "user_name": item[1] if item[1] else "Unknown User",
+                "user_name": item[1] if item[1] else "Неизвестный пользователь",
                 "ai_score": item[0].ai_score,
                 "ai_flags": [],
                 "priority": "high" if item[0].priority > 7 else ("medium" if item[0].priority > 4 else "low"),
@@ -1298,7 +1298,7 @@ async def review_moderation_item(
     try:
         uid = uuid_module.UUID(item_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid item ID format")
+        raise HTTPException(status_code=400, detail="Некорректный формат ID элемента")
     
     result = await db.execute(
         select(ModerationQueueItemModel).where(ModerationQueueItemModel.id == uid)
@@ -1306,7 +1306,7 @@ async def review_moderation_item(
     item = result.scalar_one_or_none()
     
     if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+        raise HTTPException(status_code=404, detail="Элемент не найден")
     
     # Update status based on action
     if action == "approve":
@@ -1332,12 +1332,12 @@ async def review_moderation_item(
             user.status = "banned"
             ban = BannedUser(
                 user_id=item.user_id,
-                reason=notes or "Moderation action",
+                reason=notes or "Действие модерации",
                 banned_by=current_user.id
             )
             db.add(ban)
     else:
-        raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+        raise HTTPException(status_code=400, detail=f"Неизвестное действие: {action}")
     
     item.locked_by = current_user.id
     
@@ -1354,7 +1354,7 @@ async def review_moderation_item(
     
     return {
         "status": "success",
-        "message": f"Item {action}d successfully"
+        "message": f"Элемент {action} выполнено"
     }
 
 
@@ -1610,13 +1610,13 @@ async def get_funnel_data(
     
     return {
         "funnel": [
-            {"stage": "Visitors", "value": total_users * 3, "rate": 100},
-            {"stage": "Sign Up", "value": total_users, "rate": 33.3},
-            {"stage": "Profile Complete", "value": int(total_users * 0.8), "rate": 80},
-            {"stage": "First Swipe", "value": int(total_users * 0.7), "rate": 87.5},
-            {"stage": "Match", "value": int(total_users * 0.5), "rate": 71.4},
-            {"stage": "First Message", "value": int(total_users * 0.35), "rate": 70},
-            {"stage": "Premium", "value": premium_users, "rate": (premium_users / max(total_users, 1)) * 100}
+            {"stage": "Посетители", "value": total_users * 3, "rate": 100},
+            {"stage": "Регистрация", "value": total_users, "rate": 33.3},
+            {"stage": "Профиль заполнен", "value": int(total_users * 0.8), "rate": 80},
+            {"stage": "Первый свайп", "value": int(total_users * 0.7), "rate": 87.5},
+            {"stage": "Мэтч", "value": int(total_users * 0.5), "rate": 71.4},
+            {"stage": "Первое сообщение", "value": int(total_users * 0.35), "rate": 70},
+            {"stage": "Премиум", "value": premium_users, "rate": (premium_users / max(total_users, 1)) * 100}
         ]
     }
 
@@ -1652,7 +1652,7 @@ async def get_retention_cohorts(
     return {
         "cohorts": [],
         "source": "empty",
-        "message": "No retention data yet. Click 'Calculate Retention' to generate."
+        "message": "Нет данных по ретеншену. Нажмите 'Рассчитать ретеншен' для генерации."
     }
 
 
@@ -1683,7 +1683,7 @@ async def trigger_retention_calculation(
         "calculated": result.get("calculated", 0),
         "skipped": result.get("skipped", 0),
         "errors": result.get("errors", 0),
-        "message": f"Calculated {result.get('calculated', 0)} cohorts"
+        "message": f"Рассчитано когорт: {result.get('calculated', 0)}"
     }
 
 
@@ -1845,35 +1845,35 @@ async def get_churn_prediction(
     factors = []
     if high_risk_count > 0:
         factors.append({
-            "factor": f"Inactive > 14 days ({high_risk_count} users)",
+            "factor": f"Неактивны > 14 дней ({high_risk_count} пользователей)",
             "impact": min(40, int((high_risk_count / max(at_risk_total, 1)) * 100))
         })
     if inactive_7_14 > 0:
         factors.append({
-            "factor": f"Inactive 7-14 days ({inactive_7_14} users)",
+            "factor": f"Неактивны 7-14 дней ({inactive_7_14} пользователей)",
             "impact": min(25, int((inactive_7_14 / max(at_risk_total, 1)) * 100))
         })
     if incomplete_profiles > 0:
         factors.append({
-            "factor": f"Incomplete profile ({incomplete_profiles} users)",
+            "factor": f"Незаполненный профиль ({incomplete_profiles} пользователей)",
             "impact": min(20, int((incomplete_profiles / max(total_users, 1)) * 100))
         })
     if free_longtime > 0:
         factors.append({
-            "factor": f"Free tier > 60 days ({free_longtime} users)",
+            "factor": f"Free тариф > 60 дней ({free_longtime} пользователей)",
             "impact": min(15, int((free_longtime / max(total_users, 1)) * 100))
         })
     
     # Generate dynamic recommendations
     recommendations = []
     if high_risk_count > 10:
-        recommendations.append(f"Send re-engagement push to {high_risk_count} high-risk users")
+        recommendations.append(f"Отправить re-engagement пуш {high_risk_count} пользователям высокого риска")
     if incomplete_profiles > 20:
-        recommendations.append(f"Prompt {incomplete_profiles} users to complete their profiles")
+        recommendations.append(f"Предложить {incomplete_profiles} пользователям заполнить профиль")
     if free_longtime > 50:
-        recommendations.append(f"Offer trial discount to {free_longtime} long-term free users")
+        recommendations.append(f"Предложить скидку {free_longtime} пользователям на бесплатном тарифе")
     if not recommendations:
-        recommendations.append("User engagement is healthy - continue monitoring")
+        recommendations.append("Вовлечённость пользователей в норме — продолжайте мониторинг")
     
     return {
         "prediction_date": now.isoformat(),
@@ -1884,7 +1884,7 @@ async def get_churn_prediction(
         "high_risk_count": high_risk_count,
         "medium_risk_count": medium_risk_count,
         "predicted_churn_30d": predicted_churn_30d,
-        "top_churn_factors": factors or [{"factor": "No significant risk factors", "impact": 0}],
+        "top_churn_factors": factors or [{"factor": "Нет значимых факторов риска", "impact": 0}],
         "recommendations": recommendations
     }
 
@@ -1935,10 +1935,10 @@ async def get_revenue_breakdown(
     
     if not sources:
         sources = [
-            {"source": "Subscriptions", "amount": 24500, "percentage": 75},
-            {"source": "Boosts", "amount": 5200, "percentage": 16},
-            {"source": "Super Likes", "amount": 2100, "percentage": 6},
-            {"source": "Gifts", "amount": 1000, "percentage": 3}
+            {"source": "Подписки", "amount": 24500, "percentage": 75},
+            {"source": "Бусты", "amount": 5200, "percentage": 16},
+            {"source": "Суперлайки", "amount": 2100, "percentage": 6},
+            {"source": "Подарки", "amount": 1000, "percentage": 3}
         ]
         total = 32800
     
@@ -1981,7 +1981,7 @@ async def get_geo_heatmap(
     points = []
     for row in rows:
         points.append({
-            "city": row.city or "Unknown",
+            "city": row.city or "Неизвестно",
             "lat": float(row.latitude),
             "lng": float(row.longitude),
             "users": row.user_count,
@@ -2294,10 +2294,10 @@ async def get_revenue_metrics(
             "platinum": {"count": int(premium_users * 0.3), "percentage": round(premium_users * 0.3 / max(total_users, 1) * 100, 1)}
         },
         "revenue_sources": [
-            {"source": "Subscriptions", "amount": float(revenue_month) * 0.76, "percentage": 76},
-            {"source": "Boosts", "amount": float(revenue_month) * 0.14, "percentage": 14},
-            {"source": "Super Likes", "amount": float(revenue_month) * 0.07, "percentage": 7},
-            {"source": "Gifts", "amount": float(revenue_month) * 0.03, "percentage": 3}
+            {"source": "Подписки", "amount": float(revenue_month) * 0.76, "percentage": 76},
+            {"source": "Бусты", "amount": float(revenue_month) * 0.14, "percentage": 14},
+            {"source": "Суперлайки", "amount": float(revenue_month) * 0.07, "percentage": 7},
+            {"source": "Подарки", "amount": float(revenue_month) * 0.03, "percentage": 3}
         ]
     }
 
@@ -2386,7 +2386,7 @@ async def send_push_notification(
     
     return {
         "status": "success" if result.get("success") else "partial",
-        "message": f"Push notification sent to {result.get('sent', 0)} devices",
+        "message": f"Пуш-уведомление отправлено на {result.get('sent', 0)} устройств",
         "sent": result.get("sent", 0),
         "failed": result.get("failed", 0),
         "error": result.get("error")
@@ -2535,10 +2535,10 @@ async def get_channel_performance(
     if not channels:
         # Seed default channels if none exist
         default_channels = [
-            {"name": "Organic Search", "code": "organic", "color": "#10b981"},
-            {"name": "Social Media", "code": "social", "color": "#3b82f6"},
-            {"name": "Referral", "code": "referral", "color": "#a855f7"},
-            {"name": "Paid Ads", "code": "paid_ads", "color": "#f97316"},
+            {"name": "Органический поиск", "code": "organic", "color": "#10b981"},
+            {"name": "Соцсети", "code": "social", "color": "#3b82f6"},
+            {"name": "Реферальная программа", "code": "referral", "color": "#a855f7"},
+            {"name": "Платная реклама", "code": "paid_ads", "color": "#f97316"},
             {"name": "App Store", "code": "app_store", "color": "#ec4899"},
         ]
         for ch in default_channels:
@@ -2677,7 +2677,7 @@ async def create_promo_code(
         select(PromoCode).where(PromoCode.code == promo_data.code.upper())
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Promo code already exists")
+        raise HTTPException(status_code=400, detail="Промокод уже существует")
     
     promo = PromoCode(
         code=promo_data.code.upper(),
@@ -2707,7 +2707,7 @@ async def create_promo_code(
     
     return {
         "status": "success",
-        "message": f"Promo code {promo.code} created",
+        "message": f"Промокод {promo.code} создан",
         "id": str(promo.id)
     }
 
@@ -2724,11 +2724,11 @@ async def update_promo_code(
     try:
         pid = uuid_module.UUID(promo_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid promo ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID промокода")
     
     promo = await db.get(PromoCode, pid)
     if not promo:
-        raise HTTPException(status_code=404, detail="Promo code not found")
+        raise HTTPException(status_code=404, detail="Промокод не найден")
     
     # Update fields
     if promo_data.name is not None:
@@ -2755,7 +2755,7 @@ async def update_promo_code(
     
     await db.commit()
     
-    return {"status": "success", "message": f"Promo code {promo.code} updated"}
+    return {"status": "success", "message": f"Промокод {promo.code} обновлён"}
 
 
 @router.delete("/monetization/promos/{promo_id}")
@@ -2769,11 +2769,11 @@ async def delete_promo_code(
     try:
         pid = uuid_module.UUID(promo_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid promo ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID промокода")
     
     promo = await db.get(PromoCode, pid)
     if not promo:
-        raise HTTPException(status_code=404, detail="Promo code not found")
+        raise HTTPException(status_code=404, detail="Промокод не найден")
     
     code = promo.code
     
@@ -2791,7 +2791,7 @@ async def delete_promo_code(
     
     await db.commit()
     
-    return {"status": "success", "message": f"Promo code {code} deactivated"}
+    return {"status": "success", "message": f"Промокод {code} деактивирован"}
 
 
 @router.post("/monetization/promos/{promo_id}/toggle")
@@ -2804,11 +2804,11 @@ async def toggle_promo_code(
     try:
         pid = uuid_module.UUID(promo_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid promo ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID промокода")
     
     promo = await db.get(PromoCode, pid)
     if not promo:
-        raise HTTPException(status_code=404, detail="Promo code not found")
+        raise HTTPException(status_code=404, detail="Промокод не найден")
     
     promo.is_active = not promo.is_active
     
@@ -2877,7 +2877,7 @@ async def admin_websocket_endpoint(
             auth_msg = _json.loads(raw)
 
             if auth_msg.get("type") != "auth" or not auth_msg.get("token"):
-                await websocket.close(code=4001, reason="First message must be auth")
+                await websocket.close(code=4001, reason="Первое сообщение должно быть auth")
                 return
 
             token = auth_msg["token"]
@@ -2885,13 +2885,13 @@ async def admin_websocket_endpoint(
             await websocket.close(code=4001, reason="Auth timeout")
             return
         except _json.JSONDecodeError:
-            await websocket.close(code=4001, reason="Invalid auth message")
+            await websocket.close(code=4001, reason="Некорректное сообщение авторизации")
             return
 
         # Верификация токена (decode_jwt — async, возвращает user_id строкой)
         user_id_str = await decode_jwt(token)
         if not user_id_str:
-            await websocket.close(code=4001, reason="Invalid token")
+            await websocket.close(code=4001, reason="Недействительный токен")
             return
             
         user_id = uuid.UUID(user_id_str)
@@ -2900,15 +2900,15 @@ async def admin_websocket_endpoint(
         async with async_session_maker() as session:
             user = await session.get(User, user_id)
             if not user or user.role not in ("admin", "moderator"):
-                await websocket.close(code=4003, reason="Admin privileges required")
+                await websocket.close(code=4003, reason="Требуются права администратора")
                 return
             if user.status == "banned":
-                await websocket.close(code=4003, reason="User is banned")
+                await websocket.close(code=4003, reason="Пользователь заблокирован")
                 return
                 
     except Exception as e:
         print(f"WS Auth Error: {e}")
-        await websocket.close(code=4001, reason="Auth failed")
+        await websocket.close(code=4001, reason="Ошибка авторизации")
         return
 
     # Подтверждаем успешную аутентификацию
@@ -2945,7 +2945,7 @@ async def admin_websocket_endpoint(
                         # RE-VERIFY ROLE
                         user = await db.get(User, user_id)
                         if not user or user.role not in ("admin", "moderator") or user.status == "banned":
-                            await websocket.close(code=4003, reason="Access revoked")
+                            await websocket.close(code=4003, reason="Доступ отозван")
                             return
                         
                         await send_admin_update(websocket, db, user_id)
@@ -3011,11 +3011,11 @@ async def send_admin_update(websocket: WebSocket, db: AsyncSession, user_id: uui
     for u in recent_users:
         delta = now - u.created_at
         mins = int(delta.total_seconds() // 60)
-        time_str = f"{mins} mins ago" if mins < 60 else f"{mins // 60}h ago"
+        time_str = f"{mins} мин. назад" if mins < 60 else f"{mins // 60} ч. назад"
         activities.append({
             "id": str(u.id), 
             "type": "user", 
-            "message": "New user registered", 
+            "message": "Новый пользователь зарегистрирован", 
             "time": time_str
         })
     
@@ -3182,7 +3182,7 @@ async def get_audit_logs(
             {
                 "id": str(log.id),
                 "admin_id": str(log.admin_id),
-                "admin_name": admin_names.get(str(log.admin_id), "Unknown"),
+                "admin_name": admin_names.get(str(log.admin_id), "Неизвестно"),
                 "action": log.action,
                 "target": log.target_resource,
                 "changes": log.changes,
@@ -3260,13 +3260,13 @@ async def resolve_security_alert(
     try:
         aid = uuid_module.UUID(alert_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid alert ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID алерта")
     
     result = await db.execute(select(SecurityAlert).where(SecurityAlert.id == aid))
     alert = result.scalar_one_or_none()
     
     if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
+        raise HTTPException(status_code=404, detail="Алерт не найден")
     
     alert.is_resolved = True
     alert.resolved_at = datetime.utcnow()
@@ -3354,11 +3354,11 @@ async def create_auto_ban_rule(
     """Create a new auto-ban rule"""
     valid_triggers = ["reports_count", "fraud_score", "spam_messages", "inactive_days", "multiple_accounts"]
     if data.trigger_type not in valid_triggers:
-        raise HTTPException(status_code=400, detail=f"Invalid trigger_type. Must be one of: {valid_triggers}")
+        raise HTTPException(status_code=400, detail=f"Некорректный trigger_type. Допустимые: {valid_triggers}")
     
     valid_actions = ["suspend", "ban", "warn"]
     if data.action not in valid_actions:
-        raise HTTPException(status_code=400, detail=f"Invalid action. Must be one of: {valid_actions}")
+        raise HTTPException(status_code=400, detail=f"Некорректное действие. Допустимые: {valid_actions}")
     
     rule = AutoBanRule(
         name=data.name,
@@ -3383,7 +3383,7 @@ async def create_auto_ban_rule(
         "threshold": rule.threshold,
         "action": rule.action,
         "is_enabled": rule.is_enabled,
-        "message": "Rule created successfully",
+        "message": "Правило создано",
     }
 
 
@@ -3398,12 +3398,12 @@ async def update_auto_ban_rule(
     try:
         rid = uuid_module.UUID(rule_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid rule ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID правила")
     
     result = await db.execute(select(AutoBanRule).where(AutoBanRule.id == rid))
     rule = result.scalar_one_or_none()
     if not rule:
-        raise HTTPException(status_code=404, detail="Rule not found")
+        raise HTTPException(status_code=404, detail="Правило не найдено")
     
     update_fields = data.model_dump(exclude_unset=True)
     for field, value in update_fields.items():
@@ -3419,7 +3419,7 @@ async def update_auto_ban_rule(
         "threshold": rule.threshold,
         "action": rule.action,
         "is_enabled": rule.is_enabled,
-        "message": "Rule updated successfully",
+        "message": "Правило обновлено",
     }
 
 
@@ -3433,17 +3433,17 @@ async def delete_auto_ban_rule(
     try:
         rid = uuid_module.UUID(rule_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid rule ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID правила")
     
     result = await db.execute(select(AutoBanRule).where(AutoBanRule.id == rid))
     rule = result.scalar_one_or_none()
     if not rule:
-        raise HTTPException(status_code=404, detail="Rule not found")
+        raise HTTPException(status_code=404, detail="Правило не найдено")
     
     await db.delete(rule)
     await db.commit()
     
-    return {"message": "Rule deleted successfully", "id": rule_id}
+    return {"message": "Правило удалено", "id": rule_id}
 
 
 @router.post("/auto-ban-rules/{rule_id}/toggle")
@@ -3456,12 +3456,12 @@ async def toggle_auto_ban_rule(
     try:
         rid = uuid_module.UUID(rule_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid rule ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID правила")
     
     result = await db.execute(select(AutoBanRule).where(AutoBanRule.id == rid))
     rule = result.scalar_one_or_none()
     if not rule:
-        raise HTTPException(status_code=404, detail="Rule not found")
+        raise HTTPException(status_code=404, detail="Правило не найдено")
     
     rule.is_enabled = not rule.is_enabled
     await db.commit()
@@ -3469,7 +3469,7 @@ async def toggle_auto_ban_rule(
     return {
         "id": str(rule.id),
         "is_enabled": rule.is_enabled,
-        "message": f"Rule {'enabled' if rule.is_enabled else 'disabled'}",
+        "message": f"Правило {'включено' if rule.is_enabled else 'выключено'}",
     }
 
 
@@ -3495,13 +3495,13 @@ async def get_user_activity_timeline(
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID пользователя")
     
     # Verify user exists
     result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     
     events = []
     
@@ -3659,7 +3659,7 @@ async def get_user_notes(
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID пользователя")
     
     result = await db.execute(
         select(UserNote).where(UserNote.user_id == uid).order_by(desc(UserNote.created_at))
@@ -3680,7 +3680,7 @@ async def get_user_notes(
                 "content": n.content,
                 "is_internal": n.is_internal,
                 "author_id": str(n.created_by) if n.created_by else None,
-                "author_name": author_names.get(str(n.created_by), "System"),
+                "author_name": author_names.get(str(n.created_by), "Система"),
                 "created_at": n.created_at.isoformat()
             }
             for n in notes
@@ -3699,12 +3699,12 @@ async def add_user_note(
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
+        raise HTTPException(status_code=400, detail="Некорректный ID пользователя")
     
     # Verify user exists
     result = await db.execute(select(User).where(User.id == uid))
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     
     new_note = UserNote(
         user_id=uid,
@@ -3737,7 +3737,7 @@ async def admin_gdpr_export(
     result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     # Messages
     msgs = await db.execute(
@@ -3849,3 +3849,565 @@ async def get_user_payments(
         payments = []
 
     return {"payments": payments, "total": len(payments)}
+
+
+
+# ============================================
+# 1. PUT /admin/users/{user_id} — Редактирование профиля пользователя
+# ============================================
+@router.put("/users/{user_id}")
+async def admin_update_user(
+    user_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Админ редактирует профиль пользователя."""
+    data = await request.json()
+
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Разрешённые поля для редактирования
+    allowed = {"name", "email", "phone", "age", "bio", "city", "gender", "subscription_tier", "role"}
+    changes = {}
+    for field in allowed:
+        if field in data:
+            old_val = getattr(user, field)
+            new_val = data[field]
+            # Конвертация enum-полей
+            if field == "gender":
+                from backend.models.user import Gender
+                new_val = Gender(new_val)
+            elif field == "subscription_tier":
+                new_val = SubscriptionTier(new_val)
+            elif field == "role":
+                new_val = UserRole(new_val)
+            setattr(user, field, new_val)
+            changes[field] = {"old": str(old_val), "new": str(new_val)}
+
+    # Аудит-лог
+    db.add(AuditLog(
+        admin_id=admin.id,
+        action="update_user",
+        target_resource=f"user:{user_id}",
+        changes=changes,
+    ))
+    await db.commit()
+    return {"status": "ok", "updated_fields": list(changes.keys())}
+
+
+# ============================================
+# 2. POST /admin/users/{user_id}/subscription — Смена подписки
+# ============================================
+@router.post("/users/{user_id}/subscription")
+async def admin_change_subscription(
+    user_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Админ меняет подписку пользователя."""
+    data = await request.json()
+    tier = data.get("tier")
+    duration_days = data.get("duration_days", 30)
+    reason = data.get("reason", "")
+
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    old_tier = str(user.subscription_tier)
+    user.subscription_tier = SubscriptionTier(tier)
+    user.is_vip = tier in ("vip", "gold", "platinum")
+
+    # Аудит-лог
+    db.add(AuditLog(
+        admin_id=admin.id,
+        action="change_subscription",
+        target_resource=f"user:{user_id}",
+        changes={
+            "old_tier": old_tier,
+            "new_tier": tier,
+            "duration_days": duration_days,
+            "reason": reason,
+        },
+    ))
+    await db.commit()
+    return {"status": "ok", "new_tier": tier, "duration_days": duration_days}
+
+
+# ============================================
+# 3. POST /admin/users/{user_id}/notify — Персональное уведомление
+# ============================================
+@router.post("/users/{user_id}/notify")
+async def admin_notify_user(
+    user_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Админ отправляет персональное уведомление пользователю."""
+    from backend.models.notifications import InAppNotification
+
+    data = await request.json()
+    title = data.get("title", "")
+    message = data.get("message", "")
+    notif_type = data.get("type", "info")
+
+    if not title or not message:
+        raise HTTPException(status_code=400, detail="Заголовок и сообщение обязательны")
+
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    notification = InAppNotification(
+        user_id=user.id,
+        notification_type=notif_type,
+        title=title,
+        body=message,
+        related_user_id=admin.id,
+    )
+    db.add(notification)
+
+    db.add(AuditLog(
+        admin_id=admin.id,
+        action="notify_user",
+        target_resource=f"user:{user_id}",
+        changes={"title": title, "type": notif_type},
+    ))
+    await db.commit()
+    return {"status": "ok", "notification_id": str(notification.id)}
+
+
+# ============================================
+# 4. GET /admin/users/{user_id}/chats — Чаты пользователя
+# ============================================
+@router.get("/users/{user_id}/chats")
+async def admin_get_user_chats(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Возвращает список чатов пользователя с превью последнего сообщения."""
+    uid = uuid_module.UUID(user_id)
+
+    matches_q = await db.execute(
+        select(Match).where(
+            and_(
+                or_(Match.user1_id == uid, Match.user2_id == uid),
+                Match.is_active == True,
+            )
+        )
+    )
+    matches = matches_q.scalars().all()
+
+    chats = []
+    for m in matches:
+        partner_id = m.user2_id if m.user1_id == uid else m.user1_id
+        partner_r = await db.execute(select(User.name, User.id).where(User.id == partner_id))
+        partner = partner_r.first()
+        last_msg_r = await db.execute(
+            select(Message)
+            .where(Message.match_id == m.id)
+            .order_by(desc(Message.created_at))
+            .limit(1)
+        )
+        last_msg = last_msg_r.scalar_one_or_none()
+        unread_r = await db.execute(
+            select(func.count())
+            .select_from(Message)
+            .where(
+                and_(
+                    Message.match_id == m.id,
+                    Message.receiver_id == uid,
+                    Message.is_read == False,
+                )
+            )
+        )
+        unread = unread_r.scalar() or 0
+
+        chats.append({
+            "match_id": str(m.id),
+            "partner_id": str(partner_id),
+            "partner_name": partner.name if partner else "Удалён",
+            "last_message": last_msg.text[:100] if last_msg and last_msg.text else None,
+            "last_message_at": last_msg.created_at.isoformat() if last_msg else None,
+            "unread_count": unread,
+            "created_at": m.created_at.isoformat(),
+        })
+
+    return {"chats": chats, "total": len(chats)}
+
+
+# ============================================
+# 5. GET /admin/chats/{match_id}/messages — Сообщения чата
+# ============================================
+@router.get("/chats/{match_id}/messages")
+async def admin_read_chat_messages(
+    match_id: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Возвращает пагинированные сообщения чата."""
+    mid = uuid_module.UUID(match_id)
+
+    match_r = await db.execute(select(Match).where(Match.id == mid))
+    match_obj = match_r.scalar_one_or_none()
+    if not match_obj:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+
+    offset = (page - 1) * limit
+
+    total_r = await db.execute(
+        select(func.count()).select_from(Message).where(Message.match_id == mid)
+    )
+    total = total_r.scalar() or 0
+
+    msgs_r = await db.execute(
+        select(Message)
+        .where(Message.match_id == mid)
+        .order_by(desc(Message.created_at))
+        .offset(offset)
+        .limit(limit)
+    )
+    msgs = msgs_r.scalars().all()
+
+    sender_names = {}
+    items = []
+    for msg in msgs:
+        sid = str(msg.sender_id)
+        if sid not in sender_names:
+            s_r = await db.execute(select(User.name).where(User.id == msg.sender_id))
+            row = s_r.first()
+            sender_names[sid] = row.name if row else "Удалён"
+        items.append({
+            "id": str(msg.id),
+            "sender_id": sid,
+            "sender_name": sender_names[sid],
+            "text": msg.text,
+            "type": msg.type,
+            "is_read": msg.is_read,
+            "created_at": msg.created_at.isoformat(),
+        })
+
+    return {
+        "messages": items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit if limit else 1,
+    }
+
+
+# ============================================
+# 6. POST /admin/users/{user_id}/reset-password — Сброс пароля
+# ============================================
+@router.post("/users/{user_id}/reset-password")
+async def admin_reset_password(
+    user_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Админ сбрасывает пароль пользователя."""
+    from backend.core.security import hash_password
+
+    data = await request.json()
+    new_password = data.get("new_password", "")
+    if len(new_password) < 4:
+        raise HTTPException(status_code=400, detail="Пароль должен быть не менее 4 символов")
+
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    user.hashed_password = hash_password(new_password)
+
+    db.add(AuditLog(
+        admin_id=admin.id,
+        action="reset_password",
+        target_resource=f"user:{user_id}",
+        changes={"note": "Пароль сброшен администратором"},
+    ))
+    await db.commit()
+    return {"status": "ok", "message": "Пароль успешно изменён"}
+
+
+# ============================================
+# 7. POST /admin/users/{user_id}/impersonate — Имперсонация
+# ============================================
+@router.post("/users/{user_id}/impersonate")
+async def admin_impersonate_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Генерирует краткосрочный JWT-токен (15 мин) для входа под пользователем."""
+    from backend.core.security import create_access_token
+
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    token = create_access_token(
+        user_id=user.id,
+        expires_delta=timedelta(minutes=15),
+    )
+
+    db.add(AuditLog(
+        admin_id=admin.id,
+        action="impersonate_user",
+        target_resource=f"user:{user_id}",
+        changes={"expires_in": 900},
+    ))
+    await db.commit()
+    return {"token": token, "expires_in": 900}
+
+
+# ============================================
+# 8. GET /admin/users/{user_id}/matches — Матчи пользователя
+# ============================================
+@router.get("/users/{user_id}/matches")
+async def admin_get_user_matches(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Возвращает все матчи пользователя с информацией о партнёре."""
+    uid = uuid_module.UUID(user_id)
+
+    matches_r = await db.execute(
+        select(Match).where(or_(Match.user1_id == uid, Match.user2_id == uid))
+    )
+    matches = matches_r.scalars().all()
+
+    items = []
+    for m in matches:
+        partner_id = m.user2_id if m.user1_id == uid else m.user1_id
+        partner_r = await db.execute(
+            select(User.id, User.name, User.age, User.gender).where(User.id == partner_id)
+        )
+        partner = partner_r.first()
+
+        msg_count_r = await db.execute(
+            select(func.count()).select_from(Message).where(Message.match_id == m.id)
+        )
+        msg_count = msg_count_r.scalar() or 0
+
+        items.append({
+            "match_id": str(m.id),
+            "partner_id": str(partner_id),
+            "partner_name": partner.name if partner else "Удалён",
+            "partner_age": partner.age if partner else None,
+            "partner_gender": str(partner.gender) if partner else None,
+            "is_active": m.is_active,
+            "matched_at": m.created_at.isoformat(),
+            "message_count": msg_count,
+        })
+
+    return {"matches": items, "total": len(items)}
+
+
+# ============================================
+# 9. POST /admin/users/{user_id}/warn — Предупреждение пользователю
+# ============================================
+@router.post("/users/{user_id}/warn")
+async def admin_warn_user(
+    user_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Отправляет предупреждение. При 3+ предупреждениях — автоблокировка."""
+    from backend.models.notifications import InAppNotification
+
+    data = await request.json()
+    reason = data.get("reason", "")
+    severity = data.get("severity", "medium")
+
+    if not reason:
+        raise HTTPException(status_code=400, detail="Причина предупреждения обязательна")
+
+    result = await db.execute(select(User).where(User.id == uuid_module.UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Считаем предыдущие предупреждения из аудит-логов
+    warn_count_r = await db.execute(
+        select(func.count())
+        .select_from(AuditLog)
+        .where(
+            and_(
+                AuditLog.action == "warn_user",
+                AuditLog.target_resource == f"user:{user_id}",
+            )
+        )
+    )
+    warn_count = (warn_count_r.scalar() or 0) + 1
+
+    db.add(InAppNotification(
+        user_id=user.id,
+        notification_type="warning",
+        title="Предупреждение",
+        body=f"Вы получили предупреждение: {reason}",
+    ))
+
+    db.add(AuditLog(
+        admin_id=admin.id,
+        action="warn_user",
+        target_resource=f"user:{user_id}",
+        changes={"reason": reason, "severity": severity, "warning_number": warn_count},
+    ))
+
+    auto_suspended = False
+    if warn_count >= 3:
+        user.status = UserStatus.SUSPENDED
+        user.is_active = False
+        auto_suspended = True
+        db.add(AuditLog(
+            admin_id=admin.id,
+            action="auto_suspend",
+            target_resource=f"user:{user_id}",
+            changes={"reason": f"Автоблокировка: {warn_count} предупреждений"},
+        ))
+
+    await db.commit()
+    return {
+        "status": "ok",
+        "warning_count": warn_count,
+        "auto_suspended": auto_suspended,
+    }
+
+
+# ============================================
+# 10. GET /admin/users/{user_id}/reports — Жалобы пользователя
+# ============================================
+@router.get("/users/{user_id}/reports")
+async def admin_get_user_reports(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Возвращает жалобы, где пользователь — автор или объект жалобы."""
+    uid = uuid_module.UUID(user_id)
+
+    reports_r = await db.execute(
+        select(Report).where(or_(Report.reporter_id == uid, Report.reported_id == uid))
+    )
+    reports = reports_r.scalars().all()
+
+    items = []
+    for r in reports:
+        items.append({
+            "id": str(r.id),
+            "reporter_id": str(r.reporter_id),
+            "reported_id": str(r.reported_id),
+            "reason": r.reason,
+            "description": r.description,
+            "status": r.status,
+            "direction": "filed" if r.reporter_id == uid else "received",
+            "created_at": r.created_at.isoformat(),
+            "resolution": r.resolution,
+        })
+
+    return {"reports": items, "total": len(items)}
+
+
+# ============================================
+# 11. POST /admin/users/{user_id}/delete-photos — Удаление фото
+# ============================================
+@router.post("/users/{user_id}/delete-photos")
+async def admin_delete_user_photos(
+    user_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Админ удаляет указанные фото пользователя."""
+    data = await request.json()
+    photo_ids = data.get("photo_ids", [])
+
+    if not photo_ids:
+        raise HTTPException(status_code=400, detail="Список photo_ids не может быть пустым")
+
+    uid = uuid_module.UUID(user_id)
+    user_r = await db.execute(select(User).where(User.id == uid))
+    if not user_r.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    uuids = [uuid_module.UUID(pid) for pid in photo_ids]
+    result = await db.execute(
+        delete(UserPhoto).where(
+            and_(UserPhoto.user_id == uid, UserPhoto.id.in_(uuids))
+        )
+    )
+    deleted_count = result.rowcount
+
+    db.add(AuditLog(
+        admin_id=admin.id,
+        action="delete_photos",
+        target_resource=f"user:{user_id}",
+        changes={"photo_ids": photo_ids, "deleted_count": deleted_count},
+    ))
+    await db.commit()
+    return {"status": "ok", "deleted_count": deleted_count}
+
+
+# ============================================
+# 12. GET /admin/users/{user_id}/login-history — История входов
+# ============================================
+@router.get("/users/{user_id}/login-history")
+async def admin_get_login_history(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Возвращает историю входов пользователя с маскированным IP."""
+    from backend.models.safety import LoginHistory
+
+    uid = uuid_module.UUID(user_id)
+
+    user_r = await db.execute(select(User).where(User.id == uid))
+    if not user_r.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    logins_r = await db.execute(
+        select(LoginHistory)
+        .where(LoginHistory.user_id == uid)
+        .order_by(desc(LoginHistory.created_at))
+        .limit(100)
+    )
+    logins = logins_r.scalars().all()
+
+    def mask_ip(ip: str) -> str:
+        parts = ip.split(".")
+        if len(parts) == 4:
+            parts[-1] = "***"
+            return ".".join(parts)
+        return ip
+
+    items = []
+    for log in logins:
+        items.append({
+            "id": str(log.id),
+            "ip_address": mask_ip(log.ip_address) if log.ip_address else None,
+            "user_agent": log.user_agent,
+            "login_method": log.login_method,
+            "success": log.success,
+            "country": log.country,
+            "city": log.city,
+            "created_at": log.created_at.isoformat(),
+        })
+
+    return {"login_history": items, "total": len(items)}

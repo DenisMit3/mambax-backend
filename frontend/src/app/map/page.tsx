@@ -86,7 +86,7 @@ export default function MapPage() {
     // Don't render map until we have the icon (client-side only)
     if (!mounted || !leafletIcon) {
         return (
-            <div style={{ height: "100vh", width: "100%", display: "flex", flexDirection: "column" }}>
+            <div style={{ height: "calc(100dvh - 7rem)", width: "100%", display: "flex", flexDirection: "column" }}>
                 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <div className="animate-pulse bg-slate-800 rounded-full h-12 w-12"></div>
                 </div>
@@ -95,7 +95,7 @@ export default function MapPage() {
     }
 
     return (
-        <div style={{ height: "100vh", width: "100%", display: "flex", flexDirection: "column" }}>
+        <div style={{ height: "calc(100dvh - 7rem)", width: "100%", display: "flex", flexDirection: "column" }}>
             <div style={{ flex: 1, position: "relative" }}>
                 {position ? (
                     <MapContainer center={position} zoom={13} style={{ height: "100%", width: "100%" }}>

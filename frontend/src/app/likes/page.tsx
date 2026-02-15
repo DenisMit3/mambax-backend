@@ -156,7 +156,7 @@ export default function LikesPage() {
     return (
         <div className="h-full relative flex flex-col bg-black text-white">
             {/* Scrollable Main Content */}
-            <div className="flex-1 overflow-y-auto pb-24 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto scrollbar-hide">
                 {/* Header */}
                 <div className="px-6 pt-8 pb-4 flex items-end justify-between sticky top-0 bg-black/80 backdrop-blur-xl z-20 border-b border-white/5">
                     <div>
@@ -267,7 +267,7 @@ export default function LikesPage() {
                             animate={{ y: 0 }}
                             exit={{ y: '100%' }}
                             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className="absolute bottom-0 left-0 right-0 z-[80] bg-zinc-900 rounded-t-3xl shadow-2xl"
+                            className="absolute bottom-0 left-0 right-0 z-[80] bg-zinc-900 rounded-t-3xl shadow-2xl max-h-[80vh] overflow-y-auto"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {/* Drag Handle */}

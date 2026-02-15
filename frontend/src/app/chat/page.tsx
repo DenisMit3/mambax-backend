@@ -192,7 +192,7 @@ export default function ChatListPage() {
                 )}
 
                 {/* Messages List */}
-                <div className="px-4 pb-24">
+                <div className="px-4">
                     <motion.div
                         className="space-y-1"
                         initial="hidden"

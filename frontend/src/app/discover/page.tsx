@@ -89,7 +89,7 @@ export default function DiscoverPage() {
     // Loading State with Skeleton
     if (isLoadingProfiles) {
         return (
-            <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center p-4">
+            <div className="relative h-full bg-slate-950 flex flex-col items-center justify-center p-4">
                 {/* Header Skeleton */}
                 <div className="absolute top-6 left-0 right-0 flex justify-center gap-3 px-6 z-50">
                     <Skeleton className="h-10 w-20 rounded-2xl bg-slate-800" />
@@ -117,7 +117,7 @@ export default function DiscoverPage() {
     // No More Profiles
     if (!profiles || currentIndex >= profiles.length) {
         return (
-            <div className="fixed inset-0 flex flex-col items-center justify-center bg-slate-950 p-6 text-center">
+            <div className="relative h-full flex flex-col items-center justify-center bg-slate-950 p-6 text-center">
                 <div className="w-24 h-24 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-6">
                     <Star size={40} className="text-slate-700" />
                 </div>
@@ -142,7 +142,7 @@ export default function DiscoverPage() {
     const currentProfile = profiles[currentIndex];
 
     return (
-        <div className="fixed inset-0 bg-slate-950 overflow-hidden flex flex-col">
+        <div className="relative bg-slate-950 overflow-y-auto flex flex-col h-full">
             {/* Header / Stats */}
             <AnimatePresence>
                 {swipeStatus && (
@@ -201,7 +201,7 @@ export default function DiscoverPage() {
             </div>
 
             {/* Bottom Controls */}
-            <div className="fixed bottom-24 left-0 right-0 z-50 flex justify-center items-center gap-6 px-6 pointer-events-auto">
+            <div className="fixed bottom-28 left-0 right-0 z-50 flex justify-center items-center gap-6 px-6 pointer-events-auto">
                 {/* Chat with this person */}
                 <button
                     onClick={async () => {
