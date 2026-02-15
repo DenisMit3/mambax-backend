@@ -133,7 +133,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Note: HTTPSRedirectMiddleware removed — Vercel/Render handle HTTPS at CDN level.
+# Note: HTTPSRedirectMiddleware removed — Vercel handles HTTPS at CDN level.
 # Adding it causes redirect loops on serverless platforms.
 
 @app.middleware("http")

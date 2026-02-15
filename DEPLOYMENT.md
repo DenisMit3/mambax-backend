@@ -5,7 +5,7 @@
 MambaX is deployed using a modern cloud-native architecture:
 
 - **Frontend**: [Vercel](https://vercel.com) - Next.js hosting with CDN
-- **Backend**: [Render](https://render.com) - FastAPI containerized deployment
+- **Backend**: [Vercel](https://vercel.com) - FastAPI serverless deployment
 - **Database**: [Neon](https://neon.tech) - Managed PostgreSQL (serverless)
 - **Cache**: [Upstash](https://upstash.com) - Managed Redis (optional)
 - **Storage**: [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) - File storage
@@ -16,7 +16,7 @@ MambaX is deployed using a modern cloud-native architecture:
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │                 │     │                 │     │                 │
-│   User/Client   │────▶│  Vercel (CDN)   │────▶│ Render Backend  │
+│   User/Client   │────▶│  Vercel (CDN)   │────▶│ Vercel Backend  │
 │                 │     │  Next.js App    │     │   FastAPI       │
 └─────────────────┘     └─────────────────┘     └────────┬────────┘
                                                          │
@@ -56,11 +56,11 @@ postgresql+asyncpg://neondb_owner:npg_vjOPMFZV5K9n@ep-still-band-agqygsk6-pooler
 
 ---
 
-## 2. Backend Deployment (Render)
+## 2. Backend Deployment (Vercel)
 
 ### Environment Variables
 
-Set the following in Render Dashboard → Environment:
+Set the following in Vercel Dashboard → Settings → Environment Variables:
 
 | Variable | Description | Value |
 |----------|-------------|-------|
@@ -73,30 +73,19 @@ Set the following in Render Dashboard → Environment:
 | `GEMINI_API_KEY` | Google AI API key (optional) | `AIza...` |
 | `REDIS_URL` | Upstash Redis URL (optional) | `redis://...` |
 
-### Render Project Setup
+### Vercel Backend Project Setup
 
-1. Go to [render.com](https://render.com) and sign up/login
-2. Click **New +** → **Web Service**
-3. Connect GitHub repository: `DenisMit3/mambax-backend`
-4. Configure:
-   - **Name**: `mambax-api`
-   - **Region**: Frankfurt (EU)
-   - **Branch**: `main`
-   - **Root Directory**: `backend`
-   - **Runtime**: Python 3
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT`
-   - **Plan**: Free
-5. Add environment variables
-6. Click **Create Web Service**
+1. Go to [vercel.com](https://vercel.com) and sign up/login
+2. Click **Add New...** → **Project**
+3. Import GitHub repository: `DenisMit3/mambax-backend`
+4. Set root directory to `backend`
+5. Vercel auto-detects `vercel.json` with `@vercel/python` runtime
+6. Add environment variables
+7. Click **Deploy**
 
 ### Health Check
 
-Render automatically checks:
-- **Path**: `/health`
-- **Interval**: 30 seconds
-
-Additional endpoints:
+Endpoints:
 - `/health` - Basic status
 - `/health?full=true` - Full check including DB
 - `/ping` - Simple ping
@@ -111,7 +100,7 @@ Set in Vercel Dashboard → Settings → Environment Variables:
 
 | Variable | Description | Value |
 |----------|-------------|-------|
-| `BACKEND_URL` | Render backend URL | `https://mambax-api.onrender.com` |
+| `BACKEND_URL` | Vercel backend URL | `https://backend-pi-sable-56.vercel.app` |
 | `NEXT_PUBLIC_API_URL` | API URL for client | `/api_proxy` |
 | `NEXT_PUBLIC_TELEGRAM_BOT_NAME` | Bot username | `YouMeMeet_bot` |
 
@@ -131,14 +120,14 @@ Set in Vercel Dashboard → Settings → Environment Variables:
 
 - [x] Database configured (Neon)
 - [x] All tables created (61 tables)
-- [ ] Environment variables set in Render
-- [ ] Environment variables set in Vercel
+- [ ] Environment variables set in Vercel (backend)
+- [ ] Environment variables set in Vercel (frontend)
 
 ### Deployment
 
-- [ ] Deploy backend to Render
+- [ ] Deploy backend to Vercel
 - [ ] Verify health check passes (`/health`)
-- [ ] Update `BACKEND_URL` in Vercel to Render URL
+- [ ] Update `BACKEND_URL` in Vercel frontend to backend URL
 - [ ] Redeploy frontend on Vercel
 
 ### Post-deployment
@@ -155,10 +144,10 @@ Set in Vercel Dashboard → Settings → Environment Variables:
 | Service | URL |
 |---------|-----|
 | Frontend | `https://mambax-frontend.vercel.app` |
-| Backend API | `https://mambax-api.onrender.com` |
-| API Documentation | `https://mambax-api.onrender.com/docs` |
+| Backend API | `https://backend-pi-sable-56.vercel.app` |
+| API Documentation | `https://backend-pi-sable-56.vercel.app/docs` |
 | Neon Dashboard | `https://console.neon.tech` |
-| Render Dashboard | `https://dashboard.render.com` |
+| Vercel Dashboard | `https://vercel.com/dashboard` |
 
 ---
 
@@ -166,8 +155,7 @@ Set in Vercel Dashboard → Settings → Environment Variables:
 
 | Service | Plan | Monthly Cost | Purpose |
 |---------|------|--------------|---------|
-| Vercel | Free/Pro | $0-20 | Frontend hosting, CDN |
-| Render | Free | $0 | Backend deployment |
+| Vercel | Free/Pro | $0-20 | Frontend + Backend hosting, CDN |
 | Neon | Free | $0 | Managed PostgreSQL |
 | Upstash | Free | $0 | Redis cache (optional) |
 | **Total** | | **$0-20/month** | Full production stack |
@@ -178,12 +166,12 @@ Set in Vercel Dashboard → Settings → Environment Variables:
 
 ## 7. Troubleshooting
 
-### Backend not starting on Render
+### Backend not starting on Vercel
 
-1. Check logs in Render dashboard
+1. Check logs in Vercel dashboard (Deployments → Functions tab)
 2. Verify `DATABASE_URL` is correctly formatted
 3. Ensure root directory is set to `backend`
-4. Check start command
+4. Check `vercel.json` configuration
 
 ### CORS errors in frontend
 
@@ -199,7 +187,7 @@ Set in Vercel Dashboard → Settings → Environment Variables:
 ### Telegram bot not responding
 
 1. Verify `TELEGRAM_BOT_TOKEN` is correct
-2. For webhook mode, set `WEBHOOK_URL` to Render URL
+2. For webhook mode, set `WEBHOOK_URL` to Vercel backend URL
 3. For polling mode, run bot locally
 
 ---

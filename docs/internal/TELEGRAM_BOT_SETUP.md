@@ -69,7 +69,7 @@ TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
 FRONTEND_URL=https://mambax-frontend.vercel.app
 
 # Backend URL (для API)
-BACKEND_URL=https://mambax-api.onrender.com
+BACKEND_URL=https://backend-pi-sable-56.vercel.app
 ```
 
 ## Шаг 4: Запуск бота
@@ -87,16 +87,16 @@ python run_bot.py
 Run polling for bot @YouMeMeet_bot
 ```
 
-### На сервере (Render) - WEBHOOK режим:
+### На сервере (Vercel) - WEBHOOK режим:
 
 В продакшене используется **webhook** вместо polling — это эффективнее и надёжнее.
 
-**Шаг 1: Добавьте переменные в Render**
+**Шаг 1: Добавьте переменные в Vercel**
 
 ```bash
 TELEGRAM_BOT_TOKEN=your-bot-token
 FRONTEND_URL=https://mambax-frontend.vercel.app
-WEBHOOK_URL=https://mambax-api.onrender.com
+WEBHOOK_URL=https://backend-pi-sable-56.vercel.app
 ```
 
 **Шаг 2: Webhook регистрируется автоматически**
@@ -105,15 +105,15 @@ WEBHOOK_URL=https://mambax-api.onrender.com
 
 ```bash
 # Проверить статус бота
-curl https://mambax-api.onrender.com/bot/status
+curl https://backend-pi-sable-56.vercel.app/bot/status
 
 # Настроить webhook (если не настроен автоматически)
-curl -X POST https://mambax-api.onrender.com/bot/setup-webhook \
+curl -X POST https://backend-pi-sable-56.vercel.app/bot/setup-webhook \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://mambax-api.onrender.com"}'
+  -d '{"url": "https://backend-pi-sable-56.vercel.app"}'
 
 # Удалить webhook (переключиться на polling)
-curl -X POST https://mambax-api.onrender.com/bot/delete-webhook
+curl -X POST https://backend-pi-sable-56.vercel.app/bot/delete-webhook
 ```
 
 **Эндпоинты бота:**
@@ -182,8 +182,8 @@ await send_match_notification(
 - [ ] Скопирован токен
 - [ ] Настроен Menu Button
 - [ ] Добавлен домен в Bot Settings
-- [ ] TELEGRAM_BOT_TOKEN в .env / Render
-- [ ] FRONTEND_URL в .env / Render
+- [ ] TELEGRAM_BOT_TOKEN в .env / Vercel
+- [ ] FRONTEND_URL в .env / Vercel
 - [ ] Бот запущен и отвечает на /start
 - [ ] WebApp открывается по кнопке
 

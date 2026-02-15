@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 WEBHOOK_PATH = f"/bot/webhook/{BOT_TOKEN}" if BOT_TOKEN else "/bot/webhook/invalid"
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://mambax-api.onrender.com
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://your-backend.vercel.app
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "mambax-secret-token-change-in-prod")
 
 # ============================================================================
