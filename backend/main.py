@@ -74,6 +74,53 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Skipping DB seeding (SEED_ON_STARTUP is False)")
     
+    # Ensure admin user exists
+    try:
+        from backend.models.user import User, UserRole, Gender, UserStatus, SubscriptionTier
+        from backend.core.security import hash_password
+        from sqlalchemy import select
+        
+        admin_email = os.getenv("ADMIN_EMAIL", "mit333@list.ru")
+        admin_password = os.getenv("ADMIN_PASSWORD", "0236")
+        
+        async with database.async_session() as session:
+            result = await session.execute(select(User).where(User.email == admin_email))
+            existing = result.scalar_one_or_none()
+            if not existing:
+                admin_user = User(
+                    email=admin_email,
+                    hashed_password=hash_password(admin_password),
+                    name="Admin",
+                    age=30,
+                    gender=Gender.MALE,
+                    bio="Platform Administrator",
+                    role=UserRole.ADMIN,
+                    status=UserStatus.ACTIVE,
+                    subscription_tier=SubscriptionTier.PLATINUM,
+                    is_active=True,
+                    is_complete=True,
+                    is_verified=True,
+                )
+                session.add(admin_user)
+                await session.commit()
+                logger.info(f"✅ Admin user created: {admin_email}")
+            else:
+                # Ensure role is ADMIN and password is up to date
+                changed = False
+                if existing.role != UserRole.ADMIN:
+                    existing.role = UserRole.ADMIN
+                    changed = True
+                if not existing.hashed_password or existing.hashed_password == "":
+                    existing.hashed_password = hash_password(admin_password)
+                    changed = True
+                if changed:
+                    await session.commit()
+                    logger.info(f"✅ Admin user updated: {admin_email}")
+                else:
+                    logger.info(f"✅ Admin user exists: {admin_email}")
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to ensure admin user: {e}")
+    
     # Start scheduler
     if settings.ENABLE_SCHEDULER:
         try:
