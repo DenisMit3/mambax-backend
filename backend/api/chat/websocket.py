@@ -271,22 +271,40 @@ async def _handle_message(websocket: WebSocket, sender_id: str, data: dict):
             pass
 
         # Push Notification if offline
+        push_body = text or "New message"
+        if msg_type == "voice":
+            push_body = "🎤 Voice message"
+        if msg_type == "photo":
+            push_body = "📷 Photo"
+
         if not manager.is_online(recipient_id):
             await increment_unread(recipient_id, match_id)
-            from backend.services.notification import send_push_notification
-            push_body = text or "New message"
-            if msg_type == "voice":
-                push_body = "🎤 Voice message"
-            if msg_type == "photo":
-                push_body = "📷 Photo"
-
-            await send_push_notification(
-                db,
-                user_id=UUID(recipient_id),
-                title="New Message",
-                body=push_body,
-                url=f"/chat/{match_id}"
-            )
+            
+            # Create in-app notification + push
+            try:
+                from backend.services.notify import notify_new_message
+                from backend.models.user import User as UserModel
+                sender = await db.get(UserModel, UUID(sender_id))
+                sender_name = sender.name if sender else "Кто-то"
+                await notify_new_message(
+                    db,
+                    recipient_id=recipient_id,
+                    sender_id=sender_id,
+                    sender_name=sender_name,
+                    message_preview=push_body,
+                    match_id=match_id,
+                )
+            except Exception as e:
+                logger.error(f"Notification error on message: {e}")
+                # Fallback to direct push
+                from backend.services.notification import send_push_notification
+                await send_push_notification(
+                    db,
+                    user_id=UUID(recipient_id),
+                    title="New Message",
+                    body=push_body,
+                    url=f"/chat/{match_id}"
+                )
 
         # AUTO-RESPONDER BOT (DEVELOPMENT ONLY)
         if settings.ENVIRONMENT == "development":

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { createContext, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { authService } from '@/services/api';
 import { wsService } from '@/services/websocket';
+import { notificationService } from '@/services/notificationService';
 
 // Define minimal user interface needed for context
 // Expand as needed based on UserResponse
@@ -88,6 +89,32 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             wsService.off("balance_update", handleBalanceUpdate);
         };
     }, [queryClient]);
+
+    // Connect wsService + register push when user is authenticated
+    const wsConnectedRef = useRef(false);
+    useEffect(() => {
+        if (!user) {
+            if (wsConnectedRef.current) {
+                wsService.disconnect();
+                wsConnectedRef.current = false;
+            }
+            return;
+        }
+
+        const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+        if (token && !wsConnectedRef.current) {
+            wsService.connect(token);
+            wsConnectedRef.current = true;
+
+            // Register push notifications (asks permission once)
+            notificationService.register().catch(() => {});
+        }
+
+        return () => {
+            wsService.disconnect();
+            wsConnectedRef.current = false;
+        };
+    }, [user]);
 
     const updateBalance = (newBalance: number) => {
         queryClient.setQueryData(['user', 'me'], (oldUser: User | null) => {

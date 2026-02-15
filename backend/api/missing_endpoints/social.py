@@ -99,33 +99,103 @@ async def buy_swipe_pack(
 async def get_notifications(
     page: int = 1,
     limit: int = 20,
+    db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
-    """Get user notifications list"""
+    """Get user notifications list from in_app_notifications table."""
+    from backend.models.notifications import InAppNotification
+    from sqlalchemy import select, func, desc
+    import uuid as _uuid
+
+    uid = _uuid.UUID(current_user_id) if isinstance(current_user_id, str) else current_user_id
+    offset = (page - 1) * limit
+
+    # Total unread
+    unread_stmt = select(func.count(InAppNotification.id)).where(
+        InAppNotification.user_id == uid,
+        InAppNotification.is_read == False,
+    )
+    unread_count = (await db.execute(unread_stmt)).scalar() or 0
+
+    # Paginated list
+    stmt = (
+        select(InAppNotification)
+        .where(InAppNotification.user_id == uid)
+        .order_by(desc(InAppNotification.created_at))
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+
+    notifications = [
+        {
+            "id": str(n.id),
+            "type": n.notification_type,
+            "title": n.title,
+            "body": n.body,
+            "image_url": n.icon_url,
+            "action_url": n.action_url,
+            "is_read": n.is_read,
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+        }
+        for n in rows
+    ]
+
     return {
-        "notifications": [],
-        "total": 0,
+        "notifications": notifications,
+        "total": len(notifications),
         "page": page,
         "limit": limit,
-        "unread_count": 0
+        "unread_count": unread_count,
     }
 
 
 @router.post("/notifications/{notification_id}/read")
 async def mark_notification_read(
     notification_id: str,
+    db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Mark notification as read"""
+    from backend.models.notifications import InAppNotification
+    import uuid as _uuid
+    from datetime import datetime
+
+    uid = _uuid.UUID(current_user_id) if isinstance(current_user_id, str) else current_user_id
+    nid = _uuid.UUID(notification_id)
+
+    notif = await db.get(InAppNotification, nid)
+    if notif and notif.user_id == uid and not notif.is_read:
+        notif.is_read = True
+        notif.read_at = datetime.utcnow()
+        await db.commit()
+
     return {"success": True}
 
 
 @router.post("/notifications/read-all")
 async def mark_all_notifications_read(
+    db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Mark all notifications as read"""
-    return {"success": True, "updated_count": 0}
+    from backend.models.notifications import InAppNotification
+    from sqlalchemy import update
+    from datetime import datetime
+    import uuid as _uuid
+
+    uid = _uuid.UUID(current_user_id) if isinstance(current_user_id, str) else current_user_id
+
+    stmt = (
+        update(InAppNotification)
+        .where(InAppNotification.user_id == uid, InAppNotification.is_read == False)
+        .values(is_read=True, read_at=datetime.utcnow())
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+
+    return {"success": True, "updated_count": result.rowcount}
 
 
 # --- Referral ---

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Heart, MessageCircle, Gift, Star, Rocket, Eye, Zap, Bell, CheckCheck, Loader2 } from "lucide-react";
-import { authService } from "@/services/api";
+import { notificationsApi } from "@/services/api/notifications";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ErrorState } from "@/components/ui/ErrorState";
 
@@ -58,7 +58,7 @@ export default function NotificationsPage() {
     const fetchNotifications = useCallback(async (p: number, append = false) => {
         try {
             setError(false);
-            const res = await authService.getNotifications(p, 20);
+            const res = await notificationsApi.getNotifications(p, 20);
             if (append) {
                 setNotifications(prev => [...prev, ...res.notifications]);
             } else {
@@ -97,7 +97,7 @@ export default function NotificationsPage() {
 
     const handleMarkAllRead = async () => {
         try {
-            await authService.markAllNotificationsRead();
+            await notificationsApi.markAllNotificationsRead();
             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
             setUnreadCount(0);
         } catch (e) {
@@ -107,7 +107,7 @@ export default function NotificationsPage() {
 
     const handleTap = async (n: Notification) => {
         if (!n.is_read) {
-            authService.markNotificationRead(n.id).catch((e) => console.warn('Operation failed:', e));
+            notificationsApi.markNotificationRead(n.id).catch((e) => console.warn('Operation failed:', e));
             setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x));
             setUnreadCount(prev => Math.max(0, prev - 1));
         }

@@ -65,6 +65,49 @@ async def swipe(
     if is_match:
         MATCHES_COUNTER.inc()
 
+    # === NOTIFICATIONS ===
+    try:
+        from backend.services.notify import notify_new_like, notify_new_match
+        
+        # Get liker name for notification
+        liker = await db.get(models.User, current_user_id)
+        liker_name = liker.name if liker else "Кто-то"
+
+        # Notify about like (only for like/superlike, not dislike)
+        if swipe_data.action.value in ("like", "superlike"):
+            await notify_new_like(
+                db,
+                liked_user_id=str(swipe_data.to_user_id),
+                liker_user_id=str(current_user_id),
+                liker_name=liker_name,
+                is_super=(swipe_data.action.value == "superlike"),
+            )
+
+        # Notify about match
+        if is_match:
+            # Find the match to get match_id
+            match_stmt = select(Match).where(
+                or_(
+                    and_(Match.user1_id == current_user_id, Match.user2_id == swipe_data.to_user_id),
+                    and_(Match.user1_id == swipe_data.to_user_id, Match.user2_id == current_user_id)
+                )
+            )
+            match_obj = (await db.execute(match_stmt)).scalars().first()
+            partner = await db.get(models.User, swipe_data.to_user_id)
+            partner_name = partner.name if partner else "Кто-то"
+
+            await notify_new_match(
+                db,
+                user_id=str(current_user_id),
+                partner_id=str(swipe_data.to_user_id),
+                partner_name=partner_name,
+                match_id=str(match_obj.id) if match_obj else None,
+            )
+    except Exception as e:
+        # Don't fail the swipe if notification fails
+        import logging
+        logging.getLogger(__name__).error(f"Notification error on swipe: {e}")
+
     # Записать в историю для Undo
     await add_to_swipe_history(
         str(current_user_id),

@@ -7,6 +7,7 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import QueryProvider from '@/providers/QueryProvider';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BadgeEarnedToast } from '@/components/ui/BadgeEarnedToast';
+import { NotificationToast } from '@/components/ui/NotificationToast';
 import { UserProvider } from '@/context/UserContext';
 import { useTelegram } from '@/lib/telegram';
 import { measurePerformance } from '@/lib/performance';
@@ -136,6 +137,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     </div>
 
                     <BadgeEarnedToast />
+                    <NotificationToast />
 
                     {/* iPhone-style Mobile Container */}
                     <div className="fixed inset-0 flex items-center justify-center z-10">

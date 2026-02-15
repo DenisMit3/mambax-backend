@@ -23,6 +23,10 @@ export const notificationsApi = {
         }>(`/api/notifications?page=${page}&limit=${limit}`);
     },
 
+    async getUnreadCount() {
+        return httpClient.get<{ unread_count: number }>("/api/notifications/unread-count");
+    },
+
     async markNotificationRead(id: string) {
         return httpClient.post<{ success: boolean }>(`/api/notifications/${id}/read`, {});
     },
