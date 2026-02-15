@@ -106,7 +106,7 @@ async def callback_premium(callback: types.CallbackQuery):
 async def callback_buy_subscription(callback: types.CallbackQuery):
     tier = "gold" if callback.data == "buy_gold" else "platinum"
     amount = 500 if tier == "gold" else 1000
-    title = "YouMe Gold" if tier == "gold" else "YouMe VIP"
+    title = "MambaX Gold" if tier == "gold" else "MambaX VIP"
     description = f"Purchase {title} for 1 month"
     
     await initiate_payment(callback, amount, title, description, tier)

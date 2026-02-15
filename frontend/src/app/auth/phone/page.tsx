@@ -167,7 +167,7 @@ export default function AuthGatePage() {
                     </svg>
                 </div>
 
-                <h1 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">YouMe</h1>
+                <h1 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">MambaX</h1>
                 <p className="text-slate-500 mb-10 text-center">
                     Знакомства нового поколения
                 </p>
