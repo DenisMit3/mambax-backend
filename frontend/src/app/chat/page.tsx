@@ -5,7 +5,8 @@ import { Search, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect, useDeferredValue } from 'react';
-import { authService, Match } from '@/services/api';
+import { authService, Match, MatchMessage } from '@/services/api';
+import { wsService } from '@/services/websocket';
 import { motion } from 'framer-motion';
 import { PullToRefresh } from '@/components/ui/PullToRefresh';
 import { useSoundService } from '@/hooks/useSoundService';
@@ -52,6 +53,52 @@ export default function ChatListPage() {
             if (cancelled) return;
         });
         return () => { cancelled = true; };
+    }, [isAuthed]);
+
+    // Обновление last_message в реальном времени через WebSocket
+    useEffect(() => {
+        if (!isAuthed) return;
+
+        const handleIncomingMessage = (data: Record<string, unknown>) => {
+            const matchId = data.match_id as string;
+            const text = (data.text || data.content) as string | undefined;
+            const msgType = (data.type as string) || 'text';
+            const createdAt = (data.created_at || data.timestamp) as string | undefined;
+            const senderId = data.sender_id as string;
+
+            let previewText = text;
+            if (!previewText) {
+                if (msgType === 'voice') previewText = '🎤 Голосовое сообщение';
+                else if (msgType === 'photo') previewText = '📷 Фото';
+                else previewText = 'Новое сообщение';
+            }
+
+            setMatches(prev => prev.map(m => {
+                if (m.id === matchId) {
+                    return {
+                        ...m,
+                        last_message: {
+                            id: (data.id || data.message_id) as string,
+                            text: previewText!,
+                            type: msgType,
+                            sender_id: senderId,
+                            created_at: createdAt || new Date().toISOString(),
+                        }
+                    };
+                }
+                return m;
+            }));
+        };
+
+        wsService.on('text', handleIncomingMessage);
+        wsService.on('voice', handleIncomingMessage);
+        wsService.on('photo', handleIncomingMessage);
+
+        return () => {
+            wsService.off('text', handleIncomingMessage);
+            wsService.off('voice', handleIncomingMessage);
+            wsService.off('photo', handleIncomingMessage);
+        };
     }, [isAuthed]);
 
     const handleRefresh = async () => {

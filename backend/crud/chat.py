@@ -31,6 +31,18 @@ async def get_messages(db: AsyncSession, match_id: UUID) -> list[Message]:
     result = await db.execute(stmt)
     return result.scalars().all()
 
+
+async def get_last_message(db: AsyncSession, match_id: UUID) -> Message | None:
+    """Получить последнее сообщение для матча."""
+    stmt = (
+        select(Message)
+        .where(Message.match_id == match_id)
+        .order_by(Message.created_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
 async def mark_messages_as_read(
     db: AsyncSession,
     message_ids: list[UUID],

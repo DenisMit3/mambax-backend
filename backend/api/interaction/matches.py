@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
 
 from backend.crud.interaction import get_user_matches
-from backend.crud.chat import get_messages
+from backend.crud.chat import get_messages, get_last_message
 from backend.models.interaction import Match
 from backend.db.session import get_db
 from backend.api.interaction.deps import get_current_user_id
@@ -48,7 +48,30 @@ async def get_matches(
                  "age": getattr(partner, 'age', None),
                  "bio": getattr(partner, 'bio', None),
                  "is_verified": getattr(partner, 'is_verified', False),
+                 "is_premium": getattr(partner, 'is_vip', False),
                  "city": getattr(partner, 'city', None),
+            }
+
+        # Получаем последнее сообщение для матча
+        last_msg = await get_last_message(db, m.id)
+        last_message_data = None
+        if last_msg:
+            # Формируем превью текста для нетекстовых сообщений
+            preview_text = last_msg.text
+            if not preview_text:
+                if last_msg.type == "voice":
+                    preview_text = "🎤 Голосовое сообщение"
+                elif last_msg.type == "photo":
+                    preview_text = "📷 Фото"
+                else:
+                    preview_text = "Новое сообщение"
+
+            last_message_data = {
+                "id": str(last_msg.id),
+                "text": preview_text,
+                "type": last_msg.type or "text",
+                "sender_id": str(last_msg.sender_id),
+                "created_at": last_msg.created_at.isoformat() if last_msg.created_at else None,
             }
 
         response_matches.append({
@@ -56,7 +79,8 @@ async def get_matches(
             "user1_id": str(m.user1_id),
             "user2_id": str(m.user2_id),
             "created_at": m.created_at.isoformat(),
-            "user": partner_data 
+            "user": partner_data,
+            "last_message": last_message_data,
         })
 
     return {"matches": response_matches}
@@ -71,7 +95,11 @@ async def get_match_by_id(
     """
     Get a single match by ID.
     """
-    stmt = select(Match).where(Match.id == match_id)
+    from sqlalchemy.orm import selectinload
+    stmt = select(Match).where(Match.id == match_id).options(
+        selectinload(Match.user1),
+        selectinload(Match.user2),
+    )
     result = await db.execute(stmt)
     match = result.scalar_one_or_none()
 

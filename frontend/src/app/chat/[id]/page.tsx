@@ -8,7 +8,6 @@ import { GifPicker } from '@/components/chat/GifPicker';
 import { QuestionOfTheDayCard } from '@/components/chat/QuestionOfTheDayCard';
 import { IcebreakersModal } from '@/components/chat/IcebreakersModal';
 import { Toast } from '@/components/ui/Toast';
-import { ChatToolbar } from './ChatToolbar';
 import { useChatPage } from './useChatPage';
 
 const CallScreen = dynamic(() => import('@/components/chat/CallScreen').then(m => ({ default: m.CallScreen })), {
@@ -21,16 +20,16 @@ export default function ChatPage() {
     const chat = useChatPage();
 
     if (chat.isChecking || chat.loading) return (
-        <div className="h-full bg-black flex flex-col items-center justify-center text-white font-mono space-y-4">
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center text-white font-mono space-y-4">
             <div className="w-12 h-12 border-2 border-primary-red/30 border-t-primary-red rounded-full animate-spin" />
             <p className="text-primary-red animate-pulse">Установка защищенного соединения...</p>
         </div>
     );
 
-    if (!chat.user) return <div className="h-full bg-black flex items-center justify-center text-white">Чат не найден</div>;
+    if (!chat.user) return <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center text-white">Чат не найден</div>;
 
     return (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-black overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex flex-col bg-black" style={{ height: 'var(--tg-viewport-height, var(--vvh, 100dvh))' }}>
             <VIPChatSystem
                 user={chat.user}
                 messages={chat.messages}
@@ -42,36 +41,35 @@ export default function ChatPage() {
                 onBack={() => router.back()}
                 injectInputText={chat.injectInputText}
                 onConsumedInject={() => chat.setInjectInputText('')}
-                toolbarSlot={
-                    <div className="flex flex-col gap-2 p-2 bg-black/80 backdrop-blur-sm border-b border-white/5">
-                        <QuestionOfTheDayCard
-                            matchId={chat.id}
-                            onBothAnswered={() => {}}
-                        />
-                        <ChatToolbar
-                            matchId={chat.id}
-                            ephemeralEnabled={chat.ephemeralEnabled}
-                            ephemeralSeconds={chat.ephemeralSeconds}
-                            onToggleEphemeral={chat.setEphemeralEnabled}
-                            onChangeEphemeralSeconds={chat.setEphemeralSeconds}
-                            onStartAudioCall={() => {
-                                chat.setCallType("audio");
-                                chat.setIncomingCall(null);
-                                chat.setShowCall(true);
-                            }}
-                            onStartVideoCall={() => {
-                                chat.setCallType("video");
-                                chat.setIncomingCall(null);
-                                chat.setShowCall(true);
-                            }}
-                            onOpenGifPicker={() => chat.setShowGifPicker(true)}
-                            onOpenIcebreakers={() => chat.setShowIcebreakers(true)}
-                            onSelectPrompt={(text) => chat.setInjectInputText(text)}
-                        />
-                    </div>
+                // Звонки — в шапку
+                onStartAudioCall={() => {
+                    chat.setCallType("audio");
+                    chat.setIncomingCall(null);
+                    chat.setShowCall(true);
+                }}
+                onStartVideoCall={() => {
+                    chat.setCallType("video");
+                    chat.setIncomingCall(null);
+                    chat.setShowCall(true);
+                }}
+                // Ephemeral — в меню шапки
+                ephemeralEnabled={chat.ephemeralEnabled}
+                onToggleEphemeral={chat.setEphemeralEnabled}
+                ephemeralSeconds={chat.ephemeralSeconds}
+                onChangeEphemeralSeconds={chat.setEphemeralSeconds}
+                // GIF и Идеи — кнопки в composer
+                onOpenGifPicker={() => chat.setShowGifPicker(true)}
+                onOpenIcebreakers={() => chat.setShowIcebreakers(true)}
+                // Вопрос дня — компактная карточка над composer
+                questionOfDaySlot={
+                    <QuestionOfTheDayCard
+                        matchId={chat.id}
+                        onBothAnswered={() => {}}
+                    />
                 }
             />
 
+            {/* Модалки */}
             <IcebreakersModal
                 isOpen={chat.showIcebreakers}
                 onClose={() => chat.setShowIcebreakers(false)}

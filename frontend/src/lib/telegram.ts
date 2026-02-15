@@ -65,6 +65,8 @@ interface TelegramWebApp {
     viewportHeight: number;
     viewportStableHeight: number;
     isExpanded: boolean;
+    disableVerticalSwipes?: () => void;
+    safeAreaInset?: { top: number; bottom: number; left: number; right: number };
 
     // CloudStorage (Hardware/Hardcore feature)
     CloudStorage: {
@@ -104,12 +106,36 @@ export const useTelegram = () => {
             if (!telegramHookInitialized) {
                 tg.ready();
                 tg.expand();
+                tg.disableVerticalSwipes?.();
                 telegramHookInitialized = true;
             }
 
             // Set theme colors (safe to call multiple times)
             document.documentElement.style.setProperty('--tg-theme-bg-color', tg.themeParams.bg_color || '#0A0A0B');
             document.documentElement.style.setProperty('--tg-theme-text-color', tg.themeParams.text_color || '#FFFFFF');
+
+            // Viewport height CSS variable for Telegram Mini App
+            document.documentElement.style.setProperty('--tg-viewport-height', `${tg.viewportStableHeight}px`);
+
+            // Safe area insets
+            if (tg.safeAreaInset) {
+                document.documentElement.style.setProperty('--safe-area-bottom', `${tg.safeAreaInset.bottom}px`);
+            }
+
+            // VisualViewport fallback for keyboard handling
+            let scheduled = false;
+            const setVVH = () => {
+                const h = window.visualViewport?.height ?? window.innerHeight;
+                document.documentElement.style.setProperty('--vvh', `${Math.round(h)}px`);
+            };
+            const scheduleVVH = () => {
+                if (scheduled) return;
+                scheduled = true;
+                requestAnimationFrame(() => { scheduled = false; setVVH(); });
+            };
+            setVVH();
+            window.visualViewport?.addEventListener('resize', scheduleVVH);
+            window.visualViewport?.addEventListener('scroll', scheduleVVH);
         }
     }, []);
 

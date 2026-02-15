@@ -174,7 +174,7 @@ async def get_user_matches(
     user_id: UUID
 ) -> list[Match]:
     """
-    Получает все матчи пользователя.
+    Получает все матчи пользователя с загруженными relationships.
     
     Args:
         db: Асинхронная сессия
@@ -183,6 +183,8 @@ async def get_user_matches(
     Returns:
         Список матчей
     """
+    from sqlalchemy.orm import selectinload
+    
     stmt = select(Match).where(
         and_(
             or_(
@@ -191,7 +193,10 @@ async def get_user_matches(
             ),
             Match.is_active == True
         )
-    )
+    ).options(
+        selectinload(Match.user1),
+        selectinload(Match.user2),
+    ).order_by(Match.created_at.desc())
     
     result = await db.execute(stmt)
     return list(result.scalars().all())

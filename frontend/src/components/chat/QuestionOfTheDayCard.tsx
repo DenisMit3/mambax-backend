@@ -1,11 +1,13 @@
 'use client';
 
+/**
+ * Компактная карточка "Вопрос дня" — показывается НАД полем ввода.
+ * Максимум 2 строки, кнопка закрыть (X), кнопка ответить.
+ */
+
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HelpCircle, Send, Sparkles } from 'lucide-react';
-import { useHaptic } from '@/hooks/useHaptic';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { GlassCard } from '@/components/ui/GlassCard';
+import { HelpCircle, X, ChevronRight } from 'lucide-react';
 import { authService } from '@/services/api';
 
 interface QuestionOfTheDayCardProps {
@@ -20,155 +22,133 @@ export function QuestionOfTheDayCard({
   className = '',
 }: QuestionOfTheDayCardProps) {
   const [question, setQuestion] = useState<string>('');
-  const [date, setDate] = useState<string>('');
+  const [dismissed, setDismissed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [answer, setAnswer] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const [partnerAnswered, setPartnerAnswered] = useState(false);
-  const [bothAnswered, setBothAnswered] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  const haptic = useHaptic();
-  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
+    // Проверяем, был ли уже закрыт сегодня
+    const dismissedDate = localStorage.getItem(`qotd_dismissed_${matchId}`);
+    const today = new Date().toISOString().split('T')[0];
+    if (dismissedDate === today) {
+      setDismissed(true);
+      setLoading(false);
+      return;
+    }
+
     authService
       .getQuestionOfDay()
       .then((res) => {
         setQuestion(res.question ?? '');
-        setDate(res.date ?? '');
       })
-      .catch((e) => console.warn('Operation failed:', e))
+      .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [matchId]);
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    const today = new Date().toISOString().split('T')[0];
+    localStorage.setItem(`qotd_dismissed_${matchId}`, today);
+  };
 
   const handleSubmit = async () => {
     if (!answer.trim() || sending) return;
     setSending(true);
-    haptic.medium();
     try {
       const res = await authService.postQuestionOfDayAnswer(matchId, answer.trim());
       setSubmitted(true);
-      setPartnerAnswered(res.partner_answered ?? false);
       if (res.partner_answered) {
-        setBothAnswered(true);
         onBothAnswered?.();
       }
     } catch {
-      setSending(false);
+      // ignore
     } finally {
       setSending(false);
     }
   };
 
-  useEffect(() => {
-    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-    if (!token) return;
-    
-    // FIX: Use getWsUrl() for consistent WebSocket URL across the app
-    // This ensures it works both with Next.js proxy and direct API connection
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.host;
-    const cleanHost = apiUrl.replace('http://', '').replace('https://', '');
-    // FIX (SEC-005): Token is now sent via first message, not in URL
-    const wsUrl = `${protocol}//${cleanHost}/chat/ws`;
-    const socket = new WebSocket(wsUrl);
-    
-    socket.onopen = () => {
-      // FIX (SEC-005): Send auth message immediately after connection
-      socket.send(JSON.stringify({ type: 'auth', token }));
-    };
-    
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'qotd_both_answered' && data.match_id === matchId) {
-          setBothAnswered(true);
-          haptic.heavy();
-          onBothAnswered?.();
-        }
-      } catch {
-        // ignore
-      }
-    };
-    return () => socket.close();
-  }, [matchId, onBothAnswered, haptic]);
-
-  if (loading || !question) return null;
+  // Не показываем если загрузка, нет вопроса или закрыто
+  if (loading || !question || dismissed || submitted) return null;
 
   return (
     <AnimatePresence>
-      {!collapsed && (
-        <motion.div
-          className={`${className}`}
-          initial={prefersReducedMotion ? undefined : { opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={prefersReducedMotion ? undefined : { opacity: 0, height: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-      <GlassCard className="p-4 mb-2">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary-red/20 flex items-center justify-center shrink-0">
-            <HelpCircle className="w-5 h-5 text-primary-red" />
+      <motion.div
+        className={`shrink-0 ${className}`}
+        initial={{ opacity: 0, height: 0 }}
+        animate={{ opacity: 1, height: 'auto' }}
+        exit={{ opacity: 0, height: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        <div className="mx-2 mb-1 bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+          {/* Компактная строка — вопрос + кнопки */}
+          <div className="flex items-center gap-2 px-3 py-2">
+            <HelpCircle className="w-4 h-4 text-primary-red shrink-0" />
+            <p className="flex-1 text-white/80 text-xs leading-tight line-clamp-2 min-w-0">
+              {question}
+            </p>
+            {!expanded && (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                className="shrink-0 text-primary-red"
+                title="Ответить"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleDismiss}
+              className="shrink-0 text-white/30 hover:text-white/60 transition-colors"
+              title="Скрыть"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-white/50 mb-1">Вопрос дня {date}</p>
-            <p className="text-white font-medium text-sm leading-relaxed mb-3">{question}</p>
-            {!submitted ? (
-              <>
-                <textarea
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
+
+          {/* Раскрытая форма ответа */}
+          <AnimatePresence>
+            {expanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="px-3 pb-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSubmit();
+                      }
+                    }}
                     placeholder="Ваш ответ..."
                     autoCapitalize="sentences"
-                    enterKeyHint="send"
-                  className="w-full min-h-[72px] px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-red/50"
-                  rows={3}
-                  disabled={sending}
-                />
-                <motion.button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={!answer.trim() || sending}
-                  className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-red/80 hover:bg-primary-red text-white text-sm font-medium disabled:opacity-50 disabled:pointer-events-none transition-colors"
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Send className="w-4 h-4" />
-                  {sending ? 'Отправка...' : 'Ответить'}
-                </motion.button>
-              </>
-            ) : (
-              <AnimatePresence>
-                {bothAnswered && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="flex items-center gap-2 p-3 rounded-xl bg-primary-red/10 border border-primary-red/30 text-primary-red text-sm"
-                  >
-                    <Sparkles className="w-4 h-4 shrink-0" />
-                    <span>Вы оба ответили! Сравните ответы 👀</span>
-                  </motion.div>
-                )}
-                {submitted && !bothAnswered && (
-                  <p className="text-white/60 text-sm">Ответ сохранён. Ждём ответ партнёра.</p>
-                )}
-                {submitted && (
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 text-xs focus:outline-none focus:ring-1 focus:ring-primary-red/50"
+                    disabled={sending}
+                  />
                   <button
                     type="button"
-                    onClick={() => setCollapsed(true)}
-                    className="mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
+                    onClick={handleSubmit}
+                    disabled={!answer.trim() || sending}
+                    className="px-3 py-1.5 rounded-lg bg-primary-red/80 hover:bg-primary-red text-white text-xs font-medium disabled:opacity-40 transition-colors shrink-0"
                   >
-                    Скрыть
+                    {sending ? '...' : 'Отправить'}
                   </button>
-                )}
-              </AnimatePresence>
+                </div>
+              </motion.div>
             )}
-          </div>
+          </AnimatePresence>
         </div>
-      </GlassCard>
-        </motion.div>
-      )}
+      </motion.div>
     </AnimatePresence>
   );
 }

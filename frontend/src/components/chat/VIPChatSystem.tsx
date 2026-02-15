@@ -33,11 +33,22 @@ interface VIPChatSystemProps {
   onSendSuperLike: () => void;
   onReaction?: (id: string, reaction: string) => void;
   onBack: () => void;
-  /** Optional: inject text into input (e.g. from icebreakers or prompts) */
+  /** Inject text into input (e.g. from icebreakers or prompts) */
   injectInputText?: string;
   onConsumedInject?: () => void;
-  /** Optional slot rendered at the top of the message scroll area (e.g. QuestionOfTheDay + toolbar) */
-  toolbarSlot?: React.ReactNode;
+  /** Звонки — кнопки в шапке */
+  onStartAudioCall?: () => void;
+  onStartVideoCall?: () => void;
+  /** Ephemeral mode — в меню шапки */
+  ephemeralEnabled?: boolean;
+  onToggleEphemeral?: (v: boolean) => void;
+  ephemeralSeconds?: number;
+  onChangeEphemeralSeconds?: (v: number) => void;
+  /** GIF и Идеи — кнопки в composer */
+  onOpenGifPicker?: () => void;
+  onOpenIcebreakers?: () => void;
+  /** Вопрос дня — компактная карточка над composer */
+  questionOfDaySlot?: React.ReactNode;
 }
 
 export const VIPChatSystem = ({
@@ -51,7 +62,15 @@ export const VIPChatSystem = ({
   onBack,
   injectInputText,
   onConsumedInject,
-  toolbarSlot,
+  onStartAudioCall,
+  onStartVideoCall,
+  ephemeralEnabled,
+  onToggleEphemeral,
+  ephemeralSeconds,
+  onChangeEphemeralSeconds,
+  onOpenGifPicker,
+  onOpenIcebreakers,
+  questionOfDaySlot,
 }: VIPChatSystemProps) => {
   const { hapticFeedback } = useTelegram();
 
@@ -73,7 +92,7 @@ export const VIPChatSystem = ({
   };
 
   return (
-    <div className={`flex flex-col flex-1 min-h-0 bg-[#0F0F0F] font-sans ${isPremium ? 'text-white' : 'text-gray-900'}`}>
+    <div className={`flex flex-col h-full min-h-0 bg-[#0F0F0F] font-sans ${isPremium ? 'text-white' : 'text-gray-900'}`}>
 
       {/* Модальное окно выбора реакции */}
       <VIPReactionPicker
@@ -88,14 +107,20 @@ export const VIPChatSystem = ({
         onClose={() => setViewingImage(null)}
       />
 
-      {/* Шапка чата */}
+      {/* Шапка чата — звонки и ephemeral в шапке */}
       <VIPChatHeader
         user={user}
         onBack={onBack}
         onSendSuperLike={onSendSuperLike}
+        onStartAudioCall={onStartAudioCall}
+        onStartVideoCall={onStartVideoCall}
+        ephemeralEnabled={ephemeralEnabled}
+        onToggleEphemeral={onToggleEphemeral}
+        ephemeralSeconds={ephemeralSeconds}
+        onChangeEphemeralSeconds={onChangeEphemeralSeconds}
       />
 
-      {/* Список сообщений */}
+      {/* Область сообщений — чистая, без toolbar */}
       <VIPMessageList
         messages={messages}
         isTyping={user.isTyping}
@@ -108,16 +133,20 @@ export const VIPChatSystem = ({
         }}
         onViewImage={setViewingImage}
         hapticFeedback={hapticFeedback}
-        toolbarSlot={toolbarSlot}
       />
 
-      {/* Поле ввода */}
+      {/* Вопрос дня — компактная карточка НАД полем ввода */}
+      {questionOfDaySlot}
+
+      {/* Поле ввода + кнопки GIF/Идеи */}
       <VIPComposer
         onSendMessage={onSendMessage}
         onSendImage={onSendImage}
         injectInputText={injectInputText}
         onConsumedInject={onConsumedInject}
         hapticFeedback={hapticFeedback}
+        onOpenGifPicker={onOpenGifPicker}
+        onOpenIcebreakers={onOpenIcebreakers}
       />
     </div>
   );

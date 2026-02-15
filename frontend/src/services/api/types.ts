@@ -21,6 +21,7 @@ export interface MatchUser {
     photos: string[];
     bio?: string;
     is_verified: boolean;
+    is_premium?: boolean;
     online_status?: "online" | "offline";
     last_seen?: string;
     city?: string;
@@ -29,6 +30,7 @@ export interface MatchUser {
 export interface MatchMessage {
     id: string;
     text: string;
+    type?: string;
     sender_id: string;
     created_at: string;
 }

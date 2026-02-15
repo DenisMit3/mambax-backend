@@ -26,8 +26,6 @@ interface VIPMessageListProps {
     impactOccurred: (style: string) => void;
     selection: () => void;
   };
-  /** Optional slot rendered at the top of the scroll area */
-  toolbarSlot?: React.ReactNode;
 }
 
 export const VIPMessageList = ({
@@ -39,7 +37,6 @@ export const VIPMessageList = ({
   onOpenReactionPicker,
   onViewImage,
   hapticFeedback,
-  toolbarSlot,
 }: VIPMessageListProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -54,9 +51,6 @@ export const VIPMessageList = ({
 
   return (
     <div className="flex-1 overflow-y-auto p-4 min-h-0 scrollbar-hide">
-      {/* Toolbar slot (QuestionOfTheDay + ChatToolbar) — scrolls with messages */}
-      {toolbarSlot}
-
       <AnimatePresence>
         {messages.map((message, index) => {
           // Стиль эмодзи

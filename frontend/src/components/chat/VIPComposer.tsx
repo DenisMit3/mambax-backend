@@ -6,7 +6,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, Smile, Loader2 } from 'lucide-react';
+import { Send, Image as ImageIcon, Smile, Loader2, Lightbulb } from 'lucide-react';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import dynamic from 'next/dynamic';
 import { Theme, Categories } from 'emoji-picker-react';
@@ -39,6 +39,10 @@ interface VIPComposerProps {
     impactOccurred: (style: string) => void;
     selection: () => void;
   };
+  /** Открыть GIF-пикер */
+  onOpenGifPicker?: () => void;
+  /** Открыть модалку Идеи для разговора */
+  onOpenIcebreakers?: () => void;
 }
 
 export const VIPComposer = ({
@@ -49,6 +53,8 @@ export const VIPComposer = ({
   onReactionEmojiClick,
   isReactionMode = false,
   hapticFeedback,
+  onOpenGifPicker,
+  onOpenIcebreakers,
 }: VIPComposerProps) => {
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -144,7 +150,7 @@ export const VIPComposer = ({
       </AnimatePresence>
 
       {/* Поле ввода */}
-      <div className="p-2 pb-6 border-t border-white/5">
+      <div className="p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/5">
         <div className="flex items-end gap-2">
           <div className="flex-1 bg-[#212121] rounded-[22px] px-1 py-1 flex items-end border border-white/5 focus-within:border-primary-red/30 transition-all min-h-[36px]">
             <AnimatedButton variant="ghost" size="sm" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-11 h-11 hover:bg-white/5 rounded-full shrink-0 mb-0.5">
@@ -172,9 +178,29 @@ export const VIPComposer = ({
               className="flex-1 bg-transparent border-none outline-none text-white text-[16px] leading-[20px] px-2 py-2 min-w-0 resize-none overflow-y-hidden scrollbar-hide placeholder:text-gray-500"
             />
             <input type="file" ref={fileInputRef} className="hidden" onChange={handleImageUpload} accept="image/*" multiple />
-            <AnimatedButton variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} className="w-11 h-11 hover:bg-white/5 rounded-full shrink-0 mb-0.5">
+            <AnimatedButton variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} className="w-9 h-9 hover:bg-white/5 rounded-full shrink-0 mb-0.5">
               <ImageIcon className="w-5 h-5 text-gray-400" />
             </AnimatedButton>
+            {onOpenGifPicker && (
+              <button
+                type="button"
+                onClick={onOpenGifPicker}
+                className="w-9 h-9 flex items-center justify-center hover:bg-white/5 rounded-full shrink-0 mb-0.5 text-xs font-bold text-gray-400"
+                title="GIF"
+              >
+                GIF
+              </button>
+            )}
+            {onOpenIcebreakers && (
+              <button
+                type="button"
+                onClick={onOpenIcebreakers}
+                className="w-9 h-9 flex items-center justify-center hover:bg-white/5 rounded-full shrink-0 mb-0.5"
+                title="Идеи для разговора"
+              >
+                <Lightbulb className="w-4 h-4 text-amber-400" />
+              </button>
+            )}
           </div>
           <AnimatedButton
             className={`w-12 h-12 rounded-[1.25rem] flex items-center justify-center flex-shrink-0 transition-all ${inputText.trim() ? 'bg-primary-red shadow-lg shadow-primary-red/20' : 'bg-white/5'}`}
