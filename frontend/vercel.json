@@ -15,5 +15,19 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/photos/:path*",
+      "destination": "https://backend-pi-sable-56.vercel.app/api/photos/:path*"
+    },
+    {
+      "source": "/static/:path*",
+      "destination": "https://backend-pi-sable-56.vercel.app/static/:path*"
+    },
+    {
+      "source": "/uploads/:path*",
+      "destination": "https://backend-pi-sable-56.vercel.app/static/uploads/:path*"
+    }
   ]
 }
