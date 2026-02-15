@@ -2,7 +2,7 @@
 "use client";
 
 import { Pencil, Trash2, Crown, Sparkles } from "lucide-react";
-import styles from "../../../admin.module.css";
+import styles from "../../admin.module.css";
 import { VirtualGift } from "@/services/admin";
 import { FALLBACK_AVATAR } from "@/lib/constants";
 

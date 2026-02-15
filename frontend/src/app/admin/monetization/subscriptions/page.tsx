@@ -2,7 +2,7 @@
 
 import { AnimatePresence } from 'framer-motion';
 import { Plus, Loader2 } from 'lucide-react';
-import styles from '../../../admin.module.css';
+import styles from '../../admin.module.css';
 import { Toast } from '@/components/ui/Toast';
 import { useSubscriptionsPage } from './useSubscriptionsPage';
 import { SubscriptionStats } from './SubscriptionStats';

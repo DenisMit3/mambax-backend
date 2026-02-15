@@ -2,7 +2,7 @@
 
 import { Crown, CheckCircle, XCircle, Edit, Star } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
-import styles from '../../../admin.module.css';
+import styles from '../../admin.module.css';
 import type { Plan } from './types';
 
 const featureLabels: Record<string, string> = {

@@ -5,7 +5,7 @@ import {
     RefreshCw, Activity, DollarSign, Zap, Server, ShieldCheck,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
-import styles from '../../../admin.module.css';
+import styles from '../../admin.module.css';
 import { usePaymentsPage } from './usePaymentsPage';
 import type { Gateway, FailedPayment, OverallStatsData } from './usePaymentsPage';
 

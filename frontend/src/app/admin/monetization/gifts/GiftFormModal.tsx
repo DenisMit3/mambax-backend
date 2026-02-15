@@ -4,7 +4,7 @@
 import {
     Save, X, Upload, Image as ImageIcon, Loader2
 } from "lucide-react";
-import styles from "../../../admin.module.css";
+import styles from "../../admin.module.css";
 import { GiftCategory } from "@/services/admin";
 import { GiftFormData } from "./types";
 

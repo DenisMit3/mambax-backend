@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { X, ToggleLeft, ToggleRight } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
-import styles from '../../../admin.module.css';
+import styles from '../../admin.module.css';
 import type { Plan } from './types';
 
 export function PlanEditor({ plan, onClose, onSave, onDelete }: {
