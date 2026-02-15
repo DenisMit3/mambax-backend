@@ -30,34 +30,7 @@ export default function ChatPage() {
     if (!chat.user) return <div className="h-full bg-black flex items-center justify-center text-white">Чат не найден</div>;
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-black overflow-hidden">
-            <div className="sticky top-0 z-10 flex flex-col gap-2 p-2 bg-black/80 backdrop-blur-sm border-b border-white/5">
-                <QuestionOfTheDayCard
-                    matchId={chat.id}
-                    onBothAnswered={() => {}}
-                />
-                <ChatToolbar
-                    matchId={chat.id}
-                    ephemeralEnabled={chat.ephemeralEnabled}
-                    ephemeralSeconds={chat.ephemeralSeconds}
-                    onToggleEphemeral={chat.setEphemeralEnabled}
-                    onChangeEphemeralSeconds={chat.setEphemeralSeconds}
-                    onStartAudioCall={() => {
-                        chat.setCallType("audio");
-                        chat.setIncomingCall(null);
-                        chat.setShowCall(true);
-                    }}
-                    onStartVideoCall={() => {
-                        chat.setCallType("video");
-                        chat.setIncomingCall(null);
-                        chat.setShowCall(true);
-                    }}
-                    onOpenGifPicker={() => chat.setShowGifPicker(true)}
-                    onOpenIcebreakers={() => chat.setShowIcebreakers(true)}
-                    onSelectPrompt={(text) => chat.setInjectInputText(text)}
-                />
-            </div>
-
+        <div className="fixed inset-0 z-[100] flex flex-col bg-black overflow-hidden">
             <VIPChatSystem
                 user={chat.user}
                 messages={chat.messages}
@@ -69,6 +42,34 @@ export default function ChatPage() {
                 onBack={() => router.back()}
                 injectInputText={chat.injectInputText}
                 onConsumedInject={() => chat.setInjectInputText('')}
+                toolbarSlot={
+                    <div className="flex flex-col gap-2 p-2 bg-black/80 backdrop-blur-sm border-b border-white/5">
+                        <QuestionOfTheDayCard
+                            matchId={chat.id}
+                            onBothAnswered={() => {}}
+                        />
+                        <ChatToolbar
+                            matchId={chat.id}
+                            ephemeralEnabled={chat.ephemeralEnabled}
+                            ephemeralSeconds={chat.ephemeralSeconds}
+                            onToggleEphemeral={chat.setEphemeralEnabled}
+                            onChangeEphemeralSeconds={chat.setEphemeralSeconds}
+                            onStartAudioCall={() => {
+                                chat.setCallType("audio");
+                                chat.setIncomingCall(null);
+                                chat.setShowCall(true);
+                            }}
+                            onStartVideoCall={() => {
+                                chat.setCallType("video");
+                                chat.setIncomingCall(null);
+                                chat.setShowCall(true);
+                            }}
+                            onOpenGifPicker={() => chat.setShowGifPicker(true)}
+                            onOpenIcebreakers={() => chat.setShowIcebreakers(true)}
+                            onSelectPrompt={(text) => chat.setInjectInputText(text)}
+                        />
+                    </div>
+                }
             />
 
             <IcebreakersModal

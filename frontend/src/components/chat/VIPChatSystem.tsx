@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react';
+import React from 'react';
 import { useTelegram } from '@/lib/telegram';
 import type { EmojiClickData } from 'emoji-picker-react';
 
@@ -35,6 +36,8 @@ interface VIPChatSystemProps {
   /** Optional: inject text into input (e.g. from icebreakers or prompts) */
   injectInputText?: string;
   onConsumedInject?: () => void;
+  /** Optional slot rendered at the top of the message scroll area (e.g. QuestionOfTheDay + toolbar) */
+  toolbarSlot?: React.ReactNode;
 }
 
 export const VIPChatSystem = ({
@@ -48,6 +51,7 @@ export const VIPChatSystem = ({
   onBack,
   injectInputText,
   onConsumedInject,
+  toolbarSlot,
 }: VIPChatSystemProps) => {
   const { hapticFeedback } = useTelegram();
 
@@ -69,7 +73,7 @@ export const VIPChatSystem = ({
   };
 
   return (
-    <div className={`flex flex-col h-full bg-[#0F0F0F] font-sans ${isPremium ? 'text-white' : 'text-gray-900'}`}>
+    <div className={`flex flex-col flex-1 min-h-0 bg-[#0F0F0F] font-sans ${isPremium ? 'text-white' : 'text-gray-900'}`}>
 
       {/* Модальное окно выбора реакции */}
       <VIPReactionPicker
@@ -104,6 +108,7 @@ export const VIPChatSystem = ({
         }}
         onViewImage={setViewingImage}
         hapticFeedback={hapticFeedback}
+        toolbarSlot={toolbarSlot}
       />
 
       {/* Поле ввода */}

@@ -140,7 +140,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     {/* iPhone-style Mobile Container */}
                     <div className="fixed inset-0 flex items-center justify-center z-10">
                         <div className="w-full h-full sm:h-[90vh] sm:max-w-[420px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-[#1c1c1e] sm:shadow-2xl relative flex flex-col overflow-hidden transform">
-                            <div className={`flex-1 w-full min-h-0 overflow-y-auto scrollbar-hide relative`} style={showGlobalNav ? { paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
+                            <div className={`flex-1 w-full min-h-0 ${isChatRoom ? 'overflow-hidden' : 'overflow-y-auto'} scrollbar-hide relative`} style={showGlobalNav ? { paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
                                 {children}
                             </div>
 

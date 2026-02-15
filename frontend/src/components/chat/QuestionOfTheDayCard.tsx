@@ -100,7 +100,7 @@ export function QuestionOfTheDayCard({
     <AnimatePresence>
       {!collapsed && (
         <motion.div
-          className={`sticky top-0 z-10 ${className}`}
+          className={`${className}`}
           initial={prefersReducedMotion ? undefined : { opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={prefersReducedMotion ? undefined : { opacity: 0, height: 0 }}
