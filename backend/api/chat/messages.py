@@ -72,7 +72,14 @@ async def get_history(
                 sender_id=m.sender_id,
                 receiver_id=m.receiver_id,
                 content=m.text,
+                text=m.text,
+                type=m.type or "text",
+                audio_url=m.audio_url,
+                photo_url=m.photo_url,
+                media_url=m.photo_url or m.audio_url,
+                duration=m.duration,
                 created_at=m.created_at,
+                timestamp=m.created_at,
                 is_read=m.is_read
             )
             for m in messages
@@ -178,12 +185,19 @@ async def send_message(
         sender_id=db_msg.sender_id,
         receiver_id=db_msg.receiver_id,
         content=db_msg.text,
+        text=db_msg.text,
+        type=db_msg.type or "text",
+        audio_url=db_msg.audio_url,
+        photo_url=db_msg.photo_url,
+        media_url=db_msg.photo_url or db_msg.audio_url,
+        duration=db_msg.duration,
         created_at=db_msg.created_at,
+        timestamp=db_msg.created_at,
         is_read=db_msg.is_read
     )
 
 
-@router.post("/messages/{message_id}/read")
+@router.post("/chat/messages/{message_id}/read")
 async def mark_message_read(
     message_id: UUID,
     current_user: str = Depends(auth.get_current_user),

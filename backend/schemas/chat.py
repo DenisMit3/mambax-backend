@@ -20,7 +20,14 @@ class MessageResponse(BaseModel):
     sender_id: UUID
     receiver_id: UUID
     content: Optional[str] = None
-    created_at: datetime = Field(..., serialization_alias="timestamp")
+    text: Optional[str] = None
+    type: str = "text"
+    audio_url: Optional[str] = None
+    photo_url: Optional[str] = None
+    media_url: Optional[str] = None
+    duration: Optional[float] = None
+    created_at: datetime
+    timestamp: Optional[datetime] = None
     is_read: bool
     
     class Config:

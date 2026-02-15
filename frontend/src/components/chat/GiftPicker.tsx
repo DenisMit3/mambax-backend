@@ -11,7 +11,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 interface Gift {
     id: string;
     name: string;
-    image: string;
+    image?: string;
     price: number;
     category: 'romantic' | 'funny' | 'epic';
     rarity: 'common' | 'rare' | 'legendary';
@@ -206,7 +206,7 @@ export const GiftPicker = ({
                                                         <div className="flex-1 flex items-center justify-center mb-2">
                                                             <div className="w-12 h-12 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center">
                                                                 <img
-                                                                    src={gift.image}
+                                                                    src={gift.image || ''}
                                                                     alt={gift.name}
                                                                     className="w-8 h-8 object-contain"
                                                                 />

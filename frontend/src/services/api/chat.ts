@@ -26,12 +26,12 @@ export const chatApi = {
         return httpClient.get(`/api/matches/${matchId}/messages`);
     },
 
-    async sendMessage(matchId: string, text: string, type: string = "text", audio_url: string | null = null, duration: string | null = null) {
+    async sendMessage(matchId: string, text: string, type: string = "text", media_url: string | null = null, duration: string | null = null) {
         return httpClient.post("/api/chat/send", {
             match_id: matchId,
             text,
             type,
-            media_url: audio_url,
+            media_url,
             duration: duration ? parseInt(duration as string) : undefined
         });
     },

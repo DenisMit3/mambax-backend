@@ -6,6 +6,7 @@ import { useTelegram } from '@/lib/telegram';
 import { authService } from '@/services/api';
 import { useParams } from 'next/navigation';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { getWsUrl } from '@/utils/env';
 import {
     UIGift,
     BackendMessage,
@@ -157,8 +158,8 @@ export function useChatPage() {
         const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
         if (!token) return;
 
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/chat/ws`;
+        const wsUrl = getWsUrl();
+        if (!wsUrl) return;
         const socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
@@ -189,16 +190,18 @@ export function useChatPage() {
     };
 
     const handleWebSocketMessage = (data: WebSocketMessageData) => {
-        if (data.type === 'message' || data.type === 'text' || data.type === 'photo' || data.type === 'super_like') {
+        if (data.type === 'message' || data.type === 'text' || data.type === 'photo' || data.type === 'voice' || data.type === 'super_like') {
             if (data.match_id !== id) return;
 
+            const msgId = data.id || data.message_id || `ws-${Date.now()}`;
+
             setMessages(prev => {
-                const exists = prev.find(m => m.id === data.id);
+                const exists = prev.find(m => m.id === msgId);
                 if (exists) {
-                    return prev.map(m => m.id === data.id ? { ...m, status: 'delivered' } : m);
+                    return prev.map(m => m.id === msgId ? { ...m, status: 'delivered' } : m);
                 }
 
-                if (data.sender_id !== userRef.current?.id) {
+                if (data.sender_id === currentUserIdRef.current) {
                     const pendingMatch = prev.find(m =>
                         m.status === 'sending' &&
                         m.text === (data.text || data.content) &&
@@ -206,14 +209,14 @@ export function useChatPage() {
                     );
                     if (pendingMatch) {
                         return prev.map(m => m.id === pendingMatch.id ? {
-                            ...m, id: data.id, status: 'sent',
+                            ...m, id: data.id || data.message_id, status: 'sent',
                             timestamp: new Date(data.timestamp || Date.now())
                         } : m);
                     }
                 }
 
                 const newMsg: Message = {
-                    id: data.id,
+                    id: msgId,
                     text: data.text || data.content,
                     image: getFullUrl(data.photo_url || data.media_url),
                     timestamp: new Date(data.timestamp || Date.now()),
@@ -263,10 +266,10 @@ export function useChatPage() {
             }));
         } else {
             try {
-                const sentMsg = await authService.sendMessage(id, text) as { id: string; created_at: string };
+                const sentMsg = await authService.sendMessage(id, text) as { id: string; created_at?: string; timestamp?: string };
                 setMessages(prev => prev.map(m => m.id === tempId ? {
                     ...m, id: sentMsg.id, status: 'sent',
-                    timestamp: new Date(sentMsg.created_at)
+                    timestamp: new Date(sentMsg.created_at || sentMsg.timestamp || Date.now())
                 } : m));
             } catch (error) {
                 console.error('Failed to send', error);
@@ -325,10 +328,10 @@ export function useChatPage() {
             setMessages(prev => [...prev, optimisticMsg]);
             hapticFeedback.impactOccurred('light');
 
-            const sentMsg = await authService.sendMessage(id, '', 'photo', imageUrl) as { id: string; created_at: string };
+            const sentMsg = await authService.sendMessage(id, '', 'photo', imageUrl) as { id: string; created_at?: string; timestamp?: string };
             setMessages(prev => prev.map(m => m.id === tempId ? {
                 ...m, id: sentMsg.id, status: 'sent',
-                timestamp: new Date(sentMsg.created_at)
+                timestamp: new Date(sentMsg.created_at || sentMsg.timestamp || Date.now())
             } : m));
         } catch (error) {
             console.error("Image send failed", error);

@@ -79,11 +79,11 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/chat/ws',
-        destination: `${backendUrl}/chat/ws`,
+        destination: `${backendUrl}/api/chat/ws`,
       },
       {
         source: '/chat/ws/:path*',
-        destination: `${backendUrl}/chat/ws/:path*`,
+        destination: `${backendUrl}/api/chat/ws/:path*`,
       },
       {
         source: '/admin/ws',

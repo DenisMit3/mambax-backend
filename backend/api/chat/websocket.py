@@ -370,11 +370,15 @@ async def _handle_read(user_id: str, data: dict):
 
         async with async_session_maker() as db:
             valid_message_ids = []
+            original_sender_id = None
             for mid in message_ids:
                 try:
                     msg = await db.get(Message, UUID(mid))
                     if msg and str(msg.receiver_id) == user_id:
                         valid_message_ids.append(UUID(mid))
+                        # Remember the sender so we can notify them
+                        if not original_sender_id:
+                            original_sender_id = str(msg.sender_id)
                 except Exception as e:
                     logger.warning(f"Invalid message ID {mid}: {e}")
 
@@ -385,7 +389,8 @@ async def _handle_read(user_id: str, data: dict):
 
             if rowcount > 0:
                 broadcast_ids = [str(mid) for mid in valid_message_ids]
-                recipient_id = data.get("recipient_id") or sender_id
+                # Determine who to notify: explicit recipient_id/sender_id, or auto-detect from message
+                recipient_id = data.get("recipient_id") or sender_id or original_sender_id
                 if recipient_id and broadcast_ids:
                     await manager.send_personal(recipient_id, {
                         "type": "read",
