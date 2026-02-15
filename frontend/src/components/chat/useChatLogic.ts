@@ -4,9 +4,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { wsService } from '@/services/websocket';
 import { useHaptic } from '@/hooks/useHaptic';
 import { useSoundService } from '@/hooks/useSoundService';
+import { httpClient } from '@/lib/http-client';
 import type { Message, Chat, ChatParticipant } from './ChatTypes';
 
-const getToken = () => { try { return localStorage.getItem('accessToken') || localStorage.getItem('token'); } catch { return null; } };
 
 /**
  * Хук, инкапсулирующий всю логику чата:
@@ -78,6 +78,8 @@ export function useChatLogic(chat: Chat, currentUserId: string, otherParticipant
             wsService.off('message', handleMessageConfirmed);
             wsService.off('typing', handleTyping);
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+            if (typingTimeoutTimerRef.current) clearTimeout(typingTimeoutTimerRef.current);
         };
     }, [currentUserId, haptic]);
 
@@ -108,14 +110,9 @@ export function useChatLogic(chat: Chat, currentUserId: string, otherParticipant
     const handleVoiceSend = useCallback(async (audioBlob: Blob, _duration: number) => {
         const formData = new FormData();
         formData.append('file', audioBlob, 'voice.webm');
-        const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
         try {
-            const response = await fetch('/api_proxy/api/chat/voice', {
-                method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData
-            });
-            if (!response.ok) throw new Error('Upload failed');
-            const { url, duration: serverDuration } = await response.json();
-            wsService.send({ type: 'voice', match_id: chat.matchId, media_url: url, duration: serverDuration });
+            const data = await httpClient.post<{ url: string; duration: number }>('/api/chat/voice', formData);
+            wsService.send({ type: 'voice', match_id: chat.matchId, media_url: data.url, duration: data.duration });
             haptic.success();
             soundService.playSent();
         } catch (e) {

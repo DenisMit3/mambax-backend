@@ -36,9 +36,9 @@ async def buy_subscription_with_stars(db: AsyncSession, user_id: uuid.UUID, tier
     """
     Buy a subscription plan with Telegram Stars using an ATOMIC TRANSACTION.
     """
-    # 1. Start atomic block
+    # 1. Атомарный блок (savepoint — безопасно внутри существующей транзакции)
     try:
-        async with db.begin():
+        async with db.begin_nested():
             # Get plan
             plan = await db.scalar(
                 select(SubscriptionPlan)

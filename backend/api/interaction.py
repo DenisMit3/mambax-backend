@@ -110,7 +110,7 @@ async def get_feed(
         exclude_swiped=exclude_swiped
     )
     
-    data = result.dict()
+    data = result.model_dump()
     
     # PERF-009: Cache for 30 seconds
     try:
@@ -441,6 +441,22 @@ async def start_chat_with_user(
     
     if existing_match:
         return {"match_id": str(existing_match.id), "is_new": False}
+    
+    # Проверяем взаимные лайки перед созданием матча
+    from backend.models.interaction import Swipe
+    from backend.schemas.interaction import SwipeAction
+    
+    mutual_like_stmt = select(Swipe).where(
+        and_(
+            Swipe.from_user_id == target_user_id,
+            Swipe.to_user_id == current_user_id,
+            Swipe.action == SwipeAction.LIKE
+        )
+    )
+    mutual_like = (await db.execute(mutual_like_stmt)).scalars().first()
+    
+    if not mutual_like:
+        raise HTTPException(status_code=400, detail="Cannot start chat without mutual like")
     
     # Create new match to enable chat
     new_match = Match(

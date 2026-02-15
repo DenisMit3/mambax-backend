@@ -74,6 +74,15 @@ export default function DiscoverPage() {
         }
     };
 
+    // Проверка авторизации — первым делом
+    if (isChecking) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            </div>
+        );
+    }
+
     // Loading State with Skeleton
     if (isLoadingProfiles) {
         return (
@@ -123,14 +132,6 @@ export default function DiscoverPage() {
                 <div className="w-full mt-8">
                     <Suggestions limit={5} />
                 </div>
-            </div>
-        );
-    }
-
-    if (isChecking) {
-        return (
-            <div className="min-h-screen bg-black flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
         );
     }

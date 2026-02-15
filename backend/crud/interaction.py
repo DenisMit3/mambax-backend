@@ -73,6 +73,7 @@ async def get_user_feed(
                     User.id != user_id,
                     User.is_complete == True,
                     has_photos,
+                    User.status == UserStatus.ACTIVE,  # Исключаем забаненных/shadowban
                     User.is_active == True
                 )
             )

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { VIPChatSystem, Message, ChatUser } from '@/components/chat/VIPChatSystem';
 import { GiftPicker } from '@/components/chat/GiftPicker';
+import { GifPicker } from '@/components/chat/GifPicker';
 import { QuestionOfTheDayCard } from '@/components/chat/QuestionOfTheDayCard';
 import { ConversationPromptsButton } from '@/components/chat/ConversationPromptsButton';
 import { IcebreakersModal } from '@/components/chat/IcebreakersModal';

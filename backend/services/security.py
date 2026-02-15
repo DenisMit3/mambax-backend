@@ -250,7 +250,7 @@ async def get_shadowbanned_ids_batch(user_ids: list[str]) -> set[str]:
 async def get_shadowban_info(user_id: str) -> Optional[str]:
     """Получить информацию о shadowban"""
     reason = await redis_manager.client.get(f"shadowban:{user_id}")
-    return reason.decode() if reason else None
+    return reason if reason else None
 
 
 # ============================================================================
@@ -656,7 +656,7 @@ async def get_blocked_users(user_id: str) -> List[str]:
     """Получить список заблокированных пользователей"""
     key = f"blocked:{user_id}"
     members = await redis_manager.client.smembers(key)
-    return [m.decode() for m in members]
+    return list(members)
 
 
 # ============================================================================

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Mail, Shield, CreditCard, Heart, UserX, Camera, HelpCircle, Send, CheckCircle } from "lucide-react";
 import { authService } from "@/services/api";
-import { BottomNav } from "@/components/layout/BottomNav";
+
 
 const FAQ_CATEGORIES = [
     {
@@ -295,7 +295,6 @@ export default function HelpPage() {
                 )}
             </AnimatePresence>
 
-            <BottomNav />
         </div>
     );
 }

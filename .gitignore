@@ -37,3 +37,5 @@ dist/
 build/
 .vercel
 npm-debug.log*
+.vercel
+.env*.local

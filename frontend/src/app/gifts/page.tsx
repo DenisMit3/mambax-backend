@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { authService } from "@/services/api";
-import { BottomNav } from "@/components/layout/BottomNav";
+
 import { GiftRevealAnimation } from "@/components/ui/GiftRevealAnimation";
 import { Gift, Inbox, Send, Star, Clock, User, EyeOff, ChevronRight, ShoppingBag, RefreshCw, AlertTriangle } from "lucide-react";
 import dynamic from 'next/dynamic';
@@ -347,8 +347,6 @@ export default function GiftsPage() {
 
                 </div>
             )}
-
-            <BottomNav />
 
             {/* Gift Reveal Animation */}
             <GiftRevealAnimation

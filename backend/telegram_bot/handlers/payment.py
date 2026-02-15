@@ -191,13 +191,16 @@ async def process_gift_purchase(db, user, transaction, amount, message):
         await message.answer("⚠️ Payment successful but gift delivery failed. Stars added to balance.")
 
 async def process_subscription_purchase(db, user, transaction, amount, message):
-    # 1. Credit Balance first
+    # 1. Зачисляем Stars на баланс
     user.stars_balance = (user.stars_balance or Decimal("0")) + Decimal(str(amount))
     
-    # 2. Try to activate subscription using that balance
+    # 2. Flush чтобы buy_subscription_with_stars увидел обновлённый баланс
+    await db.flush()
+    
+    # 3. Активируем подписку (списание из баланса внутри функции)
     tier = transaction.custom_metadata.get("plan_tier")
     if tier:
-        res = await buy_subscription_with_stars(db, str(user.id), tier)
+        res = await buy_subscription_with_stars(db, user.id, tier)
         if res.get("success"):
              await message.answer(f"✅ Subscription activated: {res.get('plan')}")
         else:

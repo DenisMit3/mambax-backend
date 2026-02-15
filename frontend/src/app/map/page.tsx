@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useState } from "react";
-import { BottomNav } from "@/components/layout/BottomNav";
+
 import { authService } from "@/services/api";
 import dynamic from "next/dynamic";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -65,9 +65,17 @@ export default function MapPage() {
 
                 try {
                     // Use authService to get real users nearby
-                    const profiles = await authService.getProfiles({ lat: latitude, lon: longitude, limit: 50 });
-                    // Filter users who have valid coordinates
-                    setOthers(Array.isArray(profiles) ? profiles.filter((u: { latitude?: number; longitude?: number }) => u.latitude && u.longitude) as NearbyUser[] : []);
+                    const result = await authService.getProfiles({ lat: latitude, lon: longitude, limit: 50 });
+                    // Filter users who have valid coordinates (location.lat/lon)
+                    const items = (result?.items || []);
+                    setOthers(items.filter(u => u.location?.lat && u.location?.lon).map(u => ({
+                        id: u.id,
+                        name: u.name,
+                        age: u.age,
+                        photos: u.photos,
+                        latitude: u.location!.lat,
+                        longitude: u.location!.lon,
+                    })));
                 } catch (e) {
                     console.error("Failed to fetch nearby users", e);
                 }
@@ -82,7 +90,6 @@ export default function MapPage() {
                 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <div className="animate-pulse bg-slate-800 rounded-full h-12 w-12"></div>
                 </div>
-                <BottomNav />
             </div>
         );
     }
@@ -127,7 +134,6 @@ export default function MapPage() {
                 )}
             </div>
 
-            <BottomNav />
         </div>
     );
 }

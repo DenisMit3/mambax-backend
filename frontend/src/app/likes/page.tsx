@@ -48,20 +48,18 @@ export default function LikesPage() {
 
                 if (cancelled) return;
 
-                interface LikeUser {
+                interface LikeItem {
                     id: string;
-                    name?: string;
-                    age?: number;
-                    photos?: string[];
-                    isSuper?: boolean;
+                    user: { id: string; name?: string; age?: number; photos?: string[] };
+                    is_super?: boolean;
                 }
 
-                const likesData = (likesRes.likes || []).map((u: LikeUser) => ({
-                    id: u.id,
-                    name: u.name || 'Анон',
-                    age: u.age,
-                    photos: u.photos || [],
-                    isSuper: u.isSuper || false
+                const likesData = (likesRes.likes || []).map((u: LikeItem) => ({
+                    id: u.user.id,
+                    name: u.user.name || 'Анон',
+                    age: u.user.age,
+                    photos: u.user.photos || [],
+                    isSuper: u.is_super || false
                 }));
                 setLikes(likesData);
                 setCurrentBalance(meRes.stars_balance || 0);

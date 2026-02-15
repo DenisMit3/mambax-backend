@@ -101,7 +101,7 @@ async def update_subscription_plan(
     if not db_plan:
         raise HTTPException(status_code=404, detail="Plan not found")
         
-    update_data = plan_update.dict(exclude_unset=True)
+    update_data = plan_update.model_dump(exclude_unset=True)
     
     # Handle direct fields
     for key in ["name", "tier", "price", "currency", "duration_days", "is_active", "is_popular"]:
@@ -1192,7 +1192,7 @@ async def get_upsell_opportunities(
         and_(
             User.subscription_tier == "free",
             User.is_active == True,
-            User.last_active >= now - timedelta(days=7),
+            User.last_seen >= now - timedelta(days=7),
         )
     )
     free_active = (await db.execute(free_active_stmt)).scalar() or 0
@@ -1366,7 +1366,7 @@ async def update_pricing_test(
     if not test:
         raise HTTPException(status_code=404, detail="Test not found")
 
-    update_data = data.dict(exclude_unset=True)
+    update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         if hasattr(test, key):
             setattr(test, key, value)

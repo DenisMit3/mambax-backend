@@ -368,12 +368,13 @@ def format_last_seen(last_seen: datetime) -> str:
         return "Unknown"
     now = datetime.utcnow()
     delta = now - last_seen
-    if delta.seconds < 60:
+    total_secs = int(delta.total_seconds())
+    if total_secs < 60:
         return "Just now"
-    elif delta.seconds < 3600:
-        return f"{delta.seconds // 60} min ago"
+    elif total_secs < 3600:
+        return f"{total_secs // 60} min ago"
     elif delta.days == 0:
-        return f"{delta.seconds // 3600} hours ago"
+        return f"{total_secs // 3600} hours ago"
     else:
         return last_seen.strftime("%b %d")
 

@@ -32,7 +32,7 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
     ])
 
 def get_back_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура возврата в меню"""
+    """Клавиатура возврата в меню (для sendMessage)"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
@@ -45,14 +45,51 @@ def get_back_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
+def get_main_keyboard_no_webapp() -> InlineKeyboardMarkup:
+    """Главная клавиатура без WebApp (для edit_text)"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="💘  Открыть MambaX", 
+                url="https://t.me/mambax_bot/app"
+            )
+        ],
+        [
+            InlineKeyboardButton(text="✨  Как это работает", callback_data="how_it_works"),
+            InlineKeyboardButton(text="💎  Premium", callback_data="premium")
+        ],
+        [
+            InlineKeyboardButton(text="❓  FAQ", callback_data="faq"),
+            InlineKeyboardButton(text="💬  Поддержка", callback_data="support")
+        ],
+        [
+            InlineKeyboardButton(text="📊  Статистика", callback_data="stats"),
+            InlineKeyboardButton(text="⚙️  Настройки", callback_data="settings")
+        ]
+    ])
+
+def get_back_keyboard_no_webapp() -> InlineKeyboardMarkup:
+    """Клавиатура возврата без WebApp (для edit_text)"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="💘  Открыть приложение", 
+                url="https://t.me/mambax_bot/app"
+            )
+        ],
+        [
+            InlineKeyboardButton(text="⬅️  Назад в меню", callback_data="main_menu")
+        ]
+    ])
+
 def get_premium_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура премиум-подписок"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🥇  Gold — 499₽/мес", callback_data="buy_gold"),
+            InlineKeyboardButton(text="🥇  Gold — 500 ⭐", callback_data="buy_gold"),
         ],
         [
-            InlineKeyboardButton(text="💎  VIP — 999₽/мес", callback_data="buy_vip"),
+            InlineKeyboardButton(text="💎  VIP — 1000 ⭐", callback_data="buy_vip"),
         ],
         [
             InlineKeyboardButton(text="🎁  Попробовать бесплатно", callback_data="free_trial"),

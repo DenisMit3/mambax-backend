@@ -566,7 +566,7 @@ export const authService = {
     },
 
     async enable2FA(method: 'telegram' | 'email' = 'telegram') {
-        return httpClient.post("/api/2fa/enable", null, { params: { method } });
+        return httpClient.post(`/api/2fa/enable?method=${method}`);
     },
 
     async disable2FA() {

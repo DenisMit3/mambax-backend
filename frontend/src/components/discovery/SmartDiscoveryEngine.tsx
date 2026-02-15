@@ -101,6 +101,10 @@ export function SmartDiscoveryEngine({
     const nopeOpacity = useTransform(x, [-50, -150], [0, 1]);
     const superLikeOpacity = useTransform(y, [-50, -100], [0, 1]);
 
+    // Swipe feedback scale transforms (must be in component body, not JSX)
+    const likeScale = useTransform(x, [0, 150], [1.5, 1]);
+    const nopeScale = useTransform(x, [0, -150], [1.5, 1]);
+
     // Infinite Loop Logic: Use modulo operator to cycle through activeUsers
     const safeIndex = activeUsers.length > 0 ? currentIndex % activeUsers.length : 0;
     const currentProfile = activeUsers.length > 0 ? activeUsers[safeIndex] : null;
@@ -340,7 +344,7 @@ export function SmartDiscoveryEngine({
 
                             {/* Swipe Feedback - SLAM ANIMATION */}
                             <motion.div
-                                style={{ opacity: likeOpacity, scale: useTransform(x, [0, 150], [1.5, 1]) }}
+                                style={{ opacity: likeOpacity, scale: likeScale }}
                                 className="absolute top-24 left-10 pointer-events-none z-40"
                             >
                                 <div className="border-8 border-green-500 rounded-2xl px-6 py-2 -rotate-12 bg-black/20 backdrop-blur-sm shadow-[0_0_20px_rgba(34,197,94,0.5)]">
@@ -348,7 +352,7 @@ export function SmartDiscoveryEngine({
                                 </div>
                             </motion.div>
                             <motion.div
-                                style={{ opacity: nopeOpacity, scale: useTransform(x, [0, -150], [1.5, 1]) }}
+                                style={{ opacity: nopeOpacity, scale: nopeScale }}
                                 className="absolute top-24 right-10 pointer-events-none z-40"
                             >
                                 <div className="border-8 border-red-500 rounded-2xl px-6 py-2 rotate-12 bg-black/20 backdrop-blur-sm shadow-[0_0_20px_rgba(239,68,68,0.5)]">

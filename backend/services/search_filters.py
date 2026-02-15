@@ -18,11 +18,12 @@ Search Filters Service
 
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, or_, func, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from math import radians, cos, sin, asin, sqrt
 from backend import models
+from backend.models.user import UserPhoto
 import logging
 from backend.services.geo import geo_service
 
@@ -221,7 +222,7 @@ async def get_filtered_profiles(
             )
             
             if nearby_users:
-                nearby_ids = [u['user_id'] for u in nearby_users if str(u['user_id']) != str(current_user_id)]
+                nearby_ids = [UUID(u['user_id']) for u in nearby_users if str(u['user_id']) != str(current_user_id)]
                 
                 if nearby_ids:
                     # Filter SQL query to only include these users
@@ -259,9 +260,8 @@ async def get_filtered_profiles(
     
     # Только с фото
     if filters.with_photos_only:
-        # JSON array not empty check (зависит от БД)
-        # Для PostgreSQL/SQLite с JSON
-        query = query.where(models.User.photos != None)
+        # Проверяем наличие фото через таблицу user_photos
+        query = query.where(exists(select(UserPhoto.id).where(UserPhoto.user_id == models.User.id)))
         filters_applied.append("has_photos")
     
     # ========================================
@@ -400,12 +400,12 @@ def profile_to_dict(profile: models.User) -> Dict[str, Any]:
 def get_all_filter_options() -> Dict[str, Any]:
     """Получить все опции фильтров для UI"""
     return {
-        "gender": [opt.dict() for opt in GENDER_OPTIONS],
-        "smoking": [opt.dict() for opt in SMOKING_OPTIONS],
-        "drinking": [opt.dict() for opt in DRINKING_OPTIONS],
-        "education": [opt.dict() for opt in EDUCATION_OPTIONS],
-        "looking_for": [opt.dict() for opt in LOOKING_FOR_OPTIONS],
-        "children": [opt.dict() for opt in CHILDREN_OPTIONS],
+        "gender": [opt.model_dump() for opt in GENDER_OPTIONS],
+        "smoking": [opt.model_dump() for opt in SMOKING_OPTIONS],
+        "drinking": [opt.model_dump() for opt in DRINKING_OPTIONS],
+        "education": [opt.model_dump() for opt in EDUCATION_OPTIONS],
+        "looking_for": [opt.model_dump() for opt in LOOKING_FOR_OPTIONS],
+        "children": [opt.model_dump() for opt in CHILDREN_OPTIONS],
         "interests": INTEREST_SUGGESTIONS,
         "age": {"min": 18, "max": 100},
         "height": {"min": 100, "max": 250},

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.user import User
 from backend.models.chat import Message
 from backend.core.redis import redis_manager
-from backend.api.chat import manager
+from backend.services.chat import manager
 
 
 BADGE_TITLES = {

@@ -278,7 +278,7 @@ async def get_matches_paginated_endpoint(
         cursor=cursor
     )
     
-    return result.dict()
+    return result.model_dump()
 
 
 @router.get("/matches/{match_id}/messages/paginated")
@@ -301,7 +301,7 @@ async def get_messages_paginated_endpoint(
         direction=direction
     )
     
-    return result.dict()
+    return result.model_dump()
 
 @router.get("/me", response_model=schemas.ProfileResponse)
 async def get_my_profile(

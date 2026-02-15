@@ -122,6 +122,7 @@ async def setup_webhook(backend_url: str = None):
                 "callback_query",
                 "inline_query",
                 "pre_checkout_query",  # Required for Telegram Stars payments
+                "my_chat_member",  # Отслеживание блокировки/разблокировки бота
             ],
             drop_pending_updates=True,
             secret_token=WEBHOOK_SECRET
