@@ -184,9 +184,15 @@ async def swipe(
 
     # PERF: Invalidate discover cache on swipe to ensure fresh results
     try:
-        # Delete all discover cache keys for this user
+        # Delete all discover cache keys for this user (SCAN вместо KEYS)
         pattern = f"discover:{current_user_id}:*"
-        keys = await redis_manager.client.keys(pattern)
+        cursor = 0
+        keys = []
+        while True:
+            cursor, batch = await redis_manager.client.scan(cursor=cursor, match=pattern, count=100)
+            keys.extend(batch)
+            if cursor == 0:
+                break
         if keys:
             await redis_manager.client.delete(*keys)
     except Exception:

@@ -120,7 +120,7 @@ class FraudDetectionService:
         report_score = 0
         reports_against = await db.scalar(
             select(func.count(Report.id))
-            .where(Report.reported_user_id == user_id)
+            .where(Report.reported_id == user_id)
         )
         if reports_against:
             if reports_against >= 5:

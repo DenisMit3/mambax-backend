@@ -208,7 +208,8 @@ export default function AuthGatePage() {
                                 <Phone size={18} className="text-gray-400" />
                             </div>
                             <input
-                                type="text"
+                                type="tel"
+                                inputMode="tel"
                                 placeholder="+7 999 000-00-00"
                                 value={identifier}
                                 onChange={(e) => setIdentifier(e.target.value)}

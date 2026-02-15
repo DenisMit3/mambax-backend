@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface WebAppUser {
     id: number;
@@ -113,7 +113,8 @@ export const useTelegram = () => {
         }
     }, []);
 
-    const hapticFeedback = {
+    // Мемоизация hapticFeedback — предотвращает пересоздание объекта на каждый рендер
+    const hapticFeedback = useMemo(() => ({
         light: () => webApp?.HapticFeedback.impactOccurred('light'),
         medium: () => webApp?.HapticFeedback.impactOccurred('medium'),
         heavy: () => webApp?.HapticFeedback.impactOccurred('heavy'),
@@ -124,10 +125,10 @@ export const useTelegram = () => {
             webApp?.HapticFeedback.impactOccurred(style),
         notificationOccurred: (type: 'error' | 'success' | 'warning') =>
             webApp?.HapticFeedback.notificationOccurred(type)
-    };
+    }), [webApp]);
 
-    // Helper to check if a feature is supported by version
-    const isVersionAtLeast = (minVersion: string): boolean => {
+    // Мемоизация проверки версии
+    const isVersionAtLeast = useCallback((minVersion: string): boolean => {
         if (!webApp?.version) return false;
         const current = webApp.version.split('.').map(Number);
         const required = minVersion.split('.').map(Number);
@@ -136,9 +137,10 @@ export const useTelegram = () => {
             if ((current[i] || 0) < required[i]) return false;
         }
         return true;
-    };
+    }, [webApp]);
 
-    return {
+    // Мемоизация всего return-объекта — предотвращает бесконечные ре-рендеры
+    return useMemo(() => ({
         webApp,
         hapticFeedback,
         user: webApp?.initDataUnsafe?.user,
@@ -148,5 +150,5 @@ export const useTelegram = () => {
         isVersionAtLeast,
         // BackButton requires version 6.1+
         supportsBackButton: isVersionAtLeast('6.1'),
-    };
+    }), [webApp, hapticFeedback, isVersionAtLeast]);
 };

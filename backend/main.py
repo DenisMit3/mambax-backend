@@ -132,7 +132,7 @@ if settings.ALLOWED_ORIGINS:
     allowed_origins.extend([o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()])
 
 # Allow all Vercel preview deployments
-allowed_origin_regex = r"https://.*\.vercel\.app"
+allowed_origin_regex = r"https://frontend-two-brown-70(-[a-z0-9]+)?\.vercel\.app"
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
@@ -211,6 +211,8 @@ async def rate_limit_middleware(request: Request, call_next):
 
     except Exception as e:
         logger.warning(f"Rate limit middleware error: {e}")
+        if request.url.path.startswith("/api/auth"):
+            return JSONResponse(status_code=503, content={"detail": "Service temporarily unavailable"})
         return await call_next(request)
 
 # --- Routers ---
@@ -267,8 +269,9 @@ app.include_router(photos_router)  # /api/photos/{id} — serves images from DB
 if not settings.is_production:
     app.include_router(dev_router)
 
-# Debug router always enabled (remote logging needed in production for Telegram WebApp debugging)
-app.include_router(debug_router)
+# Debug router — только вне production (содержит опасные эндпоинты вроде reset-all-profiles)
+if settings.ENVIRONMENT != "production":
+    app.include_router(debug_router)
 
 # Simple test endpoint
 @app.get("/ping")

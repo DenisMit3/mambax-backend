@@ -198,7 +198,7 @@ async def get_filtered_profiles(
     # EXCLUDE ALREADY SEEN (Swipes & Blocks)
     # Critical for dating apps: don't show same person twice
     swiped_subq = select(models.Swipe.to_user_id).where(models.Swipe.from_user_id == u_id)
-    blocked_subq = select(models.Block.blocked_user_id).where(models.Block.blocker_id == u_id)
+    blocked_subq = select(models.Block.blocked_id).where(models.Block.blocker_id == u_id)
     
     query = query.where(
         models.User.id.not_in(swiped_subq),

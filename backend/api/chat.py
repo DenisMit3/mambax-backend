@@ -5,6 +5,7 @@ Unified endpoints for real-time messaging, calling, and interactions.
 """
 
 import json
+import logging
 from datetime import datetime
 from uuid import UUID
 from typing import Optional, List, Dict, Any
@@ -35,6 +36,7 @@ from backend.services.chat import (
     mark_ephemeral_viewed,
     get_unread_count,
     increment_unread,
+    clear_unread,
     get_online_status,
     format_last_seen,
     ChatEvent,
@@ -47,6 +49,8 @@ from backend.db.session import async_session_maker
 from backend import database, auth, crud, models
 from backend.schemas.chat import MessageResponse
 from backend.metrics import ACTIVE_USERS_GAUGE, MESSAGES_COUNTER
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -119,7 +123,7 @@ async def websocket_endpoint(websocket: WebSocket):
     
     First message must be: {"type": "auth", "token": "..."}
     """
-    # Accept connection first, then wait for auth message
+    # Accept соединение, чтобы получить auth-сообщение (accept() только здесь, не в manager.connect())
     await websocket.accept()
     
     try:
@@ -156,7 +160,6 @@ async def websocket_endpoint(websocket: WebSocket):
     
     # Send auth success confirmation
     await websocket.send_json({"type": "auth_success", "user_id": user_id})
-    ACTIVE_USERS_GAUGE.inc()
 
     try:
         while True:
@@ -228,12 +231,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})
             except Exception as e:
                 print(f"WS Error: {e}")
-                await websocket.send_json({"type": "error", "message": str(e)})
+                await websocket.send_json({"type": "error", "message": "Internal error"})
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id)
         ACTIVE_USERS_GAUGE.dec()
-        await manager.broadcast_online_status(user_id, False)
+        logger.info(f"User {user_id} disconnected from WebSocket")
         
         # Update last_seen in database
         try:
@@ -345,7 +348,7 @@ async def handle_message(websocket: WebSocket, sender_id: str, data: dict):
 
         # Push Notification if offline
         if not manager.is_online(recipient_id):
-            increment_unread(recipient_id, match_id)
+            await increment_unread(recipient_id, match_id)
             from backend.services.notification import send_push_notification
             push_body = text or "New message"
             if msg_type == "voice": push_body = "🎤 Voice message"
@@ -467,8 +470,8 @@ async def handle_read(user_id: str, data: dict):
                     msg = await db.get(Message, UUID(mid))
                     if msg and str(msg.receiver_id) == user_id:
                         valid_message_ids.append(UUID(mid))
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Invalid message ID {mid}: {e}")
             
             if not valid_message_ids:
                 return  # No valid messages to mark as read
@@ -957,7 +960,7 @@ async def send_message(
 
     # Push Notification if offline
     if not manager.is_online(receiver_id):
-        increment_unread(receiver_id, msg.match_id)
+        await increment_unread(receiver_id, msg.match_id)
         from backend.services.notification import send_push_notification
         push_body = msg.text or "New message"
         if msg.type == "voice": push_body = "🎤 Voice message"
@@ -996,7 +999,7 @@ async def mark_read_endpoint(req: MarkReadRequest, current_user: str = Depends(a
 
 @router.get("/chat/unread")
 async def get_unread_endpoint(match_id: str = None, current_user: str = Depends(auth.get_current_user)):
-    return get_unread_count(current_user, match_id)
+    return await get_unread_count(current_user, match_id)
 
 @router.post("/chat/reaction")
 async def reaction_endpoint(req: ReactionRequest, current_user: str = Depends(auth.get_current_user)):

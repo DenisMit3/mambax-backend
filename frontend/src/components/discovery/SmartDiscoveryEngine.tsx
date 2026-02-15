@@ -381,6 +381,7 @@ export function SmartDiscoveryEngine({
                             <div className="absolute bottom-5 left-4 right-4 flex justify-between items-center z-40 pointer-events-auto">
                                 {/* Message */}
                                 <button
+                                    aria-label="Message"
                                     onClick={() => {
                                         if (currentProfile && onStartChat) {
                                             onStartChat(currentProfile.id);
@@ -394,6 +395,7 @@ export function SmartDiscoveryEngine({
                                 <div className="flex gap-4">
                                     {/* Like */}
                                     <motion.button
+                                        aria-label="Like"
                                         onClick={() => swipe('right')}
                                         className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/20 active:scale-95 transition-all"
                                         animate={{ scale: [1, 1.05, 1] }}
@@ -403,6 +405,7 @@ export function SmartDiscoveryEngine({
                                     </motion.button>
                                     {/* Super/Action */}
                                     <motion.button
+                                        aria-label="Super Like"
                                         onClick={() => swipe('up')}
                                         className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"
                                         animate={{

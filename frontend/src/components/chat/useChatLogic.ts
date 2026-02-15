@@ -161,6 +161,17 @@ export function useChatLogic(chat: Chat, currentUserId: string, otherParticipant
         }, 10000);
     }, [chat.matchId, otherParticipant?.id]);
 
+    // Очистка аудио при размонтировании
+    useEffect(() => {
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.src = '';
+                audioRef.current = null;
+            }
+        };
+    }, []);
+
     return {
         message, setMessage, allMessages, showReactions, setShowReactions,
         playingAudio, isPartnerTyping, inputRef, messagesEndRef,

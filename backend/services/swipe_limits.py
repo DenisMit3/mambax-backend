@@ -163,7 +163,12 @@ async def record_swipe(db: AsyncSession, user_id: str, is_super: bool = False) -
     return await get_swipe_status(db, user_id)
 
 async def buy_swipes_with_stars(db: AsyncSession, user_id: str) -> Dict[str, Any]:
-    user = await db.get(models.User, uuid_module.UUID(user_id) if isinstance(user_id, str) else user_id)
+    # SELECT ... FOR UPDATE — блокировка строки для предотвращения race condition
+    uid = uuid_module.UUID(user_id) if isinstance(user_id, str) else user_id
+    result = await db.execute(
+        select(models.User).where(models.User.id == uid).with_for_update()
+    )
+    user = result.scalar_one_or_none()
     if not user: return {"success": False, "error": "User not found"}
     
     balance = user.stars_balance or Decimal("0")
@@ -182,7 +187,12 @@ async def buy_swipes_with_stars(db: AsyncSession, user_id: str) -> Dict[str, Any
 
 async def buy_superlike_with_stars(db: AsyncSession, user_id: str) -> Dict[str, Any]:
     """Buy 1 superlike with stars"""
-    user = await db.get(models.User, uuid_module.UUID(user_id) if isinstance(user_id, str) else user_id)
+    # SELECT ... FOR UPDATE — блокировка строки для предотвращения race condition
+    uid = uuid_module.UUID(user_id) if isinstance(user_id, str) else user_id
+    result = await db.execute(
+        select(models.User).where(models.User.id == uid).with_for_update()
+    )
+    user = result.scalar_one_or_none()
     if not user: 
         return {"success": False, "error": "User not found"}
     
@@ -201,7 +211,12 @@ async def buy_superlike_with_stars(db: AsyncSession, user_id: str) -> Dict[str, 
     return {"success": True, "purchased": 1, "cost": STARS_PER_SUPERLIKE, "new_balance": float(user.stars_balance)}
 
 async def activate_boost_with_stars(db: AsyncSession, user_id: str, duration_hours: int = 1) -> Dict[str, Any]:
-    user = await db.get(models.User, uuid_module.UUID(user_id) if isinstance(user_id, str) else user_id)
+    # SELECT ... FOR UPDATE — блокировка строки для предотвращения race condition
+    uid = uuid_module.UUID(user_id) if isinstance(user_id, str) else user_id
+    result = await db.execute(
+        select(models.User).where(models.User.id == uid).with_for_update()
+    )
+    user = result.scalar_one_or_none()
     if not user: return {"success": False, "error": "User not found"}
     
     cost = Decimal(STARS_PER_BOOST * duration_hours)

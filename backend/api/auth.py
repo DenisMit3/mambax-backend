@@ -71,6 +71,9 @@ class TelegramLoginRequest(BaseModel):
 @router.get("/last-validation-debug")
 async def last_validation_debug():
     """Returns the last validation attempt debug info (GET - easy to open in browser)."""
+    # Блокируем доступ в production — утечка PII
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     from backend.auth import _last_validation_debug
     return _last_validation_debug
 
@@ -78,6 +81,9 @@ async def last_validation_debug():
 @router.get("/debug-user/{telegram_id}")
 async def debug_user_by_tg(telegram_id: str, db: AsyncSession = Depends(get_db)):
     """Temporary debug: check user record by telegram_id."""
+    # Блокируем доступ в production — утечка PII
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     from sqlalchemy import select, or_
     
     # Search by telegram_id first
@@ -124,6 +130,9 @@ async def debug_user_by_tg(telegram_id: str, db: AsyncSession = Depends(get_db))
 @router.post("/telegram-debug")
 async def telegram_debug(data: TelegramLoginRequest):
     """Temporary debug endpoint to diagnose Telegram initData validation."""
+    # Блокируем доступ в production — утечка PII и секретов
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
     from urllib.parse import parse_qsl
     import hmac as _hmac
     import hashlib as _hashlib

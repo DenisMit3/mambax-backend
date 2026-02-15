@@ -117,7 +117,7 @@ async def resolve_moderation_item(
              # Logic to ban user (add to BannedUser table or update status)
              await db.execute(
                  update(User)
-                 .where(User.id == report.reported_user_id)
+                 .where(User.id == report.reported_id)
                  .values(status=UserStatus.BANNED, is_active=False)
              )
              # TODO: Invalidate tokens (requires redis blacklist or token versioning)

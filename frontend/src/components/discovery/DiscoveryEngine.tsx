@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Settings, MapPin, Heart, X, Star, Zap, RotateCcw } from 'lucide-react';
 
@@ -76,6 +76,7 @@ export const DiscoveryEngine = ({
         minCompatibility: 0,
     });
     const [boostActive, setBoostActive] = useState(false);
+    const boostTimerRef = useRef<NodeJS.Timeout | null>(null);
     const [superLikesLeft, setSuperLikesLeft] = useState(isPremium ? 5 : 1);
 
     const { data: swipeStatus, refetch: refetchStatus } = useSwipeStatus();
@@ -192,11 +193,20 @@ export const DiscoveryEngine = ({
         setBoostActive(true);
         haptic.success();
 
-        // Boost lasts 30 minutes
-        setTimeout(() => {
+        // Boost длится 30 минут — сохраняем таймер в ref для очистки
+        if (boostTimerRef.current) clearTimeout(boostTimerRef.current);
+        boostTimerRef.current = setTimeout(() => {
             setBoostActive(false);
+            boostTimerRef.current = null;
         }, 30 * 60 * 1000);
     };
+
+    // Очистка boost таймера при размонтировании
+    useEffect(() => {
+        return () => {
+            if (boostTimerRef.current) clearTimeout(boostTimerRef.current);
+        };
+    }, []);
 
     const updateFilters = (newFilters: Partial<DiscoveryFilters>) => {
         const updatedFilters = { ...filters, ...newFilters };
@@ -367,6 +377,7 @@ export const DiscoveryEngine = ({
                 >
                     {/* Undo Button */}
                     <motion.button
+                        aria-label="Undo"
                         className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg ${undoHistory.length > 0
                             ? 'bg-gradient-to-r from-yellow-500 to-orange-500'
                             : 'bg-gray-600 opacity-50'
@@ -381,6 +392,7 @@ export const DiscoveryEngine = ({
 
                     {/* Pass Button */}
                     <motion.button
+                        aria-label="Pass"
                         className="w-14 h-14 rounded-full bg-gradient-to-r from-gray-600 to-gray-700 flex items-center justify-center shadow-lg"
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
@@ -391,6 +403,7 @@ export const DiscoveryEngine = ({
 
                     {/* Super Like Button */}
                     <motion.button
+                        aria-label="Super Like"
                         data-onboarding="superlike-button"
                         className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg ${superLikesLeft > 0
                             ? 'bg-gradient-to-r from-blue-500 to-purple-500'
@@ -406,6 +419,7 @@ export const DiscoveryEngine = ({
 
                     {/* Like Button */}
                     <motion.button
+                        aria-label="Like"
                         data-onboarding="like-button"
                         className="w-14 h-14 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center shadow-lg"
                         whileHover={{ scale: 1.1 }}

@@ -12,7 +12,7 @@ import aiohttp
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.core.redis import redis_manager
 
@@ -126,7 +126,7 @@ class ConnectionManager:
         self._offline_tasks: Dict[str, asyncio.Task] = {}  # FIX: Track pending offline tasks
     
     async def connect(self, websocket, user_id: str):
-        await websocket.accept()
+        # accept() вызывается снаружи (в websocket_endpoint), здесь только регистрация
         
         # FIX: Cancel any pending offline task for this user (reconnect within grace period)
         if user_id in self._offline_tasks:
@@ -305,7 +305,7 @@ class EphemeralMessage(BaseModel):
     text: Optional[str] = None
     media_url: Optional[str] = None
     expires_in: int = 10
-    created_at: datetime = datetime.utcnow()
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 async def create_ephemeral_message(match_id: str, sender_id: str, text: str = None, media_url: str = None, seconds: int = 10) -> EphemeralMessage:
     """Create a disappearing message"""
@@ -327,14 +327,35 @@ async def mark_ephemeral_viewed(message_id: str) -> dict:
 # UNREAD & ONLINE STATUS
 # ============================================================================
 
-def get_unread_count(user_id: str, match_id: str = None) -> dict:
-    """Get unread message count - sync wrapper"""
-    return {"total": 0, "by_match": {}}
+async def get_unread_count(user_id: str, match_id: str = None) -> dict:
+    """Получить количество непрочитанных сообщений из Redis"""
+    try:
+        by_match = await state_manager.get_all_unread(user_id)
+        total = sum(by_match.values())
+        
+        if match_id:
+            count = by_match.get(match_id, 0)
+            return {"total": count, "by_match": {match_id: count}}
+        return {"total": total, "by_match": by_match}
+    except Exception as e:
+        logger.warning(f"Failed to get unread count: {e}")
+        return {"total": 0, "by_match": {}}
 
-def increment_unread(user_id: str, match_id: str):
-    """Sync wrapper to increment unread - fire and forget in async context"""
-    # In prod, use asyncio.create_task
-    pass
+
+async def increment_unread(user_id: str, match_id: str):
+    """Увеличить счётчик непрочитанных в Redis"""
+    try:
+        await state_manager.increment_unread(user_id, match_id)
+    except Exception as e:
+        logger.warning(f"Failed to increment unread: {e}")
+
+
+async def clear_unread(user_id: str, match_id: str):
+    """Сбросить счётчик непрочитанных при прочтении"""
+    try:
+        await state_manager.clear_unread(user_id, match_id)
+    except Exception as e:
+        logger.warning(f"Failed to clear unread: {e}")
 
 def get_online_status(user_id: str) -> dict:
     """Get user online status"""

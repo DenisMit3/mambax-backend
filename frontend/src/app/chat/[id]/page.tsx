@@ -59,6 +59,10 @@ export default function ChatPage() {
     const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
     const currentUserIdRef = useRef<string | null>(null);
 
+    // Ref для актуального user (избегаем stale closure в handleWebSocketMessage)
+    const userRef = useRef(user);
+    useEffect(() => { userRef.current = user; }, [user]);
+
     useEffect(() => {
         if (id && isAuthed) {
             loadInitialData();
@@ -69,7 +73,7 @@ export default function ChatPage() {
             if (ws.current) ws.current.close();
             if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
         };
-    }, [id]);
+    }, [id, isAuthed]);
 
     // Helper to fix image URLs from backend
     // Connect via Next.js Proxy to avoid CSP/CORS issues on localhost
@@ -250,7 +254,7 @@ export default function ChatPage() {
                 // We assume if sender_id != user.id it might be ours (since user is the OTHER person in chat page context usually?)
                 // Wait, user state holds the partner. So data.sender_id should be COMPARED to user.id.
                 // If data.sender_id != user.id, it means sent by ME.
-                if (data.sender_id !== user?.id) {
+                if (data.sender_id !== userRef.current?.id) {
                     const pendingMatch = prev.find(m =>
                         m.status === 'sending' &&
                         m.text === (data.text || data.content) &&
@@ -283,14 +287,14 @@ export default function ChatPage() {
                 return [...prev, newMsg];
             });
         } else if (data.type === 'typing') {
-            if (data.match_id === id && data.user_id === user?.id) {
+            if (data.match_id === id && data.user_id === userRef.current?.id) {
                 // Update user typing status in local state or ref
                 // For now, simpler to just log or use a separate state if VIPChatSystem supports it
                 // VIPChatSystem takes `user` prop which has `isTyping`. We need to update that.
                 setUser(prev => prev ? { ...prev, isTyping: data.is_typing } : null);
             }
         } else if (data.type === 'online_status') {
-            if (data.user_id === user?.id) {
+            if (data.user_id === userRef.current?.id) {
                 setUser(prev => prev ? { ...prev, isOnline: data.is_online } : null);
             }
         } else if (data.type === 'offer' && data.match_id === id) {

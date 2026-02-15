@@ -19,7 +19,7 @@ class MessageResponse(BaseModel):
     match_id: UUID
     sender_id: UUID
     receiver_id: UUID
-    content: str
+    content: Optional[str] = None
     created_at: datetime = Field(..., serialization_alias="timestamp")
     is_read: bool
     

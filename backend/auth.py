@@ -1,4 +1,5 @@
 import random
+import secrets
 import string
 import aiohttp
 import hmac
@@ -163,7 +164,7 @@ _memory_otp = {}
 
 def generate_otp() -> str:
     # FIX (SEC-002): 6 digits instead of 4 for better security
-    return "".join(random.choices(string.digits, k=6))
+    return "".join(secrets.choice(string.digits) for _ in range(6))
 
 async def save_otp(identifier: str, otp: str):
     # Try Redis if configured

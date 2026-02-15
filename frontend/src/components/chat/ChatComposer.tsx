@@ -41,6 +41,7 @@ export const ChatComposer = ({
                         variant="ghost"
                         size="sm"
                         className="text-gray-400 min-w-[44px] min-h-[44px]"
+                        aria-label="Send image"
                     >
                         <Image className="w-5 h-5" />
                     </AnimatedButton>
@@ -50,6 +51,7 @@ export const ChatComposer = ({
                             variant="ghost"
                             size="sm"
                             className="text-pink-400 min-w-[44px] min-h-[44px]"
+                            aria-label="Send gift"
                         >
                             <Gift className="w-5 h-5" />
                         </AnimatedButton>

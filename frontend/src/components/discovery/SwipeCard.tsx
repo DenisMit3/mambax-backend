@@ -132,10 +132,12 @@ export const SwipeCard = ({
                     <button
                         className="absolute left-0 top-0 h-full w-1/2"
                         onClick={prevPhoto}
+                        aria-label="Previous photo"
                     />
                     <button
                         className="absolute right-0 top-0 h-full w-1/2"
                         onClick={nextPhoto}
+                        aria-label="Next photo"
                     />
 
                     {/* Status Badges */}

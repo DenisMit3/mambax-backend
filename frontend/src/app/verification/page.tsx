@@ -88,8 +88,18 @@ export default function VerificationPage() {
         }
     };
 
+    // Очистка Object URL при размонтировании
+    useEffect(() => {
+        return () => {
+            if (preview) URL.revokeObjectURL(preview);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
+            // Освобождаем старый Object URL перед созданием нового
+            if (preview) URL.revokeObjectURL(preview);
             setFile(e.target.files[0]);
             setPreview(URL.createObjectURL(e.target.files[0]));
         }
