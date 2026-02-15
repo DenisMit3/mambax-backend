@@ -83,11 +83,9 @@ export function useChatPage() {
 
     const loadInitialData = async () => {
         try {
-            const [msgsData, matchData, catalogData] = await Promise.all([
-                authService.getMessages(id),
-                authService.getMatch(id),
-                authService.getGiftsCatalog()
-            ]);
+            // FIX: getMatch is the ONLY critical request — it determines if chat exists.
+            // Messages and gifts are loaded separately so their failures don't cause "Чат не найден".
+            const matchData = await authService.getMatch(id);
 
             if (matchData && matchData.user) {
                 setUser({
@@ -104,35 +102,51 @@ export function useChatPage() {
             const currentUserId = matchData?.current_user_id;
             currentUserIdRef.current = currentUserId || null;
 
-            const uiMessages: Message[] = (msgsData as BackendMessage[]).map((m) => ({
-                id: m.id,
-                text: m.content || m.text,
-                image: getFullUrl(m.photo_url || m.media_url),
-                timestamp: new Date(m.created_at || m.timestamp),
-                isOwn: m.sender_id === currentUserId,
-                status: m.is_read ? 'read' : 'sent',
-                type: (m.type === 'gift' || m.type === 'super_like') ? 'super_like' : (m.photo_url ? 'image' : 'text')
-            }));
-            setMessages(uiMessages);
+            // Non-critical: load messages and gifts in parallel via allSettled
+            const [msgsResult, catalogResult] = await Promise.allSettled([
+                authService.getMessages(id),
+                authService.getGiftsCatalog()
+            ]);
 
-            const mappedGifts = catalogData.gifts.map((g: BackendGift) => {
-                const cat = catalogData.categories.find((c: BackendCategory) => c.id === g.category_id);
-                const catName = cat ? cat.name.toLowerCase() : 'romantic';
-                let uiCategory = 'romantic';
-                if (catName.includes('fun')) uiCategory = 'funny';
-                else if (catName.includes('epic') || catName.includes('premium')) uiCategory = 'epic';
-                return {
-                    id: g.id,
-                    name: g.name,
-                    image: getFullUrl(g.image_url),
-                    price: g.price,
-                    category: uiCategory,
-                    rarity: getRarity(g.price)
-                };
-            });
-            setGifts(mappedGifts);
+            if (msgsResult.status === 'fulfilled') {
+                const msgsData = msgsResult.value;
+                const uiMessages: Message[] = (msgsData as BackendMessage[]).map((m) => ({
+                    id: m.id,
+                    text: m.content || m.text,
+                    image: getFullUrl(m.photo_url || m.media_url),
+                    timestamp: new Date(m.created_at || m.timestamp),
+                    isOwn: m.sender_id === currentUserId,
+                    status: m.is_read ? 'read' : 'sent',
+                    type: (m.type === 'gift' || m.type === 'super_like') ? 'super_like' : (m.photo_url ? 'image' : 'text')
+                }));
+                setMessages(uiMessages);
+            } else {
+                console.warn('Failed to load messages (non-critical):', msgsResult.reason);
+            }
+
+            if (catalogResult.status === 'fulfilled') {
+                const catalogData = catalogResult.value;
+                const mappedGifts = catalogData.gifts.map((g: BackendGift) => {
+                    const cat = catalogData.categories.find((c: BackendCategory) => c.id === g.category_id);
+                    const catName = cat ? cat.name.toLowerCase() : 'romantic';
+                    let uiCategory = 'romantic';
+                    if (catName.includes('fun')) uiCategory = 'funny';
+                    else if (catName.includes('epic') || catName.includes('premium')) uiCategory = 'epic';
+                    return {
+                        id: g.id,
+                        name: g.name,
+                        image: getFullUrl(g.image_url),
+                        price: g.price,
+                        category: uiCategory,
+                        rarity: getRarity(g.price)
+                    };
+                });
+                setGifts(mappedGifts);
+            } else {
+                console.warn('Failed to load gifts catalog (non-critical):', catalogResult.reason);
+            }
         } catch (error) {
-            console.error('Failed to load chat', error);
+            console.error('Failed to load chat (match not found):', error);
         } finally {
             setLoading(false);
         }
@@ -144,7 +158,7 @@ export function useChatPage() {
         if (!token) return;
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/api_proxy/chat/ws`;
+        const wsUrl = `${protocol}//${window.location.host}/chat/ws`;
         const socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
