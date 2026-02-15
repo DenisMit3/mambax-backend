@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { adminApi, FunnelStage } from '@/services/adminApi';
+import { adminApi, FunnelStage } from '@/services/admin';
 import FunnelChart from '@/components/admin/analytics/FunnelChart';
 import { RefreshCw, Download, Info } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';

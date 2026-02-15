@@ -12,7 +12,7 @@ import {
   Loader2,
   RotateCcw,
 } from 'lucide-react';
-import { adminApi, ModerationQueueItem } from '@/services/adminApi';
+import { adminApi, ModerationQueueItem } from '@/services/admin';
 import { GlassCard } from '@/components/ui/GlassCard';
 import styles from '../../admin.module.css';
 

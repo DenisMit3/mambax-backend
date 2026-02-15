@@ -1,6 +1,6 @@
 'use client';
 
-import { adminApi, UserSegment } from '@/services/adminApi';
+import { adminApi, UserSegment } from '@/services/admin';
 import { Users, TrendingUp, AlertTriangle, Crown, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 

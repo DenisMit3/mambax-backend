@@ -13,7 +13,7 @@ import {
   Lock,
   RefreshCw,
 } from 'lucide-react';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 
 // Интерфейс сервиса для отображения статуса
 interface ServiceItem {

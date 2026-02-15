@@ -17,7 +17,7 @@ import {
     Loader2,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { adminApi, FeatureFlag } from '@/services/adminApi';
+import { adminApi, FeatureFlag } from '@/services/admin';
 import styles from '../../admin.module.css';
 
 // === Скелетон статистики ===

@@ -12,7 +12,7 @@ import {
   Edit,
   Eye,
 } from 'lucide-react';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 
 /** Интерфейс кампании */
 export interface Campaign {

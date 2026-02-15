@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { adminApi } from "@/services/adminApi";
+import { adminApi } from "@/services/admin";
 import { BarChart3, DollarSign, Users, TrendingUp } from "lucide-react";
 
 interface TrendItem {

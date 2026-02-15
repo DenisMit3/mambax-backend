@@ -8,7 +8,7 @@ import {
   RotateCcw,
   Loader2,
 } from 'lucide-react';
-import { adminApi, ModerationStats as ModerationStatsType } from '@/services/adminApi';
+import { adminApi, ModerationStats as ModerationStatsType } from '@/services/admin';
 import { GlassCard } from '@/components/ui/GlassCard';
 import styles from '../admin.module.css';
 

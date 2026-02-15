@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 import RevenueChart from '@/components/admin/analytics/RevenueChart';
 import { RefreshCw, Download, DollarSign, TrendingUp, CreditCard } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';

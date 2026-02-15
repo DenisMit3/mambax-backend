@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { adminApi, VerificationRequestItem } from '@/services/adminApi';
+import { adminApi, VerificationRequestItem } from '@/services/admin';
 import { Check, X, RefreshCw, Loader2, User, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassCard } from '@/components/ui/GlassCard';

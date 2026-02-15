@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Key, ToggleLeft, ToggleRight } from 'lucide-react';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 
 // Интерфейс флага функциональности
 interface FeatureFlag {

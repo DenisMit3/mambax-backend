@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { adminApi } from "@/services/adminApi";
+import { adminApi } from "@/services/admin";
 import { Ticket, BarChart3, Users, DollarSign } from "lucide-react";
 
 interface RedemptionItem {

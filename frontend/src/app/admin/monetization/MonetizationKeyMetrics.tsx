@@ -1,7 +1,7 @@
 'use client';
 
 import { GlassCard } from '@/components/ui/GlassCard';
-import { RevenueMetrics } from '@/services/adminApi';
+import { RevenueMetrics } from '@/services/admin';
 
 export interface KeyMetricsProps {
   revenueMetrics: RevenueMetrics | null;

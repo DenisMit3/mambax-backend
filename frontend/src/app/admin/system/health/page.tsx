@@ -13,7 +13,7 @@ import {
     Loader2,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { adminApi, SystemHealthService } from '@/services/adminApi';
+import { adminApi, SystemHealthService } from '@/services/admin';
 import styles from '../../admin.module.css';
 
 // Конфигурация цветов по статусу сервиса

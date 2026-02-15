@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { adminApi } from "@/services/adminApi";
+import { adminApi } from "@/services/admin";
 import { Target, DollarSign, Users, TrendingUp, ArrowRight } from "lucide-react";
 
 interface Segment {

@@ -5,7 +5,7 @@ import { Activity, Users, Zap, TrendingUp, DollarSign, MessageCircle, ShieldAler
 import { useQuery } from '@tanstack/react-query';
 
 import { GlassCard } from '@/components/ui/GlassCard';
-import adminApi, { DashboardMetrics } from '@/services/adminApi';
+import adminApi, { DashboardMetrics } from '@/services/admin';
 import { cn } from '@/lib/utils';
 
 // Metric Card Component

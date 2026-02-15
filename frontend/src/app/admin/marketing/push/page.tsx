@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Send, Bell, Users, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 import styles from '../../admin.module.css';
 
 // Сегменты аудитории

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { MapPin, Users, Crown, RefreshCw, Globe } from 'lucide-react';
-import { adminApi, GeoHeatmapPoint } from '@/services/adminApi';
+import { adminApi, GeoHeatmapPoint } from '@/services/admin';
 
 interface GeoHeatmapData {
   points: GeoHeatmapPoint[];

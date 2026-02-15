@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Eye, Edit, Ban, Trash2 } from 'lucide-react';
-import { UserListItem } from '@/services/adminApi';
+import { UserListItem } from '@/services/admin';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { STATUS_COLORS } from './types';
 

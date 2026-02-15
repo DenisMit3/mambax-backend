@@ -1,5 +1,5 @@
 // Общие типы для страницы управления пользователями
-import { UserListItem } from '@/services/adminApi';
+import { UserListItem } from '@/services/admin';
 
 export type UserStatus = 'active' | 'suspended' | 'banned' | 'pending';
 export type SubscriptionTier = 'free' | 'gold' | 'platinum';

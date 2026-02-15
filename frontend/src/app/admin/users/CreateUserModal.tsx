@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { X, UserPlus, Loader2 } from 'lucide-react';
-import { adminApi, AdminCreateUserData } from '@/services/adminApi';
+import { adminApi, AdminCreateUserData } from '@/services/admin';
 
 interface CreateUserModalProps {
   isOpen: boolean;

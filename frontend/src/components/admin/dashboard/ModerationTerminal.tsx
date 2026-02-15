@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
-import adminApi, { ModerationQueueItem } from '@/services/adminApi';
+import adminApi, { ModerationQueueItem } from '@/services/admin';
 import { cn } from '@/lib/utils';
 import { useTelegram } from '@/lib/telegram';
 

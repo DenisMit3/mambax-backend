@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { adminApi } from "@/services/adminApi";
+import { adminApi } from "@/services/admin";
 import {
   FlaskConical, Plus, Play, Pause, Trophy, Trash2, Edit, BarChart3,
 } from "lucide-react";

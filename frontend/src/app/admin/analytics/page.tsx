@@ -27,7 +27,7 @@ const RealtimeMetrics = dynamic(() => import('@/components/admin/analytics/Realt
   loading: () => <div className="h-32 animate-pulse bg-slate-800/50 rounded-xl" />,
   ssr: false
 });
-import { adminApi, AnalyticsData, FunnelStage, RetentionCohort } from '@/services/adminApi';
+import { adminApi, AnalyticsData, FunnelStage, RetentionCohort } from '@/services/admin';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import styles from '../admin.module.css';

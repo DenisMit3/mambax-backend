@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, RefreshCw, Loader2, AlertTriangle, UserPlus, Trash2 } from 'lucide-react';
-import { adminApi, UserListItem, UserFilters } from '@/services/adminApi';
+import { adminApi, UserListItem, UserFilters } from '@/services/admin';
 import { GlassCard } from '@/components/ui/GlassCard';
 import styles from '../admin.module.css';
 

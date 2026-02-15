@@ -11,7 +11,7 @@ import {
   BarChart3,
   AlertTriangle,
 } from 'lucide-react';
-import { adminApi, RevenueMetrics } from '@/services/adminApi';
+import { adminApi, RevenueMetrics } from '@/services/admin';
 import { GlassCard } from '@/components/ui/GlassCard';
 import styles from '../admin.module.css';
 

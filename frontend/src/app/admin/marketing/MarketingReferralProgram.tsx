@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Gift } from 'lucide-react';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 
 /** Интерфейс реферера */
 export interface Referrer {

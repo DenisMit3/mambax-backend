@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
-import { adminApi, TransactionListResponse } from '@/services/adminApi';
+import { adminApi, TransactionListResponse } from '@/services/admin';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Toast } from '@/components/ui/Toast';
 

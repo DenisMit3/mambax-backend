@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Bot, Plus } from 'lucide-react';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 import styles from '../admin.module.css';
 import { type AutoBanRule, type BanRuleFormData, INITIAL_FORM_DATA } from './types';
 import { BanRuleStats } from './BanRuleStats';

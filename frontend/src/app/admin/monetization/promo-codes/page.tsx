@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Plus, AlertCircle, RefreshCw } from 'lucide-react';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 import styles from '../../admin.module.css';
 
 import { PromoCode, PromoStats, PromoListResponse, PromoFilter } from './types';

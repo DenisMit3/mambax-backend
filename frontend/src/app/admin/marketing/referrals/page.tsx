@@ -12,7 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 import { GlassCard } from '@/components/ui/GlassCard';
 import styles from '../../admin.module.css';
 

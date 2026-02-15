@@ -14,7 +14,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 import styles from '../../admin.module.css';
 import type { Campaign } from './types';
 

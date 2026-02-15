@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Target } from 'lucide-react';
-import { FunnelStage } from '@/services/adminApi';
+import { FunnelStage } from '@/services/admin';
 
 interface FunnelChartProps {
     data: FunnelStage[];

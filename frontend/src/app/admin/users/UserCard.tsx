@@ -6,7 +6,7 @@ import {
   MapPin, Calendar, Heart, MessageCircle,
   Shield, Crown, CheckCircle,
 } from 'lucide-react';
-import { UserListItem } from '@/services/adminApi';
+import { UserListItem } from '@/services/admin';
 import { GlassCard } from '@/components/ui/GlassCard';
 import {
   STATUS_COLORS, SUBSCRIPTION_COLORS,

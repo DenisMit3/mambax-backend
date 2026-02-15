@@ -2,7 +2,7 @@
 
 import { Clock, Eye, CheckCircle, XCircle, Zap, TrendingUp, Loader2 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
-import type { ModerationStats as ModerationStatsType } from '@/services/adminApi';
+import type { ModerationStats as ModerationStatsType } from '@/services/admin';
 
 interface ModerationStatsProps {
   stats: ModerationStatsType | null;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { adminApi } from "@/services/adminApi";
+import { adminApi } from "@/services/admin";
 import { UserMinus, TrendingDown, BarChart3 } from "lucide-react";
 
 interface TierChurn {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Share2 } from 'lucide-react';
-import { adminApi } from '@/services/adminApi';
+import { adminApi } from '@/services/admin';
 
 /** Интерфейс канала привлечения */
 export interface Channel {

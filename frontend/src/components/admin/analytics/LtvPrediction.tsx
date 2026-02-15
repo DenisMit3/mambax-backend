@@ -6,7 +6,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, Users, Crown,
   RefreshCw, AlertTriangle, Lightbulb, BarChart3, Target,
 } from 'lucide-react';
-import { adminApi, LtvPrediction as LtvData, LtvSegment } from '@/services/adminApi';
+import { adminApi, LtvPrediction as LtvData, LtvSegment } from '@/services/admin';
 
 export default function LtvPrediction() {
   const [data, setData] = useState<LtvData | null>(null);

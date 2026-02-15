@@ -2,7 +2,7 @@ import pytest
 import pytest_asyncio
 from backend.models.user import User, UserStatus
 from backend.core.security import create_access_token
-from backend.api.auth import generate_otp, save_otp
+from backend.auth import generate_otp, save_otp
 
 @pytest.mark.asyncio
 async def test_banned_user_login_otp(client, db_session):

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { adminApi, RetentionCohort } from '@/services/adminApi';
+import { adminApi, RetentionCohort } from '@/services/admin';
 import RetentionHeatmap from '@/components/admin/analytics/RetentionHeatmap';
 import { TrendingUp, TrendingDown, RefreshCw, Download, HelpCircle } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
