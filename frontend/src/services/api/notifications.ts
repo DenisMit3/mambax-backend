@@ -42,4 +42,8 @@ export const notificationsApi = {
     async subscribePush(subscription: { endpoint: string, keys: { p256dh: string, auth: string } }) {
         return httpClient.post("/api/notifications/subscribe", subscription);
     },
+
+    async testNotification() {
+        return httpClient.post<{ success: boolean }>("/api/notifications/test", {});
+    },
 };

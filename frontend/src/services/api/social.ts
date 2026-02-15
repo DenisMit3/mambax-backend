@@ -63,21 +63,35 @@ export const socialApi = {
         return httpClient.post<{ success: boolean; message: string }>(`/api/events/${eventId}/register`);
     },
 
-    // --- Stories (stub) ---
+    // --- Stories ---
     async getStories() {
-        return [];
+        return httpClient.get<{
+            stories: {
+                id: string;
+                user_id: string;
+                user_name: string;
+                user_photo: string;
+                media_url: string;
+                media_type: string;
+                is_viewed: boolean;
+                created_at: string;
+                expires_at: string;
+            }[];
+        }>("/api/stories");
     },
 
     async createStory(file: File) {
-        return { id: '', url: '', created_at: new Date().toISOString() };
+        const formData = new FormData();
+        formData.append("file", file);
+        return httpClient.post<{ success: boolean; id: string; url: string }>("/api/stories", formData);
     },
 
     async viewStory(storyId: string) {
-        return { success: true };
+        return httpClient.post<{ success: boolean }>(`/api/stories/${storyId}/view`, {});
     },
 
     async reactToStory(storyId: string, reaction: string) {
-        return { success: true };
+        return httpClient.post<{ success: boolean }>(`/api/stories/${storyId}/react`, { reaction });
     },
 
     // --- Feedback ---
@@ -165,5 +179,37 @@ export const socialApi = {
 
     async reportUser(userId: string, reason: string, description?: string) {
         return httpClient.post("/api/safety/report", { user_id: userId, reason, description });
+    },
+
+    // --- Profile Analytics (detailed) ---
+    async getProfileAnalytics() {
+        return httpClient.get<{
+            views_today: number;
+            views_week: number;
+            views_trend: number;
+            likes_received_today: number;
+            likes_received_week: number;
+            likes_trend: number;
+            matches_week: number;
+            matches_trend: number;
+            messages_received_week: number;
+            superlikes_received_week: number;
+            profile_score: number;
+            top_viewers_age_range: string;
+            peak_activity_hour: string;
+        }>("/api/analytics/profile/detailed");
+    },
+
+    // --- Stars Transaction History ---
+    async getStarsHistory() {
+        return httpClient.get<{
+            transactions: {
+                id: string;
+                type: string;
+                amount: number;
+                description: string;
+                created_at: string;
+            }[];
+        }>("/api/payments/stars/history");
     },
 };

@@ -16,7 +16,7 @@ export function SettingsNotifications() {
 
     useEffect(() => {
         authService.getNotificationSettings()
-            .then((data) => setSettings(prev => ({ ...prev, ...data })))
+            .then((data: any) => setSettings(prev => ({ ...prev, ...data })))
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);

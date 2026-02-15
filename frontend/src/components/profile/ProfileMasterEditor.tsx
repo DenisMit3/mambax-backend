@@ -126,7 +126,7 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
                 });
                 setPhotos(newPhotos);
             }
-            setSelectedInterests(initialData.interests || []);
+            setSelectedInterests((initialData.interests || []) as string[]);
         }
     }, [initialData]);
 
@@ -134,7 +134,7 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
         if (onSave) {
             onSave({
                 bio,
-                photos: photos.filter(p => p.url).map(p => p.url),
+                photos: photos.filter(p => p.url).map(p => p.url!),
                 interests: selectedInterests,
                 is_incognito: incognito,
                 hide_age: hideAge,

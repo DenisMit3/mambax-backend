@@ -62,6 +62,7 @@ export const authApi = {
         pets?: string;
         ideal_date?: string;
         intent?: string;
+        social_links?: Record<string, string>;
         ux_preferences?: {
             sounds_enabled: boolean;
             haptic_enabled: boolean;

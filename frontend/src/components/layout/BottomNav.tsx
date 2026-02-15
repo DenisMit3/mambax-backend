@@ -1,50 +1,15 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Search, Heart, Layers, MessageCircle, Bell } from 'lucide-react';
+import { Search, Heart, Layers, MessageCircle, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useHaptic } from '@/hooks/useHaptic';
-import { wsService } from '@/services/websocket';
-import { notificationsApi } from '@/services/api/notifications';
 
 export function BottomNav() {
     const pathname = usePathname();
     const haptic = useHaptic();
-    const [unreadCount, setUnreadCount] = useState(0);
-
-    // Fetch unread count on mount
-    useEffect(() => {
-        const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
-        if (!token) return;
-
-        notificationsApi.getUnreadCount()
-            .then((res) => setUnreadCount(res?.unread_count || 0))
-            .catch(() => {});
-    }, [pathname]);
-
-    // Listen for real-time notification events to bump badge
-    useEffect(() => {
-        const handleNewNotification = () => {
-            setUnreadCount(prev => prev + 1);
-        };
-        const handleNotificationsRead = () => {
-            setUnreadCount(0);
-        };
-
-        wsService.on("new_like", handleNewNotification);
-        wsService.on("new_match", handleNewNotification);
-        wsService.on("gift_received", handleNewNotification);
-        wsService.on("notifications_read", handleNotificationsRead);
-
-        return () => {
-            wsService.off("new_like", handleNewNotification);
-            wsService.off("new_match", handleNewNotification);
-            wsService.off("gift_received", handleNewNotification);
-            wsService.off("notifications_read", handleNotificationsRead);
-        };
-    }, []);
 
     // FIX (A11Y): Added aria-labels for screen readers
     const navItems = [
@@ -52,7 +17,7 @@ export function BottomNav() {
         { name: 'Likes', href: '/likes', icon: Heart, ariaLabel: 'Симпатии' },
         { name: 'Discover', href: '/', icon: Layers, ariaLabel: 'Главная' },
         { name: 'Chat', href: '/chat', icon: MessageCircle, ariaLabel: 'Чаты' },
-        { name: 'Notifications', href: '/notifications', icon: Bell, ariaLabel: 'Уведомления', badge: unreadCount },
+        { name: 'Profile', href: '/profile', icon: User, ariaLabel: 'Профиль' },
     ];
 
     return (
@@ -103,12 +68,6 @@ export function BottomNav() {
                                         : 'text-slate-500 hover:text-slate-300'
                                         }`}
                                 />
-                                {/* Unread badge */}
-                                {'badge' in item && (item as any).badge > 0 && (
-                                    <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] flex items-center justify-center bg-[#ff4b91] text-white text-[10px] font-bold rounded-full px-1 shadow-[0_0_8px_rgba(255,75,145,0.6)]">
-                                        {(item as any).badge > 99 ? '99+' : (item as any).badge}
-                                    </span>
-                                )}
                             </motion.div>
 
                             {/* Glowing Active Dot */}

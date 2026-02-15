@@ -12,6 +12,7 @@ import { UserProvider } from '@/context/UserContext';
 import { useTelegram } from '@/lib/telegram';
 import { measurePerformance } from '@/lib/performance';
 import { initRemoteLogger } from '@/utils/remoteLogger';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -21,6 +22,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const isVerification = pathname?.startsWith('/verification');
     const isOnboarding = pathname?.startsWith('/onboarding');
     const isAuth = pathname?.startsWith('/auth');
+
+    // Register push notifications for authenticated users
+    usePushNotifications();
 
     // Explicitly hide global nav where pages handle it themselves (to avoid duplicates)
     // Only hide on individual Chat pages (which has input bar), NOT the chat list
