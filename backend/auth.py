@@ -30,6 +30,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 TELEGRAM_BOT_TOKEN = settings.TELEGRAM_BOT_TOKEN
 logger = logging.getLogger(__name__)
 
+# Debug: store last validation attempt details
+_last_validation_debug = {"status": "no attempts yet"}
 
 
 async def decode_jwt(token: str) -> Optional[str]:
@@ -50,30 +52,50 @@ def validate_telegram_data(init_data: str) -> dict | None:
     Uses HMAC-SHA256 as per official Telegram docs:
     https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
     """
+    global _last_validation_debug
+    debug = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "init_data_length": len(init_data) if init_data else 0,
+        "init_data_preview": (init_data or "")[:100],
+    }
     try:
-        if not TELEGRAM_BOT_TOKEN:
+        bot_token = TELEGRAM_BOT_TOKEN.strip() if TELEGRAM_BOT_TOKEN else None
+        debug["bot_token_length"] = len(bot_token) if bot_token else 0
+        debug["bot_token_prefix"] = bot_token[:8] + "..." if bot_token and len(bot_token) > 8 else "N/A"
+        
+        if not bot_token:
+             debug["error"] = "TELEGRAM_BOT_TOKEN not configured"
+             _last_validation_debug = debug
              logger.error("[VALIDATE-TG] TELEGRAM_BOT_TOKEN not configured")
              raise ValueError("TELEGRAM_BOT_TOKEN not configured")
         
-        parsed_data = dict(parse_qsl(init_data, keep_blank_values=True))
+        parsed_data = dict(parse_qsl(init_data.strip(), keep_blank_values=True))
+        debug["parsed_keys"] = sorted(parsed_data.keys())
         logger.info(f"[VALIDATE-TG] Parsed keys: {sorted(parsed_data.keys())}")
+        
         if "hash" not in parsed_data:
+            debug["error"] = "hash not found in initData"
+            _last_validation_debug = debug
             logger.warning("[VALIDATE-TG] FAIL: hash not found in initData")
             return None
 
         received_hash = parsed_data.pop("hash")
+        debug["received_hash_prefix"] = received_hash[:16]
         
-        # Remove signature field if present (used for Ed25519 third-party validation, not HMAC)
+        # NOTE: Do NOT remove 'signature' - it must be included in data_check_string
+        # when validating via HMAC-SHA256 (hash). Telegram includes ALL fields except 'hash'
+        # in the hash calculation.
         had_signature = "signature" in parsed_data
-        parsed_data.pop("signature", None)
-        if had_signature:
-            logger.info("[VALIDATE-TG] Removed 'signature' field from data")
+        debug["had_signature"] = had_signature
         
         # Check auth_date to prevent replay attacks
         auth_date = int(parsed_data.get("auth_date", 0))
         current_time = datetime.utcnow().timestamp()
         max_age = 86400  # 24 hours
         age_seconds = current_time - auth_date
+        debug["auth_date"] = auth_date
+        debug["age_seconds"] = round(age_seconds)
+        debug["environment"] = app_settings.ENVIRONMENT
         
         logger.info(f"[VALIDATE-TG] auth_date={auth_date}, age={age_seconds:.0f}s, env={app_settings.ENVIRONMENT}")
         
@@ -81,25 +103,31 @@ def validate_telegram_data(init_data: str) -> dict | None:
             logger.info(f"[VALIDATE-TG] Dev mode: skipping auth_date validation")
         else:
             if age_seconds > max_age:
+                debug["error"] = f"auth_date too old: {age_seconds:.0f}s > {max_age}s"
+                _last_validation_debug = debug
                 logger.warning(f"[VALIDATE-TG] FAIL: auth_date too old: {age_seconds:.0f}s > {max_age}s")
                 return None
         
         # Step 1: Sort keys alphabetically and build data_check_string
         data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
+        debug["data_check_string_preview"] = data_check_string[:200]
         logger.info(f"[VALIDATE-TG] data_check_string (first 200 chars): {data_check_string[:200]}")
         
         # Step 2: secret_key = HMAC-SHA256(key="WebAppData", data=bot_token)
-        secret_key = hmac.new(b"WebAppData", TELEGRAM_BOT_TOKEN.encode(), hashlib.sha256).digest()
+        secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
         
         # Step 3: calculated_hash = HMAC-SHA256(key=secret_key, data=data_check_string)
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         
+        debug["calculated_hash_prefix"] = calculated_hash[:16]
         logger.info(f"[VALIDATE-TG] Hash compare: calculated={calculated_hash[:16]}... received={received_hash[:16]}...")
         
         # Step 4: Constant-time comparison to prevent timing attacks
         if hmac.compare_digest(calculated_hash, received_hash):
             user_data = json.loads(parsed_data.get("user", "{}"))
             if not user_data.get("id"):
+                debug["error"] = "user data missing 'id'"
+                _last_validation_debug = debug
                 logger.warning("[VALIDATE-TG] FAIL: user data missing 'id'")
                 return None
             result = {
@@ -110,12 +138,22 @@ def validate_telegram_data(init_data: str) -> dict | None:
                 "language_code": user_data.get("language_code"),
                 "is_premium": user_data.get("is_premium", False),
             }
+            debug["status"] = "SUCCESS"
+            debug["user_id"] = result["id"]
+            _last_validation_debug = debug
             logger.info(f"[VALIDATE-TG] SUCCESS: user_id={result['id']}, username={result['username']}")
             return result
         
+        debug["error"] = "hash mismatch"
+        debug["status"] = "FAIL"
+        _last_validation_debug = debug
         logger.warning("[VALIDATE-TG] FAIL: hash mismatch")
         return None
     except Exception as e:
+        debug["error"] = str(e)
+        debug["exception_type"] = type(e).__name__
+        debug["status"] = "EXCEPTION"
+        _last_validation_debug = debug
         logger.error(f"[VALIDATE-TG] EXCEPTION: {e}", exc_info=True)
         return None
 

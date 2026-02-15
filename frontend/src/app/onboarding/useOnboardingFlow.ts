@@ -69,10 +69,8 @@ export function useOnboardingFlow() {
 
             try {
                 const me = await authService.getMe();
-                const hasPhotos = me.photos && me.photos.length > 0;
-                const hasRealGender = me.gender && me.gender !== 'other';
 
-                if (me.is_complete === true && hasPhotos && hasRealGender) {
+                if (me.is_complete === true) {
                     router.push('/');
                     return;
                 }
@@ -88,10 +86,8 @@ export function useOnboardingFlow() {
                             try {
                                 await authService.telegramLogin(initData);
                                 const me = await authService.getMe();
-                                const hasPhotos = me.photos && me.photos.length > 0;
-                                const hasRealGender = me.gender && me.gender !== 'other';
 
-                                if (me.is_complete === true && hasPhotos && hasRealGender) {
+                                if (me.is_complete === true) {
                                     router.push('/');
                                     return;
                                 }

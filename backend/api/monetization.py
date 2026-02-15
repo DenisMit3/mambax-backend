@@ -2370,7 +2370,7 @@ async def upload_gift_image(
         raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {allowed_types}")
     
     from backend.services.storage import storage_service
-    url = await storage_service.save_gift_image(file)
+    url = await storage_service.save_gift_image(file, db)
     return {"url": url, "filename": url.split("/")[-1]}
 
 @router.get("/gifts/analytics")

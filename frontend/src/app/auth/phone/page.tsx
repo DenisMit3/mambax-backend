@@ -66,17 +66,12 @@ export default function AuthGatePage() {
                 .then(async (data) => {
                     console.log('[AUTH-FLOW] AuthGatePage: telegramLogin response:', JSON.stringify(data));
                     
-                    // FIX: Even if has_profile is true, verify profile is actually complete
-                    // by checking for photos and real data
+                    // Trust backend's is_complete flag
                     if (data.has_profile) {
                         try {
                             const me = await authService.getMe();
                             
-                            // Profile is only truly complete if user has photos and real gender
-                            const hasPhotos = me.photos && me.photos.length > 0;
-                            const hasRealGender = me.gender && me.gender !== 'other';
-                            
-                            if (!hasPhotos || !hasRealGender) {
+                            if (me.is_complete !== true) {
                                 router.replace("/onboarding");
                                 return;
                             }
@@ -112,15 +107,12 @@ export default function AuthGatePage() {
             authService.telegramLogin(initDataRaw)
                 .then(async (data) => {
                     
-                    // FIX: Even if has_profile is true, verify profile is actually complete
+                    // Trust backend's is_complete flag
                     if (data.has_profile) {
                         try {
                             const me = await authService.getMe();
                             
-                            const hasPhotos = me.photos && me.photos.length > 0;
-                            const hasRealGender = me.gender && me.gender !== 'other';
-                            
-                            if (!hasPhotos || !hasRealGender) {
+                            if (me.is_complete !== true) {
                                 router.replace("/onboarding");
                                 return;
                             }

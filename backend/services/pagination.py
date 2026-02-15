@@ -18,7 +18,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import desc, asc
+from sqlalchemy import desc, asc, exists
 from backend import models
 
 # ============================================================================
@@ -101,11 +101,18 @@ async def get_profiles_paginated(
     """
     # Базовый запрос
     from uuid import UUID
+    from backend.models.user import UserPhoto
     u_id = UUID(current_user_id) if isinstance(current_user_id, str) else current_user_id
+
+    # Подзапрос: пользователь имеет хотя бы 1 фото
+    has_photos = exists(
+        select(UserPhoto.id).where(UserPhoto.user_id == models.User.id)
+    )
 
     query = select(models.User).where(
         models.User.id != u_id,
         models.User.is_complete == True,
+        has_photos,
         models.User.is_active == True
     )
     

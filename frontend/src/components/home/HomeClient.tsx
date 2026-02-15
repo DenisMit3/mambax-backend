@@ -125,13 +125,8 @@ export function HomeClient() {
 
     useEffect(() => {
         if (me) {
-            
-            // Critical: Check BOTH is_complete flag AND actual profile data
-            const hasPhotos = me.photos && me.photos.length > 0;
-            const hasRealGender = me.gender && me.gender !== 'other';
-            
-            // Only redirect if profile is truly incomplete
-            if (me.is_complete !== true || !hasPhotos || !hasRealGender) {
+            // Trust backend's is_complete flag — it's set during onboarding completion
+            if (me.is_complete !== true) {
                 router.replace('/onboarding');
             }
         }

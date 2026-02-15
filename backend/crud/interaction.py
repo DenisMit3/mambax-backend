@@ -3,11 +3,11 @@
 from typing import Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import select, and_, or_, func
+from sqlalchemy import select, and_, or_, func, exists
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.user import User, UserStatus
+from backend.models.user import User, UserStatus, UserPhoto
 from backend.models.interaction import Swipe, Match
 from backend.schemas.interaction import SwipeCreate, SwipeAction
 
@@ -40,12 +40,19 @@ async def get_user_feed(
         .scalar_subquery()
     )
     
+    # Подзапрос: пользователь имеет хотя бы 1 фото
+    has_photos = exists(
+        select(UserPhoto.id).where(UserPhoto.user_id == User.id)
+    )
+    
     # Основной запрос: пользователи, которых еще НЕ свайпнули
     stmt = (
         select(User)
         .where(
             and_(
                 User.id != user_id,           # Не показываем себя
+                User.is_complete == True,     # Только завершённые профили
+                has_photos,                   # Только с фото
                 User.status == UserStatus.ACTIVE, # Only strictly active (excludes shadowban, banned, suspended)
                 User.is_active == True,       # Redundant safety check
                 User.id.notin_(swiped_users_subquery)  # Не показываем уже свайпнутых
@@ -64,6 +71,8 @@ async def get_user_feed(
             .where(
                 and_(
                     User.id != user_id,
+                    User.is_complete == True,
+                    has_photos,
                     User.is_active == True
                 )
             )

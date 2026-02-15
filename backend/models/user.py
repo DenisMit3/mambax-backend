@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional, List
 from decimal import Decimal
 
-from sqlalchemy import String, Integer, Boolean, Float, Text, DateTime, JSON, Uuid, Numeric, ForeignKey, Enum as SQLAlchemyEnum, Index
+from sqlalchemy import String, Integer, Boolean, Float, Text, DateTime, JSON, Uuid, Numeric, ForeignKey, Enum as SQLAlchemyEnum, Index, LargeBinary
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base
@@ -49,6 +49,25 @@ class UserPhoto(Base):
 
     def __repr__(self) -> str:
         return f"<UserPhoto {self.id} for {self.user_id}>"
+
+
+class PhotoBlob(Base):
+    """Binary photo storage in PostgreSQL (Neon).
+    
+    Stores processed/optimized images as bytea.
+    Referenced by UserPhoto.url as /api/photos/{id}
+    """
+    __tablename__ = "photo_blobs"
+    
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    content_type: Mapped[str] = mapped_column(String(50), nullable=False, default="image/webp")
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    original_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f"<PhotoBlob {self.id} ({self.size_bytes} bytes)>"
 
 
 class UserInterest(Base):

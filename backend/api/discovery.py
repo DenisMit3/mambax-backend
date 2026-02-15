@@ -390,8 +390,8 @@ async def upload_file(
     Unified Secure Upload for Discovery/Profile.
     Uses StorageService for cross-platform consistency.
     """
-    # 1. Save file via unified storage service (returns CDN URL if configured)
-    file_url = await storage_service.save_user_photo(file)
+    # 1. Save file via unified storage service (returns DB URL)
+    file_url = await storage_service.save_user_photo(file, db)
     
     # 2. Real Moderation Check on the actual file content
     try:
@@ -403,8 +403,8 @@ async def upload_file(
         )
         
         if not is_safe:
-            # DELETE the bad file immediately to save space and prevent abuse
-            storage_service.delete_file(file_url)
+            # DELETE the bad file immediately
+            await storage_service.delete_photo(file_url, db)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, 
                 detail="Image failed moderation policy"
@@ -415,7 +415,7 @@ async def upload_file(
     except Exception as e:
         logger.error(f"Moderation CRITICAL error for {file_url}: {e}")
         # FAIL-CLOSE: Delete the file if we can't verify its safety
-        storage_service.delete_file(file_url)
+        await storage_service.delete_photo(file_url, db)
         raise HTTPException(status_code=500, detail="Moderation temporary unavailable. Please try later.")
 
     # URL already includes CDN prefix from storage_service.save_user_photo()

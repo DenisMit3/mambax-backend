@@ -852,20 +852,23 @@ async def check_online_status_endpoint(user_id: str):
     return get_online_status(user_id)
 
 @router.post("/chat/upload")
-async def upload_chat_media(file: UploadFile = File(...), current_user: str = Depends(auth.get_current_user)):
+async def upload_chat_media(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(database.get_db),
+    current_user: str = Depends(auth.get_current_user)
+):
     from backend.services.storage import storage_service
-    # Reuse save_gift_image or create a generic one. For now save_gift_image handles images.
-    # Ideally storage_service.save_file(file, folder="chat")
-    url = await storage_service.save_gift_image(file)
+    url = await storage_service.save_gift_image(file, db)
     return {"url": url, "type": file.content_type}
 
 @router.post("/chat/voice")
 async def upload_voice_message(
     file: UploadFile = File(...),
+    db: AsyncSession = Depends(database.get_db),
     current_user: str = Depends(auth.get_current_user)
 ):
     from backend.services.storage import storage_service
-    url, duration = await storage_service.save_voice_message(file)
+    url, duration = await storage_service.save_voice_message(file, db)
     return {"url": url, "duration": duration}
 
 @router.post("/messages/{message_id}/read")

@@ -224,6 +224,7 @@ from backend.api.system import router as system_router
 from backend.api.advanced import router as advanced_router
 from backend.api.debug import router as debug_router
 from backend.api.missing_endpoints import router as missing_router
+from backend.api.photos import router as photos_router
 
 
 app.include_router(health_router, tags=["Health"])
@@ -248,6 +249,7 @@ app.include_router(marketing_router)
 app.include_router(system_router)
 app.include_router(advanced_router)
 app.include_router(missing_router, prefix="/api")
+app.include_router(photos_router)  # /api/photos/{id} — serves images from DB
 
 # Debug/Dev routes only in non-production
 if not settings.is_production:
@@ -262,9 +264,9 @@ async def ping():
     return {"pong": True}
 
 # --- Static Files & Root ---
-
+# NOTE: Photos are now stored in PostgreSQL (PhotoBlob), not on disk.
+# StaticFiles mount kept only for index.html and other static assets.
 static_dir = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "static")))
-logger.info(f"Serving static files from: {static_dir}")
 
 if not static_dir.exists():
     static_dir.mkdir(parents=True, exist_ok=True)

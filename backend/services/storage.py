@@ -1,180 +1,199 @@
-import os
+# Storage Service — Neon PostgreSQL blob storage
+# Stores processed images as bytea in photo_blobs table
+# Returns URLs like /api/photos/{blob_id} for serving
+
 import uuid
-import shutil
-from typing import List
-from pathlib import Path
+import logging
+from typing import Optional
+
 from fastapi import UploadFile, HTTPException
-from backend.core.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
+
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+
+async def _process_image(content: bytes) -> tuple[bytes, str]:
+    """
+    Validate, sanitize and optimize image using Pillow.
+    Returns (processed_bytes, content_type).
+    Strips EXIF, converts to WebP for optimal size.
+    """
+    from PIL import Image, ImageOps
+    import io
+
+    try:
+        image = Image.open(io.BytesIO(content))
+        image.load()  # Force full decode to catch corrupt files
+    except Exception as e:
+        logger.warning(f"Invalid image rejected: {e}")
+        raise HTTPException(status_code=400, detail="Invalid or corrupt image file")
+
+    # Strip EXIF, fix orientation
+    image = ImageOps.exif_transpose(image)
+
+    # Handle transparency
+    if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+        clean = image.convert("RGBA")
+    else:
+        clean = image.convert("RGB")
+
+    # Resize if too large (max 2048px on longest side)
+    max_dim = 2048
+    if max(clean.size) > max_dim:
+        clean.thumbnail((max_dim, max_dim), Image.LANCZOS)
+
+    # Save as WebP
+    buf = io.BytesIO()
+    clean.save(buf, format="WEBP", quality=85, optimize=True)
+    buf.seek(0)
+
+    return buf.getvalue(), "image/webp"
+
 
 class StorageService:
-    def __init__(self):
-        # Fix: Use absolute path relative to backend root to match FastAPI mount in main.py
-        # backend/services/storage.py -> backend/services -> backend -> backend/static
-        self.base_dir = Path(__file__).parent.parent / "static"
-        self.base_dir.mkdir(exist_ok=True)
-        self.max_file_size = 10 * 1024 * 1024  # 10 MB limit for photos
-        self.allowed_image_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    """
+    Production storage service using Neon PostgreSQL.
+    Images are stored as bytea in photo_blobs table.
+    """
 
-    async def _save_file(self, file: UploadFile, subfolder: str) -> str:
+    async def save_photo(
+        self,
+        file: UploadFile,
+        db: AsyncSession,
+        category: str = "uploads",
+    ) -> str:
         """
-        Generic file saver with validation and sanitization.
+        Process and save photo to PostgreSQL.
+        Returns URL path: /api/photos/{blob_id}
         """
+        from backend.models.user import PhotoBlob
+
+        # 1. Validate content type
+        if file.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type '{file.content_type}'. Allowed: {', '.join(ALLOWED_IMAGE_TYPES)}"
+            )
+
+        # 2. Read and validate size
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Max {MAX_FILE_SIZE // (1024*1024)}MB allowed."
+            )
+
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file")
+
+        # 3. Process image (validate, strip EXIF, optimize, convert to WebP)
+        processed_data, content_type = await _process_image(content)
+
+        # 4. Save to PostgreSQL
+        blob = PhotoBlob(
+            data=processed_data,
+            content_type=content_type,
+            size_bytes=len(processed_data),
+            original_filename=file.filename,
+        )
+        db.add(blob)
+        await db.flush()  # Get the ID without committing
+
+        url = f"/api/photos/{blob.id}"
+        logger.info(f"Photo saved to DB: {url} ({len(processed_data)} bytes, {category})")
+        return url
+
+    async def delete_photo(self, photo_url: str, db: AsyncSession) -> bool:
+        """
+        Delete photo blob from PostgreSQL by URL.
+        """
+        from backend.models.user import PhotoBlob
+        from sqlalchemy import select
+
+        if not photo_url or not photo_url.startswith("/api/photos/"):
+            # Legacy URL or external — skip silently
+            logger.debug(f"Skipping delete for non-blob URL: {photo_url}")
+            return False
+
         try:
-            from PIL import Image, ImageOps
-            import io
+            blob_id = uuid.UUID(photo_url.split("/api/photos/")[1])
+        except (ValueError, IndexError):
+            logger.warning(f"Invalid photo URL for delete: {photo_url}")
+            return False
 
-            # 1. Read content
-            content = await file.read()
-            if len(content) > self.max_file_size:
-                raise HTTPException(
-                    status_code=413, 
-                    detail=f"File too large. Max {self.max_file_size // (1024*1024)}MB allowed."
-                )
+        result = await db.execute(select(PhotoBlob).where(PhotoBlob.id == blob_id))
+        blob = result.scalar_one_or_none()
+        if blob:
+            await db.delete(blob)
+            logger.info(f"Photo blob deleted: {blob_id}")
+            return True
 
-            # 2. Strict Image Validation & Sanitization
-            try:
-                # Open image
-                image = Image.open(io.BytesIO(content))
-                
-                # Force loading to verify data integrity
-                image.load()
-                
-                # Auto-rotate based on EXIF before stripping it
-                image = ImageOps.exif_transpose(image)
-                
-                # Convert to RGB (or RGBA) to normalize and strip metadata/embedded scripts
-                if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
-                    convert_mode = "RGBA"
-                else:
-                    convert_mode = "RGB"
-                    
-                clean_image = image.convert(convert_mode)
-                
-                # Optimize & Convert to WebP (Safe Format)
-                output_buffer = io.BytesIO()
-                clean_image.save(output_buffer, format="WEBP", quality=85, optimize=True)
-                output_buffer.seek(0)
-                
-                # Generate safe filename
-                filename = f"{uuid.uuid4()}.webp"
-                
-            except Exception as e:
-                print(f"Security: Invalid image rejected: {e}")
-                raise HTTPException(status_code=400, detail="Invalid image file or corrupt data")
+        logger.warning(f"Photo blob not found for delete: {blob_id}")
+        return False
 
-            # 3. Save
-            target_dir = self.base_dir / subfolder
-            target_dir.mkdir(exist_ok=True, parents=True)
-            
-            file_path = target_dir / filename
-            
-            with open(file_path, "wb") as buffer:
-                buffer.write(output_buffer.getbuffer())
-            
-            return f"/static/{subfolder}/{filename}"
+    async def get_photo(self, photo_id: uuid.UUID, db: AsyncSession) -> Optional[tuple[bytes, str]]:
+        """
+        Retrieve photo data and content_type from PostgreSQL.
+        Returns (data, content_type) or None.
+        """
+        from backend.models.user import PhotoBlob
+        from sqlalchemy import select
 
-        except HTTPException as he:
-            raise he
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Storage error: {str(e)}")
+        result = await db.execute(select(PhotoBlob).where(PhotoBlob.id == photo_id))
+        blob = result.scalar_one_or_none()
+        if blob:
+            return blob.data, blob.content_type
+        return None
+
+    # --- Convenience methods matching old API ---
+
+    async def save_user_photo(self, file: UploadFile, db: AsyncSession) -> str:
+        return await self.save_photo(file, db, category="uploads")
+
+    async def save_verification_photo(self, file: UploadFile, db: AsyncSession) -> str:
+        return await self.save_photo(file, db, category="verifications")
+
+    async def save_gift_image(self, file: UploadFile, db: AsyncSession) -> str:
+        return await self.save_photo(file, db, category="gifts")
+
+    async def save_voice_message(self, file: UploadFile, db: AsyncSession) -> tuple[str, int]:
+        """
+        Save voice message as blob (no image processing).
+        Returns (url, duration). Duration detection is best-effort.
+        """
+        from backend.models.user import PhotoBlob
+
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="File too large")
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file")
+
+        blob = PhotoBlob(
+            data=content,
+            content_type=file.content_type or "audio/ogg",
+            size_bytes=len(content),
+            original_filename=file.filename,
+        )
+        db.add(blob)
+        await db.flush()
+
+        url = f"/api/photos/{blob.id}"
+        logger.info(f"Voice saved to DB: {url} ({len(content)} bytes)")
+        return url, 0  # Duration detection not implemented yet
 
     def delete_file(self, file_url: str):
         """
-        Deletes a file from the local storage based on its public URL.
+        Legacy sync delete — no-op for DB storage.
+        Use delete_photo(url, db) for async DB deletion.
         """
-        if not file_url:
-            return
-
-        # URL typically looks like /static/uploads/filename.ext or /static/gifts/filename.ext
-        # We need to map it back to the local path
-        if file_url.startswith("/static/"):
-            relative_path = file_url[len("/static/"):]
-            # SECURITY: Resolve and check if within base_dir to prevent path traversal
-            try:
-                # Use .name and .parent.name to ensure we stay within static/subfolder
-                parts = Path(relative_path).parts
-                if len(parts) < 2 or ".." in parts:
-                    return
-
-                file_path = (self.base_dir / Path(*parts)).resolve()
-                
-                if not str(file_path).startswith(str(self.base_dir.resolve())):
-                    print(f"Path traversal attempt blocked: {file_url}")
-                    return
-
-                if file_path.exists() and file_path.is_file():
-                    os.remove(file_path)
-            except Exception as e:
-                # Log error but don't fail the request (cleanup is best-effort)
-                print(f"Failed to delete file {file_url}: {e}")
-
-    async def save_gift_image(self, file: UploadFile) -> str:
-        file_url = await self._save_file(file, "gifts")
-        return self.get_cdn_url(file_url)
-
-    async def save_user_photo(self, file: UploadFile) -> str:
-        file_url = await self._save_file(file, "uploads")
-        return self.get_cdn_url(file_url)
-    
-    async def save_verification_photo(self, file: UploadFile) -> str:
-        # In prod this should be a private bucket
-        file_url = await self._save_file(file, "verifications")
-        return self.get_cdn_url(file_url)
-
-    async def save_voice_message(self, file: UploadFile) -> tuple[str, float]:
-        import subprocess
-        import json
-        
-        if file.content_type not in ["audio/ogg", "audio/webm", "audio/mpeg", "audio/wav"]:
-            raise HTTPException(400, "Invalid audio format")
-            
-        # Temp file
-        temp_filename = f"{uuid.uuid4()}.tmp"
-        temp_path = self.base_dir / "voice" / temp_filename
-        (self.base_dir / "voice").mkdir(exist_ok=True, parents=True)
-        
-        with open(temp_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
-            
-        output_filename = f"{uuid.uuid4()}.ogg"
-        output_path = self.base_dir / "voice" / output_filename
-        
-        try:
-            # Convert
-            subprocess.run([
-                'ffmpeg', '-i', str(temp_path), 
-                '-c:a', 'libopus', '-b:a', '32k', '-vn', 
-                str(output_path)
-            ], check=True, capture_output=True)
-            
-            # Get duration
-            probe = subprocess.run([
-                'ffprobe', '-v', 'error', 
-                '-show_entries', 'format=duration', 
-                '-of', 'default=noprint_wrappers=1:nokey=1', 
-                str(output_path)
-            ], check=True, capture_output=True, text=True)
-            
-            duration = float(probe.stdout.strip())
-            
-            os.remove(temp_path)
-            return f"/static/voice/{output_filename}", duration
-            
-        except Exception as e:
-            if temp_path.exists(): os.remove(temp_path)
-            if output_path.exists(): os.remove(output_path)
-            print(f"FFmpeg error: {e}")
-            raise HTTPException(500, "Voice processing failed")
+        logger.debug(f"Legacy delete_file called for: {file_url} (no-op, use delete_photo)")
 
     def get_cdn_url(self, file_url: str) -> str:
-        """
-        Convert local URL to CDN URL if configured.
-        PERF: CDN integration for faster static file delivery.
-        """
-        cdn_domain = os.getenv("CDN_DOMAIN")  # e.g., "cdn.mambax.com"
-        if cdn_domain and file_url.startswith("/static/"):
-            return f"https://{cdn_domain}{file_url}"
+        """Backward compat — just return the URL as-is for DB storage."""
         return file_url
 
 
