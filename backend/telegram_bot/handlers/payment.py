@@ -14,7 +14,7 @@ from backend.models.user import User
 from backend.telegram_bot import texts
 from backend.services.gifts import deliver_gift
 from backend.services.monetization import buy_subscription_with_stars
-from backend.core.websocket import manager
+from backend.services.chat import manager
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -208,10 +208,10 @@ async def process_subscription_purchase(db, user, transaction, amount, message):
 
 async def notify_frontend(user_id, new_balance):
     try:
-        await manager.send_personal_message({
+        await manager.send_personal(str(user_id), {
             "type": "balance_update",
             "balance": float(new_balance)
-        }, str(user_id))
+        })
     except Exception as e:
         logger.error(f"WS notification failed: {e}")
 

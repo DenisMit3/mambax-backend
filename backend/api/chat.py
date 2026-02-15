@@ -1044,7 +1044,7 @@ async def set_typing_endpoint(req: TypingRequest, current_user: str = Depends(au
 
 @router.get("/chat/typing/{match_id}")
 async def get_typing_endpoint(match_id: str, current_user: str = Depends(auth.get_current_user)):
-    return {"typing_users": get_typing_users(match_id, exclude_user_id=current_user)}
+    return {"typing_users": await get_typing_users(match_id, exclude_user_id=current_user)}
 
 @router.post("/chat/read")
 async def mark_read_endpoint(req: MarkReadRequest, current_user: str = Depends(auth.get_current_user)):

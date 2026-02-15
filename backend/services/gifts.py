@@ -6,7 +6,7 @@ from backend.models.user import User
 from backend.models.monetization import VirtualGift, GiftTransaction, RevenueTransaction
 from backend.models.interaction import Match
 from backend.models.chat import Message
-from backend.core.websocket import manager
+from backend.services.chat import manager
 from backend.services.notification import send_push_notification
 import logging
 
@@ -82,9 +82,9 @@ async def deliver_gift(
         "timestamp": transaction.created_at.isoformat()
     }
     
-    is_receiver_online = manager.is_user_online(str(receiver_id))
+    is_receiver_online = manager.is_online(str(receiver_id))
     if is_receiver_online:
-        await manager.send_personal_message(notification, str(receiver_id))
+        await manager.send_personal(str(receiver_id), notification)
 
     # 6. Send Push Notification (if offline or always?)
     if not is_receiver_online:
@@ -141,7 +141,7 @@ async def deliver_gift(
             "timestamp": gift_message.created_at.isoformat(),
             "is_anonymous": is_anonymous
         }
-        await manager.send_personal_message(gift_chat_message, str(receiver_id))
+        await manager.send_personal(str(receiver_id), gift_chat_message)
 
     # 8. Notify Sender of Success (for UI update)
     success_notification = {
@@ -152,6 +152,6 @@ async def deliver_gift(
         "receiver_name": receiver.name if receiver else "User",
         "timestamp": transaction.created_at.isoformat()
     }
-    await manager.send_personal_message(success_notification, str(sender_id))
+    await manager.send_personal(str(sender_id), success_notification)
 
     return transaction

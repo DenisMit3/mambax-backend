@@ -66,6 +66,12 @@ export default function ChatPage() {
     const userRef = useRef(user);
     useEffect(() => { userRef.current = user; }, [user]);
 
+    // Рефы для ephemeral настроек (избегаем stale closure в WS/send handlers)
+    const ephemeralEnabledRef = useRef(ephemeralEnabled);
+    const ephemeralSecondsRef = useRef(ephemeralSeconds);
+    useEffect(() => { ephemeralEnabledRef.current = ephemeralEnabled; }, [ephemeralEnabled]);
+    useEffect(() => { ephemeralSecondsRef.current = ephemeralSeconds; }, [ephemeralSeconds]);
+
     useEffect(() => {
         if (id && isAuthed) {
             loadInitialData();
@@ -308,7 +314,7 @@ export default function ChatPage() {
             // Incoming call
             setIncomingCall({
                 callerId: data.caller_id,
-                callerName: user?.name || "Unknown",
+                callerName: userRef.current?.name || "Неизвестный",
                 type: data.call_type || "video"
             });
             setCallType(data.call_type || "video");
@@ -339,8 +345,8 @@ export default function ChatPage() {
                 type: 'message',
                 match_id: id,
                 content: text,
-                is_ephemeral: ephemeralEnabled,
-                ephemeral_seconds: ephemeralEnabled ? ephemeralSeconds : undefined
+                is_ephemeral: ephemeralEnabledRef.current,
+                ephemeral_seconds: ephemeralEnabledRef.current ? ephemeralSecondsRef.current : undefined
             }));
         } else {
             // Fallback to REST

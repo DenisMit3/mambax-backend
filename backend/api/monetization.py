@@ -343,11 +343,11 @@ async def refund_transaction(
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
         
-    if tx.status != "completed":
-        raise HTTPException(status_code=400, detail="Transaction not completed")
-        
     if tx.status == "refunded":
         raise HTTPException(status_code=400, detail="Already refunded")
+        
+    if tx.status != "completed":
+        raise HTTPException(status_code=400, detail="Transaction not completed")
 
     # Create Refund
     refund = Refund(
@@ -1789,7 +1789,7 @@ from backend.schemas.monetization import (
     GiftCatalogResponse, SendGiftRequest, ReceivedGiftsResponse, 
     SentGiftsResponse, MarkGiftReadRequest, VirtualGiftCreate, GiftCategoryCreate
 )
-from backend.core.websocket import manager
+from backend.services.chat import manager
 
 # Public gifts router (accessible by authenticated users)
 gifts_router = APIRouter(prefix="/gifts", tags=["gifts"])
@@ -2002,9 +2002,9 @@ async def send_gift(
 
     
     # Check if receiver is online and send via WebSocket
-    is_receiver_online = manager.is_user_online(str(request.receiver_id))
+    is_receiver_online = manager.is_online(str(request.receiver_id))
     if is_receiver_online:
-        await manager.send_personal_message(notification, str(request.receiver_id))
+        await manager.send_personal(str(request.receiver_id), notification)
     
     # 9b. Send Push Notification if user is offline
     if not is_receiver_online:
@@ -2068,7 +2068,7 @@ async def send_gift(
             "timestamp": gift_message.created_at.isoformat(),
             "is_anonymous": request.is_anonymous
         }
-        await manager.send_personal_message(gift_chat_message, str(request.receiver_id))
+        await manager.send_personal(str(request.receiver_id), gift_chat_message)
     
     # Build response with enriched data
     response = GiftTransactionResponse(
