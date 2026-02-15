@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTelegram } from '@/lib/telegram';
 import { authService } from '@/services/api';
 import { FLOW_STEPS, type Message, type UserData } from './onboardingTypes';
@@ -10,6 +11,7 @@ import { FLOW_STEPS, type Message, type UserData } from './onboardingTypes';
 export function useOnboardingFlow() {
     const { hapticFeedback } = useTelegram();
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [messages, setMessages] = useState<Message[]>([]);
     const [stepIndex, setStepIndex] = useState(0);
     const [inputValue, setInputValue] = useState('');
@@ -316,6 +318,9 @@ export function useOnboardingFlow() {
 
             // Теперь обновляем профиль - бэкенд увидит фото и выставит is_complete = true
             await authService.updateProfile(profileData);
+
+            // Инвалидируем кэш профиля, чтобы HomeClient не перекинул обратно на onboarding
+            await queryClient.invalidateQueries({ queryKey: ['me'] });
 
             hapticFeedback.notificationOccurred('success');
             router.push('/');

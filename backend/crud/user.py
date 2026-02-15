@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.security import hash_password
@@ -97,7 +98,11 @@ async def get_user_by_id(db: AsyncSession, user_id: UUID) -> Optional[User]:
     Returns:
         User | None: Пользователь или None если не найден
     """
-    stmt = select(User).where(User.id == user_id)
+    stmt = (
+        select(User)
+        .where(User.id == user_id)
+        .options(selectinload(User.photos_rel), selectinload(User.interests_rel))
+    )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -209,10 +214,10 @@ async def delete_user(db: AsyncSession, user_id: UUID) -> bool:
     if not user:
         return False
         
-    # 1. Delete photos from disk before deleting from DB
+    # 1. Delete photos from DB before deleting user
     from backend.services.storage import storage_service
     for photo in user.photos_rel:
-        storage_service.delete_file(photo.url)
+        await storage_service.delete_photo(photo.url, db)
 
     # 2. Cleanup Redis Keys (Rate limits, Location, Sessions)
     from backend.core.redis import redis_manager
@@ -290,7 +295,7 @@ async def update_profile(db: AsyncSession, user_id: str, update_data: UserCreate
         from backend.services.storage import storage_service
         for url in old_photos:
             if url not in new_photos:
-                storage_service.delete_file(url)
+                await storage_service.delete_photo(url, db)
 
         # Clear existing
         user.photos_rel = []
@@ -314,8 +319,16 @@ async def update_profile(db: AsyncSession, user_id: str, update_data: UserCreate
         has_real_gender = bool(user.gender and user.gender != Gender.OTHER)
         has_photos = bool(user.photos and len(user.photos) > 0)
         
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.info(f"[IS_COMPLETE CHECK] user_id={user.id} name='{user.name}' age={user.age} gender={user.gender} photos={user.photos} photos_rel={user.photos_rel}")
+        _logger.info(f"[IS_COMPLETE CHECK] has_name={has_name} has_age={has_age} has_real_gender={has_real_gender} has_photos={has_photos}")
+        
         if has_name and has_age and has_real_gender and has_photos:
             user.is_complete = True
+            _logger.info(f"[IS_COMPLETE CHECK] Setting is_complete=True for user {user.id}")
+        else:
+            _logger.info(f"[IS_COMPLETE CHECK] NOT complete yet for user {user.id}")
 
     # Update UX Preferences
     if hasattr(update_data, 'ux_preferences') and update_data.ux_preferences is not None:
