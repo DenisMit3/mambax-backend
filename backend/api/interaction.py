@@ -220,13 +220,18 @@ async def get_matches(
             from backend.services.chat import manager
             is_online = manager.is_online(str(partner.id))
             
-            # Basic profile info
+            # Basic profile info + поля для фронтенда
             partner_data = {
                  "id": str(partner.id),
                  "name": partner.name,
                  "photos": partner.photos,
                  "is_online": is_online,
-                 "last_seen": partner.last_seen.isoformat() if getattr(partner, 'last_seen', None) else None
+                 "online_status": "online" if is_online else "offline",
+                 "last_seen": partner.last_seen.isoformat() if getattr(partner, 'last_seen', None) else None,
+                 "age": getattr(partner, 'age', None),
+                 "bio": getattr(partner, 'bio', None),
+                 "is_verified": getattr(partner, 'is_verified', False),
+                 "city": getattr(partner, 'city', None),
             }
 
         response_matches.append({
@@ -237,7 +242,7 @@ async def get_matches(
             "user": partner_data 
         })
 
-    return response_matches
+    return {"matches": response_matches}
 
 
 @router.get("/matches/{match_id}")

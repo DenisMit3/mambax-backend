@@ -356,7 +356,7 @@ async def get_likes_received(
             u.name,
             u.age,
             u.is_active,
-            GROUP_CONCAT(p.url) as photos
+            STRING_AGG(p.url, ',') as photos
         FROM swipes s
         JOIN users u ON s.from_user_id = u.id
         LEFT JOIN user_photos p ON p.user_id = s.from_user_id
@@ -467,7 +467,7 @@ async def export_my_data(
     """
     from backend.models.interaction import Swipe, Match, Like, Report
     from backend.models.chat import Message
-    from backend.models.monetization import Transaction, StarTransaction
+    from backend.models.monetization import RevenueTransaction, GiftTransaction
     from backend.models.profile_enrichment import UserPrompt, UserPreference
 
     uid = current_user.id
@@ -493,10 +493,10 @@ async def export_my_data(
 
     # Swipes
     swipes_result = await db.execute(
-        select(Swipe).where(Swipe.swiper_id == uid).order_by(Swipe.created_at)
+        select(Swipe).where(Swipe.from_user_id == uid).order_by(Swipe.timestamp)
     )
     swipes = [
-        {"target_id": str(s.swiped_id), "direction": s.direction, "created_at": str(s.created_at)}
+        {"target_id": str(s.to_user_id), "action": s.action, "created_at": str(s.timestamp)}
         for s in swipes_result.scalars().all()
     ]
 

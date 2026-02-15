@@ -153,6 +153,10 @@ export function HomeClient() {
                 const resolvePhotoUrl = (url: string): string => {
                     if (!url) return FALLBACK_AVATAR;
                     // If it's a relative path to static files, prepend proxy URL
+                    // /api/photos/ — проксируется через Next.js rewrite, оставляем как есть
+                    if (url.startsWith('/api/photos/')) {
+                        return url;
+                    }
                     if (url.startsWith('/static/') || url.startsWith('/uploads/')) {
                         return `${PHOTO_BASE}${url}`;
                     }

@@ -469,7 +469,7 @@ export const authService = {
     },
 
     async sendGiftDirectPurchase(giftId: string, receiverId: string, message?: string, isAnonymous?: boolean) {
-        return httpClient.post<GiftPurchaseResponse>("/admin/monetization/payments/gift", {
+        return httpClient.post<GiftPurchaseResponse>("/api/gifts/send", {
             gift_id: giftId,
             receiver_id: receiverId,
             message,
@@ -936,5 +936,25 @@ export const authService = {
 
     async createSupportTicket(data: { subject: string; message: string; category: string }) {
         return httpClient.post<{ ticket_id: string }>("/api/support/tickets", data);
+    },
+
+    // ============================================
+    // STORIES API (stub — бэкенд ещё не реализован)
+    // ============================================
+
+    async getStories() {
+        return [];
+    },
+
+    async createStory(file: File) {
+        return { id: '', url: '', created_at: new Date().toISOString() };
+    },
+
+    async viewStory(storyId: string) {
+        return { success: true };
+    },
+
+    async reactToStory(storyId: string, reaction: string) {
+        return { success: true };
     },
 };

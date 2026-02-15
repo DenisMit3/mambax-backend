@@ -27,7 +27,8 @@ async def create_profile(
     current_user: str = Depends(auth.get_current_user),
     db: AsyncSession = Depends(database.get_db)
 ):
-    return await crud.create_profile(db, profile, current_user)
+    """Обновление профиля текущего пользователя (обратная совместимость)"""
+    return await crud.update_profile(db, current_user, profile)
 
 @router.get("/profiles", response_model=list[schemas.ProfileResponse])
 async def get_profiles(
@@ -37,7 +38,8 @@ async def get_profiles(
     db: AsyncSession = Depends(database.get_db)
 ):
     """Простой список профилей (обратная совместимость)"""
-    return await crud.get_profiles(db, skip, limit, exclude_user_id=current_user)
+    from uuid import UUID
+    return await crud.get_user_feed(db, UUID(current_user), limit=limit)
 
 
 def _hash_filters(filters: SearchFilters, skip: int, limit: int) -> str:

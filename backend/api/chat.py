@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from backend.core.security import verify_token
+from backend.core.config import settings
 from backend.core.redis import redis_manager
 # Use the advanced service manager instead of the core one
 from backend.services.chat import (

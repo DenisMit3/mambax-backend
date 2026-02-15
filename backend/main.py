@@ -47,6 +47,18 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("✅ Telegram bot configured")
         
+        # Автоматическая настройка webhook на Vercel/продакшене
+        if os.getenv("VERCEL") or os.getenv("WEBHOOK_URL"):
+            try:
+                from backend.api.bot_webhook import setup_webhook
+                result = await setup_webhook()
+                if result:
+                    logger.info("✅ Telegram webhook auto-configured")
+                else:
+                    logger.warning("⚠️  Webhook auto-setup failed. Set manually: POST /api/bot/setup-webhook")
+            except Exception as e:
+                logger.warning(f"⚠️  Webhook auto-setup error: {e}. Set manually: POST /api/bot/setup-webhook")
+        
     logger.info("Starting up: Creating database tables...")
     try:
         async with database.engine.begin() as conn:
@@ -166,7 +178,7 @@ async def rate_limit_middleware(request: Request, call_next):
 
         # Anti-Scraping
         user_agent = request.headers.get("user-agent", "").lower()
-        bot_signatures = ["python-requests", "curl/", "wget/", "scrapy", "aiohttp", "urllib"]
+        bot_signatures = ["python-requests", "curl/", "wget/", "scrapy", "urllib"]
         if any(sig in user_agent for sig in bot_signatures):
             return JSONResponse(status_code=403, content={"detail": "Access denied (Anti-Bot)"})
 

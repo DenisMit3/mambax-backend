@@ -90,6 +90,10 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/admin/ws`,
       },
       {
+        source: '/api/photos/:path*',
+        destination: `${backendUrl}/api/photos/:path*`,
+      },
+      {
         source: '/static/:path*',
         destination: `${backendUrl}/static/:path*`,
       },

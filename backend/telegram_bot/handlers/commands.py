@@ -115,6 +115,49 @@ async def callback_buy_subscription(callback: types.CallbackQuery):
 async def callback_free_trial(callback: types.CallbackQuery):
     await callback.answer("Free trial is currently unavailable.", show_alert=True)
 
+@router.callback_query(F.data == "faq")
+async def callback_faq(callback: types.CallbackQuery):
+    """Обработчик кнопки FAQ"""
+    await callback.message.edit_text(
+        "❓ Часто задаваемые вопросы:\n\n"
+        "1. Как начать? — Нажмите '💘 Открыть MambaX'\n"
+        "2. Как найти пару? — Свайпайте анкеты вправо\n"
+        "3. Как написать? — После взаимного лайка откроется чат",
+        reply_markup=get_back_keyboard()
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "support")
+async def callback_support(callback: types.CallbackQuery):
+    """Обработчик кнопки поддержки"""
+    await callback.message.edit_text(
+        "📧 Поддержка:\n\n"
+        "Напишите нам: @MambaX_support\n"
+        "Или опишите проблему прямо здесь, и мы ответим в ближайшее время.",
+        reply_markup=get_back_keyboard()
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "stats")
+async def callback_stats(callback: types.CallbackQuery):
+    """Обработчик кнопки статистики"""
+    await callback.message.edit_text(
+        "📊 Статистика пока недоступна.\n\n"
+        "Мы работаем над этой функцией!",
+        reply_markup=get_back_keyboard()
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "settings")
+async def callback_settings(callback: types.CallbackQuery):
+    """Обработчик кнопки настроек"""
+    await callback.message.edit_text(
+        "⚙️ Настройки доступны в приложении.\n\n"
+        "Откройте MambaX и перейдите в раздел профиля.",
+        reply_markup=get_back_keyboard()
+    )
+    await callback.answer()
+
 # Helpers
 
 async def show_premium(message: types.Message):
