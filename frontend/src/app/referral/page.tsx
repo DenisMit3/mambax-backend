@@ -122,38 +122,18 @@ export default function ReferralPage() {
   }, [referral, haptic, showToast]);
 
   // Поделиться ссылкой через Telegram
-  const shareLink = useCallback(async () => {
+  const shareLink = useCallback(() => {
     if (!referral) return;
     haptic?.light();
 
     const shareText = `Присоединяйся к YouMe! Используй мой код ${referral.code} и получи ${referral.reward} ⭐`;
     const shareUrl = referral.link || `https://t.me/${TELEGRAM_BOT_NAME}?start=${referral.code}`;
+    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
 
-    // Try Telegram-native sharing first
-    if (webApp?.openTelegramLink) {
-      try {
-        const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
-        webApp.openTelegramLink(tgShareUrl);
-        return;
-      } catch {
-        /* fallback below */
-      }
-    }
-
-    // Fallback: Web Share API
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Присоединяйся к YouMe!", text: shareText, url: shareUrl });
-        return;
-      } catch { /* cancelled */ }
-    }
-
-    // Last fallback: copy to clipboard
-    try {
-      await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
-      showToast("Ссылка скопирована!");
-    } catch { /* nothing */ }
-  }, [referral, haptic, webApp, showToast]);
+    // Telegram Mini App — открываем нативный share dialog
+    // window.open работает надёжнее чем openTelegramLink в Mini App контексте
+    window.open(tgShareUrl, "_blank");
+  }, [referral, haptic]);
 
   // Применение чужого кода
   const applyCode = useCallback(async () => {
@@ -215,7 +195,7 @@ export default function ReferralPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white pb-24">
+    <div className="min-h-screen bg-black text-white pb-24 overflow-x-hidden">
       {/* Toast */}
       <AnimatePresence>
         {toast && (
@@ -240,7 +220,7 @@ export default function ReferralPage() {
         </div>
       </div>
 
-      <div className="px-4 pt-6 space-y-5 max-w-lg mx-auto">
+      <div className="px-4 pt-6 space-y-5 max-w-lg mx-auto w-full overflow-hidden box-border">
         {/* Реферальный код */}
         <motion.div
           custom={0}
@@ -251,7 +231,7 @@ export default function ReferralPage() {
         >
           <p className="text-sm text-purple-300 mb-2">Твой реферальный код</p>
           <div className="flex items-center gap-3">
-            <span className="text-2xl font-bold tracking-widest flex-1 break-all">{referral?.code ?? "—"}</span>
+            <span className="text-xl font-bold tracking-wider flex-1 break-all min-w-0">{referral?.code ?? "—"}</span>
             <button
               onClick={copyCode}
               className="p-2.5 rounded-xl bg-white/10 hover:bg-white/15 transition-colors flex-shrink-0"
@@ -263,7 +243,7 @@ export default function ReferralPage() {
 
           <button
             onClick={shareLink}
-            className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 font-medium text-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
+            className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 font-medium text-sm hover:opacity-90 transition-opacity active:scale-[0.98] box-border"
           >
             <Share2 className="w-4 h-4" />
             Поделиться ссылкой
@@ -272,7 +252,7 @@ export default function ReferralPage() {
 
         {/* Статистика */}
         {stats && (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2 w-full">
             {[
               { icon: Users, label: "Рефералы", value: stats.total_referrals, color: "text-purple-400" },
               { icon: Star, label: "Заработано", value: stats.earned_stars, suffix: " ⭐", color: "text-yellow-400" },
@@ -284,11 +264,11 @@ export default function ReferralPage() {
                 variants={fadeUp}
                 initial="hidden"
                 animate="visible"
-                className="bg-slate-950 rounded-2xl p-3 border border-white/5 text-center"
+                className="bg-slate-950 rounded-2xl p-2.5 border border-white/5 text-center overflow-hidden"
               >
-                <card.icon className={`w-5 h-5 mx-auto mb-1.5 ${card.color}`} />
-                <p className="text-xl font-bold">{card.value}{card.suffix || ""}</p>
-                <p className="text-[11px] text-gray-500 mt-0.5">{card.label}</p>
+                <card.icon className={`w-4 h-4 mx-auto mb-1 ${card.color}`} />
+                <p className="text-lg font-bold truncate">{card.value}{card.suffix || ""}</p>
+                <p className="text-[10px] text-gray-500 mt-0.5 truncate">{card.label}</p>
               </motion.div>
             ))}
           </div>
@@ -357,7 +337,7 @@ export default function ReferralPage() {
           className="bg-slate-950 rounded-2xl p-4 border border-white/5"
         >
           <p className="text-sm font-medium mb-3">Есть код друга?</p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full overflow-hidden">
             <input
               type="text"
               value={inputCode}
@@ -369,12 +349,12 @@ export default function ReferralPage() {
               enterKeyHint="send"
               spellCheck={false}
               maxLength={20}
-              className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 transition-colors"
+              className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 transition-colors box-border"
             />
             <button
               onClick={applyCode}
               disabled={!inputCode.trim() || applying}
-              className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0"
+              className="px-3 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 box-border"
             >
               {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : "Применить"}
             </button>
