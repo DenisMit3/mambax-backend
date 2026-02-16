@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import Script from "next/script";
 
 // Flag to prevent multiple initializations
 let telegramInitialized = false;
@@ -46,10 +45,6 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <Script
-        src="https://telegram.org/js/telegram-web-app.js"
-        strategy="afterInteractive"
-      />
       {children}
     </>
   );

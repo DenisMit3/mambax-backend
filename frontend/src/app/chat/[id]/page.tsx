@@ -38,7 +38,7 @@ export default function ChatPage() {
                 onSendImage={chat.handleSendImage}
                 onSendSuperLike={() => chat.setShowGiftPicker(true)}
                 onReaction={chat.handleReaction}
-                onBack={() => router.back()}
+                onBack={() => router.push('/chat')}
                 injectInputText={chat.injectInputText}
                 onConsumedInject={() => chat.setInjectInputText('')}
                 // Звонки — в шапку

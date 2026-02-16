@@ -1,5 +1,4 @@
 import { getApiUrl } from "@/utils/env";
-import * as Sentry from "@sentry/nextjs";
 
 type RequestConfig = RequestInit & {
     skipAuth?: boolean;
@@ -180,11 +179,8 @@ class HttpClient {
                 console.error('[API Error]', err);
             }
         } else {
-            // Send to Sentry in production
-            Sentry.captureException(err, {
-                tags: { error_type: 'api_error' },
-                extra: { status: err.status, detail: err.data?.detail }
-            });
+            // Log error in production
+            console.error('[API Error]', err.status, err.data?.detail);
         }
     }
 

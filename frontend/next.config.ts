@@ -19,8 +19,7 @@ const nextConfig: NextConfig = {
       'lucide-react', 
       'framer-motion', 
       '@radix-ui/react-dialog',
-      '@tanstack/react-query',
-      'date-fns'
+      '@tanstack/react-query'
     ],
   },
 
@@ -48,11 +47,11 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: `
               default-src 'self';
-              script-src 'self' 'unsafe-eval' 'unsafe-inline' https://telegram.org https://oauth.telegram.org https://app.posthog.com https://*.sentry.io;
+              script-src 'self' 'unsafe-eval' 'unsafe-inline' https://telegram.org https://oauth.telegram.org;
               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
               img-src 'self' blob: data: https:;
               font-src 'self' data: https://fonts.gstatic.com;
-              connect-src 'self' https://*.sentry.io https://app.posthog.com wss://*.vercel.app https://*.vercel.app wss://backend-pi-sable-56.vercel.app https://backend-pi-sable-56.vercel.app; 
+              connect-src 'self' wss://*.vercel.app https://*.vercel.app wss://backend-pi-sable-56.vercel.app https://backend-pi-sable-56.vercel.app; 
               frame-ancestors 'self' https://web.telegram.org https://*.telegram.org;
               form-action 'self';
             `.replace(/\s{2,}/g, ' ').trim(),
@@ -72,10 +71,6 @@ const nextConfig: NextConfig = {
       {
         source: '/api_proxy/:path*',
         destination: `${backendUrl}/:path*`,
-      },
-      {
-        source: '/debug/:path*',
-        destination: `${backendUrl}/debug/:path*`,
       },
       {
         source: '/chat/ws',
@@ -128,14 +123,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-import { withSentryConfig } from "@sentry/nextjs";
-
-export default withSentryConfig(nextConfig, {
-  org: "mambax",
-  project: "frontend",
-  silent: !process.env.CI,
-  widenClientFileUpload: true,
-  reactComponentAnnotation: { enabled: true },
-  tunnelRoute: "/monitoring",
-  disableLogger: true,
-});
+export default nextConfig;
