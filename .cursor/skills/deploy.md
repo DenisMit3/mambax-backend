@@ -8,8 +8,9 @@ MambaX — приложение для знакомств (Telegram Mini App). �
 
 ```
 mambax-backend/                    ← GitHub: DenisMit3/mambax-backend
-├── frontend/                      ← Next.js 14 (Vercel project: "frontend")
+├── frontend/                      ← Next.js 16 (Vercel project: "frontend")
 ├── backend/                       ← FastAPI + Python (Vercel project: "backend")
+├── deploy-all.sh                  ← Скрипт полного деплоя
 └── docs/                          ← Документация
 ```
 
@@ -18,12 +19,14 @@ mambax-backend/                    ← GitHub: DenisMit3/mambax-backend
 ### GitHub
 - Репозиторий: `DenisMit3/mambax-backend`
 - Ветка: `main`
-- Автодеплой: при `git push origin main` оба Vercel проекта обновляются
+- **ВАЖНО**: `git push origin main` деплоит ТОЛЬКО backend! Frontend НЕ деплоится автоматически через Git Integration!
 
 ### Frontend
-- Технология: Next.js 14 (TypeScript)
+- Технология: Next.js 16 (TypeScript)
 - Хостинг: Vercel
 - Vercel project name: `frontend`
+- Vercel Project ID: `prj_fSnV7bhTzxrfl4400LlRKGvfc7vA`
+- Vercel Org ID: `team_Dm78vx8mzaOqQtfYTgUXosF3`
 - Root Directory в Vercel: `frontend`
 - Production URL: `https://frontend-two-brown-70.vercel.app`
 - Env файл: `frontend/.env.local`
@@ -60,25 +63,45 @@ mambax-backend/                    ← GitHub: DenisMit3/mambax-backend
 - User: `neondb_owner`
 - Neon project: `long-sea-64550481`
 - Dashboard: `https://console.neon.tech`
-- Таблиц: 61
-- Connection string: `postgresql+asyncpg://neondb_owner:npg_vjOPMFZV5K9n@ep-still-band-agqygsk6-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require`
 
 ### Telegram Bot
 - Username: `@YouMeMeet_bot`
 - Бренд в UI: MambaX
 - Mini App URL: `https://frontend-two-brown-70.vercel.app`
 - Код бота: `backend/telegram_bot/`
-- Тексты бота: `backend/telegram_bot/texts.py`
-- Хэндлеры: `backend/telegram_bot/handlers/commands.py`
-- Настройка в BotFather: `/mybots → @YouMeMeet_bot → Bot Settings → Menu Button → URL`
 
 ## Процедуры деплоя
 
-### Стандартный деплой (автоматический)
+### ⚠️ КРИТИЧЕСКИ ВАЖНО: Деплой фронтенда
+
+**Git push НЕ деплоит фронтенд автоматически!** Vercel Git Integration для frontend проекта не работает в этом монорепо. После КАЖДОГО изменения фронтенда нужно деплоить вручную через Vercel CLI.
+
+### Полный деплой (backend + frontend)
+
+```bash
+# 1. Коммит и пуш (деплоит backend автоматически)
+git add -A && git commit -m "описание" && git push origin main
+
+# 2. ОБЯЗАТЕЛЬНО: деплой фронтенда вручную
+cd frontend && npx vercel --prod --yes && cd ..
+```
+
+Или одной командой:
+```bash
+bash deploy-all.sh "описание изменений"
+```
+
+### Только backend (если изменения только в backend/)
 ```bash
 git add -A && git commit -m "описание" && git push origin main
 ```
-Vercel автоматически деплоит оба проекта.
+Backend деплоится автоматически через Vercel Git Integration.
+
+### Только frontend (если изменения только в frontend/)
+```bash
+git add -A && git commit -m "описание" && git push origin main
+cd frontend && npx vercel --prod --yes && cd ..
+```
 
 ### Проверка после деплоя
 ```bash
@@ -90,7 +113,7 @@ curl https://backend-pi-sable-56.vercel.app/health?full=true
 curl -I https://frontend-two-brown-70.vercel.app
 ```
 
-### Ручной редеплой
+### Ручной редеплой через Dashboard
 Vercel Dashboard → проект → Deployments → три точки → Redeploy
 
 ### Обновление env переменных
@@ -100,6 +123,7 @@ Vercel Dashboard → проект → Settings → Environment Variables → и�
 
 | Проблема | Причина | Решение |
 |----------|---------|---------|
+| Frontend не обновляется после push | Git Integration не работает для frontend | `cd frontend && npx vercel --prod --yes` |
 | Backend 404 | Root Directory не `backend` | Vercel Settings → General → Root Directory = `backend` |
 | CORS ошибки | `ALLOWED_ORIGINS` не содержит frontend URL | Обновить env в Vercel backend |
 | DB connection fails | Neon project suspended | Зайти в console.neon.tech, активировать |
