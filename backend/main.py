@@ -209,7 +209,6 @@ async def rate_limit_middleware(request: Request, call_next):
             request.url.path == "/docs" or
             request.url.path == "/openapi.json" or
             request.url.path == "/redoc" or
-            "debug" in request.url.path or 
             request.url.path.startswith("/admin")):
             return await call_next(request)
         
@@ -285,7 +284,6 @@ from backend.api.monetization import router as monetization_router, gifts_router
 from backend.api.marketing import router as marketing_router
 from backend.api.system import router as system_router
 from backend.api.advanced import router as advanced_router
-from backend.api.debug import router as debug_router
 from backend.api.missing_endpoints import router as missing_router
 from backend.api.photos import router as photos_router
 
@@ -317,10 +315,6 @@ app.include_router(photos_router)  # /api/photos/{id} — serves images from DB
 # Debug/Dev routes only in non-production
 if not settings.is_production:
     app.include_router(dev_router)
-
-# Debug router — только вне production (содержит опасные эндпоинты вроде reset-all-profiles)
-if settings.ENVIRONMENT != "production":
-    app.include_router(debug_router)
 
 # Simple test endpoint
 @app.get("/ping")
