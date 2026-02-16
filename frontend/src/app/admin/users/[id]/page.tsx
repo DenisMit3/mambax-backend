@@ -14,6 +14,7 @@ import UserNotesTab from './UserNotesTab';
 import PaymentHistory from './PaymentHistory';
 import ActivityTimeline from './ActivityTimeline';
 import StarsModal from './StarsModal';
+import EditUserModal from './EditUserModal';
 
 export default function UserDetailPage() {
     const params = useParams();
@@ -30,6 +31,9 @@ export default function UserDetailPage() {
     const [starsAmount, setStarsAmount] = useState(10);
     const [starsAction, setStarsAction] = useState<'add' | 'remove'>('add');
     const [starsReason, setStarsReason] = useState('Bonus');
+
+    // Состояние модалки Edit
+    const [showEditModal, setShowEditModal] = useState(false);
 
     const onUpdateStars = async () => {
         const ok = await handleUpdateStars(starsAmount, starsAction, starsReason);
@@ -90,6 +94,7 @@ export default function UserDetailPage() {
                 onGdprExport={onGdprExport}
                 onShowStarsModal={() => setShowStarsModal(true)}
                 onAction={handleAction}
+                onEditProfile={() => setShowEditModal(true)}
             />
 
             <UserProfileCard user={user} />
@@ -111,9 +116,9 @@ export default function UserDetailPage() {
             <div className="tab-content glass-panel">
                 {activeTab === 'overview' && <UserOverviewTab user={user} />}
                 {activeTab === 'activity' && <ActivityTimeline userId={userId} />}
-                {activeTab === 'photos' && <UserPhotosTab photos={user.photos} />}
+                {activeTab === 'photos' && <UserPhotosTab userId={userId} />}
                 {activeTab === 'payments' && <PaymentHistory userId={userId} />}
-                {activeTab === 'notes' && <UserNotesTab />}
+                {activeTab === 'notes' && <UserNotesTab userId={userId} />}
                         </div>
 
             {showStarsModal && (
@@ -126,6 +131,14 @@ export default function UserDetailPage() {
                     onReasonChange={setStarsReason}
                     onSubmit={onUpdateStars}
                     onClose={() => setShowStarsModal(false)}
+                />
+            )}
+
+            {showEditModal && user && (
+                <EditUserModal
+                    user={user}
+                    onClose={() => setShowEditModal(false)}
+                    onSaved={() => { setShowEditModal(false); fetchUserDetails(); }}
                 />
             )}
 

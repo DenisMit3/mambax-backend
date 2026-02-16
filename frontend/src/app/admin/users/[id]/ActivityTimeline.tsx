@@ -7,13 +7,68 @@ import {
     Shield, User, Edit, Activity, RefreshCw,
 } from 'lucide-react';
 import { httpClient } from '@/lib/http-client';
-import { TimelineEvent } from './types';
 
 interface ActivityTimelineProps {
     userId: string;
 }
 
-// Иконка по имени
+interface RawTimelineEvent {
+    type: string;
+    action: string;
+    details: Record<string, unknown> | null;
+    timestamp: string;
+}
+
+interface DisplayEvent {
+    type: string;
+    icon: string;
+    title: string;
+    description: string;
+    timestamp: string;
+    color: string;
+}
+
+const mapEvent = (raw: RawTimelineEvent): DisplayEvent => {
+    const actionMap: Record<string, { icon: string; title: string; color: string }> = {
+        sent_message: { icon: 'message', title: 'Отправил сообщение', color: '#3b82f6' },
+        filed_report: { icon: 'flag', title: 'Подал жалобу', color: '#f97316' },
+        was_reported: { icon: 'flag', title: 'Получил жалобу', color: '#ef4444' },
+        user_verify: { icon: 'shield', title: 'Верифицирован', color: '#10b981' },
+        user_unverify: { icon: 'shield', title: 'Верификация снята', color: '#f97316' },
+        user_suspend: { icon: 'user', title: 'Приостановлен', color: '#f97316' },
+        user_ban: { icon: 'user', title: 'Заблокирован', color: '#ef4444' },
+        user_activate: { icon: 'user', title: 'Активирован', color: '#10b981' },
+        stars_add: { icon: 'dollar', title: 'Начислены звёзды', color: '#eab308' },
+        stars_remove: { icon: 'dollar', title: 'Списаны звёзды', color: '#ef4444' },
+        edit_user: { icon: 'edit', title: 'Профиль отредактирован', color: '#8b5cf6' },
+        warn_user: { icon: 'flag', title: 'Предупреждение', color: '#f97316' },
+        reset_password: { icon: 'shield', title: 'Пароль сброшен', color: '#3b82f6' },
+        update_subscription: { icon: 'dollar', title: 'Подписка обновлена', color: '#8b5cf6' },
+        impersonate: { icon: 'user', title: 'Имперсонация', color: '#ef4444' },
+    };
+
+    const mapped = actionMap[raw.action] || { icon: 'activity', title: raw.action, color: '#64748b' };
+    let description = '';
+    if (raw.details) {
+        if (raw.type === 'message') {
+            description = `Чат: ${raw.details.chat_id || '—'}`;
+        } else if (raw.type === 'report') {
+            description = `Причина: ${raw.details.reason || '—'}, статус: ${raw.details.status || '—'}`;
+        } else if (raw.details.reason) {
+            description = String(raw.details.reason);
+        } else if (raw.details.amount) {
+            description = `${raw.details.amount} звёзд`;
+        } else {
+            const keys = Object.keys(raw.details);
+            if (keys.length > 0) {
+                description = keys.map(k => `${k}: ${raw.details![k]}`).join(', ');
+            }
+        }
+    }
+
+    return { ...mapped, type: raw.type, description, timestamp: raw.timestamp };
+};
+
 const getIcon = (iconName: string, color: string) => {
     const size = 16;
     const props = { size, style: { color } };
@@ -29,7 +84,6 @@ const getIcon = (iconName: string, color: string) => {
     }
 };
 
-// Форматирование времени (относительное)
 const formatTime = (ts: string | null) => {
     if (!ts) return '';
     const d = new Date(ts);
@@ -45,10 +99,9 @@ const formatTime = (ts: string | null) => {
 };
 
 export default function ActivityTimeline({ userId }: ActivityTimelineProps) {
-    const [events, setEvents] = useState<TimelineEvent[]>([]);
+    const [events, setEvents] = useState<DisplayEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
-    const [total, setTotal] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
@@ -56,12 +109,11 @@ export default function ActivityTimeline({ userId }: ActivityTimelineProps) {
             setLoading(true);
             setError(false);
             try {
-                const data = await httpClient.get<{ events: TimelineEvent[]; total: number }>(
-                    `/admin/users/${userId}/activity-timeline?limit=50`
+                const data = await httpClient.get<{ events: RawTimelineEvent[] }>(
+                    `/admin/users/${userId}/timeline?limit=50`
                 );
                 if (!cancelled) {
-                    setEvents(data.events || []);
-                    setTotal(data.total || 0);
+                    setEvents((data.events || []).map(mapEvent));
                 }
             } catch (err) {
                 if (!cancelled) {
@@ -103,14 +155,13 @@ export default function ActivityTimeline({ userId }: ActivityTimelineProps) {
 
     return (
         <div style={{ position: 'relative', paddingLeft: '2rem' }}>
-            {/* Вертикальная линия таймлайна */}
             <div style={{
                 position: 'absolute', left: '1.05rem', top: 0, bottom: 0,
                 width: '2px', background: 'rgba(148, 163, 184, 0.15)',
             }} />
 
             <div className="text-slate-500" style={{ fontSize: '0.75rem', marginBottom: '1rem' }}>
-                Всего событий: {total}
+                Всего событий: {events.length}
             </div>
 
             {events.map((event, i) => (
@@ -124,7 +175,6 @@ export default function ActivityTimeline({ userId }: ActivityTimelineProps) {
                         gap: '1rem', marginBottom: '1rem', position: 'relative',
                     }}
                 >
-                    {/* Точка на таймлайне */}
                     <div style={{
                         position: 'absolute', left: '-1.55rem', top: '0.35rem',
                         width: '12px', height: '12px', borderRadius: '50%',
@@ -132,7 +182,6 @@ export default function ActivityTimeline({ userId }: ActivityTimelineProps) {
                         zIndex: 1,
                     }} />
 
-                    {/* Иконка */}
                     <div style={{
                         width: '32px', height: '32px', borderRadius: '8px',
                         background: `${event.color}20`,
@@ -142,7 +191,6 @@ export default function ActivityTimeline({ userId }: ActivityTimelineProps) {
                         {getIcon(event.icon, event.color)}
                     </div>
 
-                    {/* Контент */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span className="text-slate-200" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
@@ -152,9 +200,11 @@ export default function ActivityTimeline({ userId }: ActivityTimelineProps) {
                                 {formatTime(event.timestamp)}
                             </span>
                         </div>
-                        <div className="text-slate-400" style={{ fontSize: '0.78rem', marginTop: '0.15rem' }}>
-                            {event.description}
-                        </div>
+                        {event.description && (
+                            <div className="text-slate-400" style={{ fontSize: '0.78rem', marginTop: '0.15rem' }}>
+                                {event.description}
+                            </div>
+                        )}
                     </div>
                 </motion.div>
             ))}

@@ -524,11 +524,15 @@ async def manage_user_stars(
     }
 
 
+class UserActionRequest(BaseModel):
+    action: str
+    reason: Optional[str] = None
+
+
 @router.post("/users/{user_id}/action")
 async def perform_user_action(
     user_id: str,
-    action: str,
-    reason: Optional[str] = None,
+    data: UserActionRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
@@ -543,6 +547,9 @@ async def perform_user_action(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    action = data.action
+    reason = data.reason
     
     if action == "verify":
         user.is_verified = True
@@ -583,30 +590,34 @@ async def perform_user_action(
     }
 
 
+class BulkActionRequest(BaseModel):
+    user_ids: List[str]
+    action: str
+    reason: Optional[str] = None
+
+
 @router.post("/users/bulk-action")
 async def perform_bulk_user_action(
-    user_ids: List[str],
-    action: str,
-    reason: Optional[str] = None,
+    data: BulkActionRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
     """Perform action on multiple users"""
     
     success_count = 0
-    for user_id in user_ids:
+    for user_id in data.user_ids:
         try:
             uid = uuid_module.UUID(user_id)
             result = await db.execute(select(User).where(User.id == uid))
             user = result.scalar_one_or_none()
             if user:
-                if action == "verify":
+                if data.action == "verify":
                     user.is_verified = True
-                elif action == "suspend":
+                elif data.action == "suspend":
                     user.status = UserStatus.SUSPENDED
-                elif action == "ban":
+                elif data.action == "ban":
                     user.status = UserStatus.BANNED
-                elif action == "activate":
+                elif data.action == "activate":
                     user.status = UserStatus.ACTIVE
                 success_count += 1
         except:

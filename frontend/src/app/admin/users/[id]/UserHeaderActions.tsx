@@ -12,10 +12,11 @@ interface UserHeaderActionsProps {
     onGdprExport: () => void;
     onShowStarsModal: () => void;
     onAction: (action: string) => void;
+    onEditProfile: () => void;
 }
 
 export default function UserHeaderActions({
-    user, onBack, onGdprExport, onShowStarsModal, onAction,
+    user, onBack, onGdprExport, onShowStarsModal, onAction, onEditProfile,
 }: UserHeaderActionsProps) {
     return (
         <div className="page-header">
@@ -26,7 +27,7 @@ export default function UserHeaderActions({
                 <button className="action-btn gdpr" onClick={onGdprExport}>
                     <Download size={16} /> GDPR Export
                 </button>
-                <button className="action-btn edit">
+                <button className="action-btn edit" onClick={onEditProfile}>
                     <Edit size={16} /> Edit Profile
                 </button>
                 <button className="action-btn stars" onClick={onShowStarsModal}>

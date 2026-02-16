@@ -2,107 +2,183 @@
 
 import { useRouter } from 'next/navigation';
 import {
-  Eye, Edit, UserCheck, UserX, Ban, Trash2,
-  MapPin, Calendar, Heart, MessageCircle,
-  Shield, Crown, CheckCircle,
+  Eye,
+  Ban,
+  Trash2,
+  UserCheck,
+  UserX,
+  Shield,
+  Heart,
+  MessageCircle,
+  MapPin,
+  Calendar,
+  Crown,
+  CheckCircle2,
 } from 'lucide-react';
 import { UserListItem } from '@/services/admin';
-import { GlassCard } from '@/components/ui/GlassCard';
-import {
-  STATUS_COLORS, SUBSCRIPTION_COLORS,
-  FRAUD_COLORS, getFraudLevel,
-} from './types';
 
-interface UserCardProps {
+interface Props {
   user: UserListItem;
   onAction: (action: string, user: UserListItem) => void;
 }
 
-// Карточка пользователя для grid-режима
-export function UserCard({ user, onAction }: UserCardProps) {
+const STATUS_LABELS: Record<string, string> = {
+  active: 'Активен',
+  suspended: 'Приостановлен',
+  banned: 'Заблокирован',
+  pending: 'Ожидание',
+};
+
+const STATUS_STYLES: Record<string, string> = {
+  active: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  suspended: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  banned: 'bg-red-500/20 text-red-400 border-red-500/30',
+  pending: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+};
+
+const SUBSCRIPTION_STYLES: Record<string, { bg: string; text: string; glow?: string }> = {
+  free: { bg: 'bg-white/10', text: 'text-gray-400' },
+  gold: { bg: 'bg-orange-500/20', text: 'text-orange-400', glow: 'shadow-[0_0_8px_rgba(251,146,60,0.3)]' },
+  platinum: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
+};
+
+function getFraudColor(score: number) {
+  if (score >= 70) return 'text-red-400';
+  if (score >= 40) return 'text-orange-400';
+  return 'text-emerald-400';
+}
+
+export default function UserCard({ user, onAction }: Props) {
   const router = useRouter();
-  const fraudLevel = getFraudLevel(user.fraud_score);
+
+  const statusStyle = STATUS_STYLES[user.status] || STATUS_STYLES.pending;
+  const subStyle = SUBSCRIPTION_STYLES[user.subscription] || SUBSCRIPTION_STYLES.free;
+  const initial = user.name?.charAt(0)?.toUpperCase() || '?';
+
+  const handleCardClick = () => {
+    router.push(`/admin/users/${user.id}`);
+  };
+
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
-    <GlassCard className="p-5 flex flex-col h-full bg-[var(--admin-glass-bg)] hover:bg-[var(--admin-glass-bg-hover)] border-[var(--admin-glass-border)]">
-      {/* Шапка: аватар + имя + статус + подписка */}
-      <div className="flex items-start gap-4 mb-4">
-        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-semibold text-white relative shrink-0 bg-gradient-to-br from-neon-blue to-neon-purple">
-          {user.name?.charAt(0) || 'U'}
+    <div
+      onClick={handleCardClick}
+      className="relative bg-[#0f1225]/80 backdrop-blur border border-white/10 rounded-2xl p-5 hover:border-white/20 transition-all cursor-pointer group"
+    >
+      {/* Бейдж подписки — верхний правый угол */}
+      <div className={`absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border border-white/10 ${subStyle.bg} ${subStyle.text} ${subStyle.glow || ''}`}>
+        {user.subscription === 'platinum' && <Crown className="w-3 h-3" />}
+        {user.subscription === 'gold' && <Crown className="w-3 h-3" />}
+        {user.subscription === 'free' ? 'Free' : user.subscription === 'gold' ? 'Gold' : 'Platinum'}
+      </div>
+
+      {/* Верхняя секция: аватар + инфо */}
+      <div className="flex items-start gap-3.5">
+        {/* Аватар */}
+        <div className="relative flex-shrink-0">
+          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
+            {initial}
+          </div>
           {user.verified && (
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 border-2 border-[var(--admin-bg)] rounded-full flex items-center justify-center text-white">
-              <CheckCircle size={12} />
+            <div className="absolute -bottom-1 -right-1 bg-[#0f1225] rounded-full p-0.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 fill-emerald-400/20" />
             </div>
           )}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h4 className="text-[15px] font-semibold text-[var(--admin-text-primary)] truncate">{user.name}, {user.age || '?'}</h4>
-            <span
-              className="px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide"
-              style={STATUS_COLORS[user.status] || STATUS_COLORS.pending}
-            >
-              {user.status}
-            </span>
+
+        {/* Имя, email, локация, дата */}
+        <div className="min-w-0 flex-1 pr-16">
+          <div className="font-bold text-white truncate">
+            {user.name}{user.age ? `, ${user.age}` : ''}
           </div>
-          <div className="flex gap-3">
-            <span className="flex items-center gap-1 text-xs text-[var(--admin-text-muted)]">
-              <MapPin size={12} /> {user.location || 'Неизвестно'}
-            </span>
-            <span className="flex items-center gap-1 text-xs text-[var(--admin-text-muted)]">
-              <Calendar size={12} /> {new Date(user.registered_at).toLocaleDateString()}
-            </span>
+          {user.email && (
+            <div className="text-xs text-gray-500 truncate mt-0.5">{user.email}</div>
+          )}
+          {user.location && (
+            <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+              <MapPin className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">{user.location}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1 text-xs text-gray-600 mt-0.5">
+            <Calendar className="w-3 h-3 flex-shrink-0" />
+            <span>{new Date(user.registered_at).toLocaleDateString('ru-RU')}</span>
           </div>
-        </div>
-        <div
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase whitespace-nowrap"
-          style={SUBSCRIPTION_COLORS[user.subscription] || SUBSCRIPTION_COLORS.free}
-        >
-          {user.subscription === 'platinum' && <Crown size={12} />}
-          {SUBSCRIPTION_COLORS[user.subscription]?.label || 'Бесплатный'}
         </div>
       </div>
 
-      {/* Статистика: матчи, сообщения, фрод-скор */}
-      <div className="flex gap-4 py-3 border-y border-[var(--admin-glass-border)] mb-3">
-        <div className="flex items-center gap-1.5 text-[13px] text-[var(--admin-text-muted)]">
-          <Heart size={14} className="text-pink-500" />
+      {/* Статус */}
+      <div className="mt-3">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusStyle}`}>
+          {STATUS_LABELS[user.status] || user.status}
+        </span>
+      </div>
+
+      {/* Статистика */}
+      <div className="flex items-center justify-between mt-4 py-3 border-y border-white/10 text-xs">
+        <div className="flex items-center gap-1.5 text-pink-400">
+          <Heart className="w-3.5 h-3.5" />
           <span>{user.matches}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-[13px] text-[var(--admin-text-muted)]">
-          <MessageCircle size={14} className="text-blue-500" />
+        <div className="flex items-center gap-1.5 text-blue-400">
+          <MessageCircle className="w-3.5 h-3.5" />
           <span>{user.messages}</span>
         </div>
-        <div className="ml-auto flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: FRAUD_COLORS[fraudLevel] }}>
-          <Shield size={14} />
+        <div className={`flex items-center gap-1.5 ${getFraudColor(user.fraud_score)}`}>
+          <Shield className="w-3.5 h-3.5" />
           <span>{user.fraud_score}%</span>
         </div>
       </div>
 
       {/* Кнопки действий */}
-      <div className="flex gap-2 mt-auto">
-        <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-blue-500/20 hover:text-blue-500 hover:border-blue-500/30 transition-all" onClick={() => router.push(`/admin/users/${user.id}`)}>
-          <Eye size={16} />
+      <div className="flex items-center justify-between mt-3 gap-1.5">
+        {/* Просмотр */}
+        <button
+          onClick={(e) => { stop(e); onAction('view', user); }}
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors"
+          title="Просмотр"
+        >
+          <Eye className="w-4 h-4" />
         </button>
-        <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-blue-500/20 hover:text-blue-500 hover:border-blue-500/30 transition-all" onClick={() => onAction('edit', user)}>
-          <Edit size={16} />
-        </button>
-        {user.status === 'active' ? (
-          <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-orange-500/20 hover:text-orange-500 hover:border-orange-500/30 transition-all" onClick={() => onAction('suspend', user)}>
-            <UserX size={16} />
+
+        {/* Активировать / Приостановить */}
+        {user.status === 'suspended' || user.status === 'banned' || user.status === 'pending' ? (
+          <button
+            onClick={(e) => { stop(e); onAction('activate', user); }}
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors"
+            title="Активировать"
+          >
+            <UserCheck className="w-4 h-4" />
           </button>
         ) : (
-          <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-emerald-500/20 hover:text-emerald-500 hover:border-emerald-500/30 transition-all" onClick={() => onAction('activate', user)}>
-            <UserCheck size={16} />
+          <button
+            onClick={(e) => { stop(e); onAction('suspend', user); }}
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 transition-colors"
+            title="Приостановить"
+          >
+            <UserX className="w-4 h-4" />
           </button>
         )}
-        <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition-all" onClick={() => onAction('ban', user)} title="Забанить">
-          <Ban size={16} />
+
+        {/* Заблокировать */}
+        <button
+          onClick={(e) => { stop(e); onAction('ban', user); }}
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
+          title="Заблокировать"
+        >
+          <Ban className="w-4 h-4" />
         </button>
-        <button className="flex-1 h-9 flex items-center justify-center rounded-lg bg-slate-800/50 border border-slate-700/50 text-[var(--admin-text-muted)] hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition-all" onClick={() => onAction('delete', user)} title="Удалить из базы">
-          <Trash2 size={16} />
+
+        {/* Удалить */}
+        <button
+          onClick={(e) => { stop(e); onAction('delete', user); }}
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
+          title="Удалить"
+        >
+          <Trash2 className="w-4 h-4" />
         </button>
       </div>
-    </GlassCard>
+    </div>
   );
 }
