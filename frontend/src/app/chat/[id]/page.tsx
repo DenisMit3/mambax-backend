@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { VIPChatSystem } from '@/components/chat/VIPChatSystem';
 import { GiftPicker } from '@/components/chat/GiftPicker';
@@ -15,16 +16,39 @@ const CallScreen = dynamic(() => import('@/components/chat/CallScreen').then(m =
     loading: () => null
 });
 
+const loadingPhrases = [
+    '🔐 Устанавливаем защищённое соединение...',
+    '🔥 Подкидываем дрова в печку...',
+    '⚡ Ещё чуть-чуть...',
+    '💬 Готовим чат для вас...',
+    '🚀 Почти на месте!',
+];
+
+function ChatLoader() {
+    const [phraseIdx, setPhraseIdx] = useState(0);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setPhraseIdx(prev => (prev + 1) % loadingPhrases.length);
+        }, 1500);
+        return () => clearInterval(timer);
+    }, []);
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center text-white font-mono space-y-4">
+            <div className="w-12 h-12 border-2 border-primary-red/30 border-t-primary-red rounded-full animate-spin" />
+            <p className="text-primary-red animate-pulse transition-all duration-300 text-center px-6">
+                {loadingPhrases[phraseIdx]}
+            </p>
+        </div>
+    );
+}
+
 export default function ChatPage() {
     const router = useRouter();
     const chat = useChatPage();
 
-    if (chat.isChecking || chat.loading) return (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center text-white font-mono space-y-4">
-            <div className="w-12 h-12 border-2 border-primary-red/30 border-t-primary-red rounded-full animate-spin" />
-            <p className="text-primary-red animate-pulse">Установка защищенного соединения...</p>
-        </div>
-    );
+    if (chat.isChecking || chat.loading) return <ChatLoader />;
 
     if (!chat.user) return <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center text-white">Чат не найден</div>;
 

@@ -190,50 +190,47 @@ export function useChatPage() {
 
     const loadInitialData = async () => {
         try {
-            // FIX: getMatch is the ONLY critical request — it determines if chat exists.
-            // Messages and gifts are loaded separately so their failures don't cause "Чат не найден".
-            const matchData = await authService.getMatch(id);
-
-            if (matchData && matchData.user) {
-                setUser({
-                    id: matchData.user.id,
-                    name: matchData.user.name,
-                    photo: getFullUrl(matchData.user.photos?.[0]) || '',
-                    isOnline: matchData.user.is_online,
-                    lastSeen: matchData.user.last_seen ? new Date(matchData.user.last_seen) : undefined,
-                    isTyping: false,
-                    isPremium: matchData.user.is_premium || false
-                });
-            }
-
-            const currentUserId = matchData?.current_user_id;
-            currentUserIdRef.current = currentUserId || null;
-
-            // Non-critical: load messages and gifts in parallel via allSettled
-            const [msgsResult, catalogResult] = await Promise.allSettled([
+            // FIX: Run ALL requests in parallel for faster load
+            const [matchData, msgsResult, catalogResult] = await Promise.allSettled([
+                authService.getMatch(id),
                 authService.getMessages(id),
                 authService.getGiftsCatalog()
             ]);
 
-            if (msgsResult.status === 'fulfilled') {
-                const msgsData = msgsResult.value;
-                const uiMessages: Message[] = (msgsData as BackendMessage[]).map((m) => {
-                    const isOwn = m.sender_id === currentUserId;
-                    return {
-                        id: m.id,
-                        text: m.content || m.text,
-                        image: getFullUrl(m.photo_url || m.media_url),
-                        timestamp: new Date(m.created_at || m.timestamp),
-                        isOwn,
-                        status: isOwn ? (m.is_read ? 'read' : 'delivered') : 'delivered',
-                        type: (m.type === 'gift' || m.type === 'super_like') ? 'super_like' : (m.photo_url ? 'image' : 'text')
-                    };
+            // Process match (critical)
+            if (matchData.status === 'fulfilled' && matchData.value?.user) {
+                const md = matchData.value;
+                setUser({
+                    id: md.user.id,
+                    name: md.user.name,
+                    photo: getFullUrl(md.user.photos?.[0]) || '',
+                    isOnline: md.user.is_online,
+                    lastSeen: md.user.last_seen ? new Date(md.user.last_seen) : undefined,
+                    isTyping: false,
+                    isPremium: md.user.is_premium || false
                 });
-                setMessages(uiMessages);
-            } else {
-                console.warn('Failed to load messages (non-critical):', msgsResult.reason);
+                currentUserIdRef.current = md.current_user_id || null;
+
+                // Process messages
+                const currentUserId = md.current_user_id;
+                if (msgsResult.status === 'fulfilled') {
+                    const uiMessages: Message[] = (msgsResult.value as BackendMessage[]).map((m) => {
+                        const isOwn = m.sender_id === currentUserId;
+                        return {
+                            id: m.id,
+                            text: m.content || m.text,
+                            image: getFullUrl(m.photo_url || m.media_url),
+                            timestamp: new Date(m.created_at || m.timestamp),
+                            isOwn,
+                            status: isOwn ? (m.is_read ? 'read' : 'delivered') : 'delivered',
+                            type: (m.type === 'gift' || m.type === 'super_like') ? 'super_like' : (m.photo_url ? 'image' : 'text')
+                        };
+                    });
+                    setMessages(uiMessages);
+                }
             }
 
+            // Process gifts catalog (non-critical)
             if (catalogResult.status === 'fulfilled') {
                 const catalogData = catalogResult.value;
                 const mappedGifts = catalogData.gifts.map((g: BackendGift) => {
@@ -252,11 +249,9 @@ export function useChatPage() {
                     };
                 });
                 setGifts(mappedGifts);
-            } else {
-                console.warn('Failed to load gifts catalog (non-critical):', catalogResult.reason);
             }
         } catch (error) {
-            console.error('Failed to load chat (match not found):', error);
+            console.error('Failed to load chat:', error);
         } finally {
             setLoading(false);
         }
