@@ -179,7 +179,7 @@ if settings.ALLOWED_ORIGINS:
     allowed_origins.extend([o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()])
 
 # Allow all Vercel preview deployments
-allowed_origin_regex = r"https://frontend-two-brown-70(-[a-z0-9]+)?\.vercel\.app"
+allowed_origin_regex = r"https://frontend-[\w-]+\.vercel\.app"
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 

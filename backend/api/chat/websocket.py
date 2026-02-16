@@ -6,7 +6,7 @@ import json
 import asyncio
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -157,7 +157,7 @@ async def websocket_endpoint(websocket: WebSocket):
             async with async_session_maker() as db:
                 user = await db.get(User, UUID(user_id))
                 if user:
-                    user.last_seen = datetime.utcnow()
+                    user.last_seen = datetime.now(timezone.utc)
                     await db.commit()
         except Exception as e:
             logger.error(f"Failed to update last_seen: {e}")
@@ -277,7 +277,7 @@ async def _handle_message(websocket: WebSocket, sender_id: str, data: dict):
         if msg_type == "photo":
             push_body = "📷 Photo"
 
-        if not manager.is_online(recipient_id):
+        if not await manager.is_online_async(recipient_id):
             await increment_unread(recipient_id, match_id)
             
             # Create in-app notification + push
@@ -305,6 +305,24 @@ async def _handle_message(websocket: WebSocket, sender_id: str, data: dict):
                     body=push_body,
                     url=f"/chat/{match_id}"
                 )
+
+            # Telegram Bot notification (always for offline users)
+            try:
+                from backend.services.telegram_notify import notify_user_new_message
+                from backend.models.user import User as UserModel
+                if not sender_name or sender_name == "Кто-то":
+                    sender_obj = await db.get(UserModel, UUID(sender_id))
+                    sender_name = sender_obj.name if sender_obj else "Кто-то"
+                await notify_user_new_message(
+                    db,
+                    recipient_id=recipient_id,
+                    sender_id=sender_id,
+                    sender_name=sender_name,
+                    message_preview=push_body,
+                    match_id=match_id,
+                )
+            except Exception as e:
+                logger.error(f"Telegram notification error: {e}")
 
         # AUTO-RESPONDER BOT (DEVELOPMENT ONLY)
         if settings.ENVIRONMENT == "development":
@@ -441,7 +459,7 @@ async def _handle_gift_read(user_id: str, data: dict, websocket: WebSocket):
                 tx = await db.get(GiftTransaction, UUID(transaction_id))
                 if tx and str(tx.receiver_id) == user_id and not tx.is_read:
                     tx.is_read = True
-                    tx.read_at = datetime.utcnow()
+                    tx.read_at = datetime.now(timezone.utc)
                     await db.commit()
                     await websocket.send_json({
                         "type": "gift_read_ack",

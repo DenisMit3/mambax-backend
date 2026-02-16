@@ -152,7 +152,7 @@ export const VIPComposer = ({
       {/* Поле ввода */}
       <div className="p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/5">
         <div className="flex items-end gap-2">
-          <div className="flex-1 bg-[#212121] rounded-[22px] px-1 py-1 flex items-end border border-white/5 focus-within:border-primary-red/30 transition-all min-h-[36px]">
+          <div className="flex-1 min-w-0 bg-[#212121] rounded-[22px] px-1 py-1 flex items-end border border-white/5 focus-within:border-primary-red/30 transition-all min-h-[36px]">
             <AnimatedButton variant="ghost" size="sm" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-11 h-11 hover:bg-white/5 rounded-full shrink-0 mb-0.5">
               <Smile className="w-5 h-5 text-gray-400" />
             </AnimatedButton>

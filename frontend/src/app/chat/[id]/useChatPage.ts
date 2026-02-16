@@ -59,10 +59,16 @@ export function useChatPage() {
     // Refs
     const ws = useRef<WebSocket | null>(null);
     const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+    const wsReconnectAttempts = useRef(0);
+    const MAX_WS_RECONNECT = 5;
     const currentUserIdRef = useRef<string | null>(null);
     const mountedRef = useRef(true);
     const userRef = useRef(user);
     useEffect(() => { userRef.current = user; }, [user]);
+    const wsConnected = useRef(false);
+    const pollInterval = useRef<NodeJS.Timeout | null>(null);
+    const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
+    const lastMessageTime = useRef<string | null>(null);
 
     const ephemeralEnabledRef = useRef(ephemeralEnabled);
     const ephemeralSecondsRef = useRef(ephemeralSeconds);
@@ -74,13 +80,113 @@ export function useChatPage() {
         if (id && isAuthed) {
             loadInitialData();
             connectWebSocket();
+            startHeartbeat();
         }
         return () => {
             mountedRef.current = false;
             if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+            if (pollInterval.current) clearInterval(pollInterval.current);
+            if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
             if (ws.current) ws.current.close();
         };
     }, [id, isAuthed]);
+
+    // --- Heartbeat: keep online status alive in Redis ---
+    const startHeartbeat = () => {
+        authService.heartbeat().catch(() => {});
+        heartbeatInterval.current = setInterval(() => {
+            if (mountedRef.current) {
+                authService.heartbeat().catch(() => {});
+            }
+        }, 30_000);
+    };
+
+    // --- Polling fallback: when WS is not connected ---
+    const startPolling = () => {
+        if (pollInterval.current) return; // already polling
+        pollInterval.current = setInterval(async () => {
+            if (!mountedRef.current || wsConnected.current) {
+                if (pollInterval.current) clearInterval(pollInterval.current);
+                pollInterval.current = null;
+                return;
+            }
+            try {
+                const data = await authService.pollMessages(id, lastMessageTime.current || undefined);
+
+                // Update partner online status and last seen
+                if (userRef.current) {
+                    setUser(prev => prev ? {
+                        ...prev,
+                        isOnline: data.partner_online,
+                        lastSeen: data.partner_last_seen ? new Date(data.partner_last_seen) : prev.lastSeen,
+                    } : null);
+                }
+
+                // Update read status of own messages (double checkmark)
+                if (data.read_by_partner && data.read_by_partner.length > 0) {
+                    setMessages(prev => prev.map(m =>
+                        m.isOwn && data.read_by_partner.includes(m.id) && m.status !== 'read'
+                            ? { ...m, status: 'read' as const }
+                            : m
+                    ));
+                }
+
+                if (data.messages && data.messages.length > 0) {
+                    const currentUserId = currentUserIdRef.current;
+                    let hasIncoming = false;
+
+                    for (const m of data.messages) {
+                        const msgTime = m.created_at;
+                        if (msgTime && (!lastMessageTime.current || msgTime > lastMessageTime.current)) {
+                            lastMessageTime.current = msgTime;
+                        }
+                    }
+
+                    setMessages(prev => {
+                        let updated = [...prev];
+                        for (const m of data.messages) {
+                            const exists = updated.find(existing => existing.id === m.id);
+                            if (exists) {
+                                // Update read status of own messages
+                                if (m.is_read && exists.isOwn && exists.status !== 'read') {
+                                    updated = updated.map(msg => msg.id === m.id ? { ...msg, status: 'read' as const } : msg);
+                                }
+                                continue;
+                            }
+
+                            const isOwn = m.sender_id === currentUserId;
+                            if (!isOwn) hasIncoming = true;
+
+                            updated.push({
+                                id: m.id,
+                                text: m.content || m.text,
+                                image: getFullUrl(m.photo_url || m.media_url),
+                                timestamp: new Date(m.created_at || Date.now()),
+                                isOwn,
+                                status: m.is_read ? 'read' : (isOwn ? 'delivered' : 'delivered'),
+                                type: m.photo_url ? 'image' : 'text'
+                            });
+                        }
+                        return updated;
+                    });
+
+                    // Auto mark-read incoming messages via REST
+                    if (hasIncoming) {
+                        authService.markReadBatch(id).catch(() => {});
+                    }
+                }
+            } catch {
+                // Polling error — silent
+            }
+        }, 3000);
+    };
+
+    const stopPolling = () => {
+        if (pollInterval.current) {
+            clearInterval(pollInterval.current);
+            pollInterval.current = null;
+        }
+    };
 
     const loadInitialData = async () => {
         try {
@@ -111,15 +217,18 @@ export function useChatPage() {
 
             if (msgsResult.status === 'fulfilled') {
                 const msgsData = msgsResult.value;
-                const uiMessages: Message[] = (msgsData as BackendMessage[]).map((m) => ({
-                    id: m.id,
-                    text: m.content || m.text,
-                    image: getFullUrl(m.photo_url || m.media_url),
-                    timestamp: new Date(m.created_at || m.timestamp),
-                    isOwn: m.sender_id === currentUserId,
-                    status: m.is_read ? 'read' : 'sent',
-                    type: (m.type === 'gift' || m.type === 'super_like') ? 'super_like' : (m.photo_url ? 'image' : 'text')
-                }));
+                const uiMessages: Message[] = (msgsData as BackendMessage[]).map((m) => {
+                    const isOwn = m.sender_id === currentUserId;
+                    return {
+                        id: m.id,
+                        text: m.content || m.text,
+                        image: getFullUrl(m.photo_url || m.media_url),
+                        timestamp: new Date(m.created_at || m.timestamp),
+                        isOwn,
+                        status: isOwn ? (m.is_read ? 'read' : 'delivered') : 'delivered',
+                        type: (m.type === 'gift' || m.type === 'super_like') ? 'super_like' : (m.photo_url ? 'image' : 'text')
+                    };
+                });
                 setMessages(uiMessages);
             } else {
                 console.warn('Failed to load messages (non-critical):', msgsResult.reason);
@@ -156,37 +265,58 @@ export function useChatPage() {
     // --- WebSocket ---
     const connectWebSocket = () => {
         const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-        if (!token) return;
+        if (!token) {
+            startPolling();
+            return;
+        }
 
         const wsUrl = getWsUrl();
-        if (!wsUrl) return;
-        const socket = new WebSocket(wsUrl);
+        if (!wsUrl) {
+            startPolling();
+            return;
+        }
 
-        socket.onopen = () => {
-            socket.send(JSON.stringify({ type: 'auth', token }));
-        };
+        try {
+            const socket = new WebSocket(wsUrl);
 
-        socket.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                handleWebSocketMessage(data);
-            } catch (e) {
-                console.error('WS Parse Error', e);
-            }
-        };
+            socket.onopen = () => {
+                wsConnected.current = true;
+                wsReconnectAttempts.current = 0; // Reset on successful connect
+                stopPolling();
+                socket.send(JSON.stringify({ type: 'auth', token }));
+            };
 
-        socket.onclose = () => {
-            ws.current = null;
-            if (mountedRef.current) {
-                reconnectTimeout.current = setTimeout(connectWebSocket, 3000);
-            }
-        };
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (e) {
+                    console.error('WS Parse Error', e);
+                }
+            };
 
-        socket.onerror = () => {
-            socket.close();
-        };
+            socket.onclose = () => {
+                ws.current = null;
+                wsConnected.current = false;
+                if (mountedRef.current) {
+                    startPolling();
+                    // Exponential backoff with max retries — stop hammering if WS unavailable (e.g. Vercel serverless)
+                    if (wsReconnectAttempts.current < MAX_WS_RECONNECT) {
+                        const delay = Math.min(5000 * Math.pow(2, wsReconnectAttempts.current), 60000);
+                        reconnectTimeout.current = setTimeout(connectWebSocket, delay);
+                        wsReconnectAttempts.current++;
+                    }
+                }
+            };
 
-        ws.current = socket;
+            socket.onerror = () => {
+                socket.close();
+            };
+
+            ws.current = socket;
+        } catch {
+            startPolling();
+        }
     };
 
     const handleWebSocketMessage = (data: WebSocketMessageData) => {
@@ -225,6 +355,22 @@ export function useChatPage() {
                     type: data.type === 'super_like' ? 'super_like' : (data.photo_url ? 'image' : 'text')
                 };
                 hapticFeedback.impactOccurred('light');
+
+                // Auto-send read receipt for incoming messages
+                if (!newMsg.isOwn) {
+                    if (ws.current?.readyState === WebSocket.OPEN) {
+                        ws.current.send(JSON.stringify({
+                            type: 'read',
+                            match_id: id,
+                            message_ids: [msgId],
+                            sender_id: data.sender_id,
+                        }));
+                    } else {
+                        // REST fallback for read receipt
+                        authService.markReadBatch(id).catch(() => {});
+                    }
+                }
+
                 return [...prev, newMsg];
             });
         } else if (data.type === 'typing') {
@@ -234,6 +380,21 @@ export function useChatPage() {
         } else if (data.type === 'online_status') {
             if (data.user_id === userRef.current?.id) {
                 setUser(prev => prev ? { ...prev, isOnline: data.is_online } : null);
+            }
+        } else if (data.type === 'read') {
+            // Partner read our messages — update checkmarks to double
+            if (data.match_id === id) {
+                const readIds = data.message_ids as string[] | undefined;
+                if (readIds && readIds.length > 0) {
+                    setMessages(prev => prev.map(m =>
+                        m.isOwn && readIds.includes(m.id) ? { ...m, status: 'read' } : m
+                    ));
+                } else {
+                    // If no specific IDs, mark all own sent/delivered as read
+                    setMessages(prev => prev.map(m =>
+                        m.isOwn && (m.status === 'sent' || m.status === 'delivered') ? { ...m, status: 'read' } : m
+                    ));
+                }
             }
         } else if (data.type === 'offer' && data.match_id === id) {
             setIncomingCall({

@@ -3,7 +3,8 @@ Chat - Redis State Management (online, typing, unread)
 """
 
 import logging
-from typing import Dict, List
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
 
 from backend.core.redis import redis_manager
 
@@ -15,12 +16,22 @@ class ChatStateManager:
     
     async def set_user_online(self, user_id: str):
         await redis_manager.set_value(f"user:online:{user_id}", "true", expire=300)
+        # Also update last_seen timestamp
+        now = datetime.now(timezone.utc).isoformat()
+        await redis_manager.set_value(f"user:last_seen:{user_id}", now, expire=604800)  # 7 days
         
     async def set_user_offline(self, user_id: str):
         await redis_manager.delete(f"user:online:{user_id}")
+        # Update last_seen on disconnect
+        now = datetime.now(timezone.utc).isoformat()
+        await redis_manager.set_value(f"user:last_seen:{user_id}", now, expire=604800)  # 7 days
         
     async def is_user_online(self, user_id: str) -> bool:
         return await redis_manager.get_value(f"user:online:{user_id}") == "true"
+
+    async def get_last_seen(self, user_id: str) -> Optional[str]:
+        """Get ISO timestamp of when user was last online."""
+        return await redis_manager.get_value(f"user:last_seen:{user_id}")
 
     async def set_typing(self, match_id: str, user_id: str, is_typing: bool):
         """Set/remove typing indicator using Redis Set for efficient retrieval"""

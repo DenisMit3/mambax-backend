@@ -66,6 +66,53 @@ async def cmd_start(message: types.Message, command: CommandObject):
     if referral_code:
         try:
             logger.info(f"User {user.id} joined via referral: {referral_code}")
+            async with async_session_maker() as ref_db:
+                from sqlalchemy import text
+                from backend.models.marketing import Referral, ReferralStatus
+                from decimal import Decimal
+
+                # Find referrer by code
+                referrer_q = await ref_db.execute(
+                    text("SELECT id FROM users WHERE referral_code = :code"),
+                    {"code": referral_code.strip().upper()}
+                )
+                referrer_row = referrer_q.fetchone()
+
+                if referrer_row:
+                    referrer_id = referrer_row[0]
+                    # Get current user from DB
+                    current_db_user = await crud_user.get_user_by_telegram_id(ref_db, str(user.id))
+
+                    if current_db_user and current_db_user.referred_by is None and str(referrer_id) != str(current_db_user.id):
+                        # Check no duplicate
+                        dup_q = await ref_db.execute(
+                            text("SELECT id FROM referrals WHERE referrer_id = :ref_id AND referred_id = :uid"),
+                            {"ref_id": referrer_id, "uid": current_db_user.id}
+                        )
+                        if not dup_q.fetchone():
+                            current_db_user.referred_by = referrer_id
+                            referral = Referral(
+                                referrer_id=referrer_id,
+                                referred_id=current_db_user.id,
+                                status=ReferralStatus.CONVERTED,
+                                reward_stars=50.0,
+                                reward_paid=True,
+                            )
+                            ref_db.add(referral)
+                            # Credit stars to both
+                            reward = Decimal(50)
+                            await ref_db.execute(
+                                text("UPDATE users SET stars_balance = stars_balance + :r WHERE id = :uid"),
+                                {"r": reward, "uid": current_db_user.id}
+                            )
+                            await ref_db.execute(
+                                text("UPDATE users SET stars_balance = stars_balance + :r WHERE id = :rid"),
+                                {"r": reward, "rid": referrer_id}
+                            )
+                            await ref_db.commit()
+                            logger.info(f"Referral processed: {user.id} referred by {referrer_id}")
+                else:
+                    logger.warning(f"Referral code not found: {referral_code}")
         except Exception as e:
             logger.warning(f"Referral processing error: {e}")
 

@@ -43,10 +43,11 @@ async def clear_unread(user_id: str, match_id: str):
         logger.warning(f"Failed to clear unread: {e}")
 
 
-def get_online_status(user_id: str) -> dict:
+async def get_online_status(user_id: str) -> dict:
     """Get user online status"""
-    is_online = manager.is_online(user_id)
-    return {"user_id": user_id, "is_online": is_online, "last_seen": None}
+    is_online = await manager.is_online_async(user_id)
+    last_seen = await state_manager.get_last_seen(user_id)
+    return {"user_id": user_id, "is_online": is_online, "last_seen": last_seen}
 
 
 def format_last_seen(last_seen: datetime) -> str:

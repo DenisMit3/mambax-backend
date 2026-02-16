@@ -29,7 +29,7 @@ export default function ChatPage() {
     if (!chat.user) return <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center text-white">Чат не найден</div>;
 
     return (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-black" style={{ height: 'var(--tg-viewport-height, var(--vvh, 100dvh))' }}>
+        <div className="fixed inset-0 z-[100] flex flex-col bg-black" style={{ height: '100dvh' }}>
             <VIPChatSystem
                 user={chat.user}
                 messages={chat.messages}

@@ -392,7 +392,7 @@ async def check_user_online(
     # Проверяем настройки видимости пользователя
     visibility = get_visibility_settings(user_id)
     
-    status = get_online_status(user_id)
+    status = await get_online_status(user_id)
     
     # Скрываем если пользователь отключил
     if not visibility.get("show_online_status", True):

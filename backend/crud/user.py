@@ -1,5 +1,6 @@
 # User CRUD - Операции создания и получения пользователей из PostgreSQL
 
+import secrets
 from typing import Optional
 from uuid import UUID
 
@@ -10,6 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.security import hash_password
 from backend.models.user import User, Gender
 from backend.schemas.user import UserCreate
+
+
+def _generate_referral_code() -> str:
+    """Generate unique 8-char referral code like REF-A1B2C3D4"""
+    return f"REF-{secrets.token_hex(4).upper()}"
 
 
 async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
@@ -47,6 +53,7 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
         latitude=latitude,
         longitude=longitude,
         is_vip=False,
+        referral_code=_generate_referral_code(),
     )
     
     db.add(db_user)
@@ -190,7 +197,8 @@ async def create_user_via_phone(db: AsyncSession, phone: str) -> User:
         gender=Gender.OTHER,  # FIX: Use neutral default, not MALE
         is_active=True,
         is_verified=False, 
-        is_complete=False 
+        is_complete=False,
+        referral_code=_generate_referral_code(),
     )
     
     db.add(db_user)

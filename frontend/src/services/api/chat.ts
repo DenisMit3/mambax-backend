@@ -63,4 +63,36 @@ export const chatApi = {
     async postQuestionOfDayAnswer(matchId: string, answer: string) {
         return httpClient.post<{ status: string; partner_answered: boolean }>("/api/chat/question-of-day/answer", { match_id: matchId, answer });
     },
+
+    async heartbeat() {
+        return httpClient.post("/api/chat/heartbeat");
+    },
+
+    async pollMessages(matchId: string, after?: string) {
+        const params = after ? `?after=${encodeURIComponent(after)}` : '';
+        return httpClient.get<{
+            partner_online: boolean;
+            partner_last_seen: string | null;
+            read_by_partner: string[];
+            messages: Array<{
+                id: string;
+                match_id: string;
+                sender_id: string;
+                receiver_id: string;
+                text: string;
+                content: string;
+                type: string;
+                photo_url?: string;
+                audio_url?: string;
+                media_url?: string;
+                duration?: number;
+                created_at: string;
+                is_read: boolean;
+            }>;
+        }>(`/api/chat/poll/${matchId}${params}`);
+    },
+
+    async markReadBatch(matchId: string) {
+        return httpClient.post(`/api/chat/mark-read-batch?match_id=${encodeURIComponent(matchId)}`);
+    },
 };

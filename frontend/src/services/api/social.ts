@@ -18,6 +18,10 @@ export const socialApi = {
         return httpClient.post<{ success: boolean; bonus: number; message: string }>("/api/referral/apply", { code });
     },
 
+    async getReferralInvited() {
+        return httpClient.get<{ invited: { name: string; username: string | null; status: string; reward_stars: number; reward_paid: boolean; joined_at: string | null }[] }>("/api/referral/invited");
+    },
+
     // --- Daily Rewards ---
     async getDailyRewardStatus() {
         return httpClient.get<{

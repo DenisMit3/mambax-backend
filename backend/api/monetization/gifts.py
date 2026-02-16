@@ -211,7 +211,7 @@ async def send_gift(
 
     
     # Check if receiver is online and send via WebSocket
-    is_receiver_online = manager.is_online(str(request.receiver_id))
+    is_receiver_online = await manager.is_online_async(str(request.receiver_id))
     if is_receiver_online:
         await manager.send_personal(str(request.receiver_id), notification)
     

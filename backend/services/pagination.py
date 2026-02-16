@@ -177,7 +177,7 @@ async def get_profiles_paginated(
     # Формируем ответ
     items = []
     for profile in profiles:
-        is_online = manager.is_online(str(profile.id))
+        is_online = await manager.is_online_async(str(profile.id))
         items.append({
             "id": str(profile.id),
             "name": profile.name,
@@ -265,7 +265,7 @@ async def get_matches_paginated(
         profile = profiles_map.get(other_id)
         
         if profile:
-            is_online = manager.is_online(str(profile.id))
+            is_online = await manager.is_online_async(str(profile.id))
             items.append({
                 "id": str(match.id),
                 "created_at": str(match.created_at),

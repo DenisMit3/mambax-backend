@@ -52,7 +52,7 @@ const nextConfig: NextConfig = {
               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
               img-src 'self' blob: data: https:;
               font-src 'self' data: https://fonts.gstatic.com;
-              connect-src 'self' https://*.sentry.io https://app.posthog.com wss://*.vercel.app https://*.vercel.app; 
+              connect-src 'self' https://*.sentry.io https://app.posthog.com wss://*.vercel.app https://*.vercel.app wss://backend-pi-sable-56.vercel.app https://backend-pi-sable-56.vercel.app; 
               frame-ancestors 'self' https://web.telegram.org https://*.telegram.org;
               form-action 'self';
             `.replace(/\s{2,}/g, ' ').trim(),

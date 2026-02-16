@@ -18,6 +18,14 @@
   ],
   "rewrites": [
     {
+      "source": "/api_proxy/:path*",
+      "destination": "https://backend-pi-sable-56.vercel.app/:path*"
+    },
+    {
+      "source": "/debug/:path*",
+      "destination": "https://backend-pi-sable-56.vercel.app/debug/:path*"
+    },
+    {
       "source": "/api/photos/:path*",
       "destination": "https://backend-pi-sable-56.vercel.app/api/photos/:path*"
     },

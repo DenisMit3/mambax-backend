@@ -166,14 +166,14 @@ async def get_conversion_funnel(
     premium = result.scalar() or 0
 
     funnel = [
-        {"stage": "???????????", "count": registered, "percentage": 100},
-        {"stage": "?????????? ???????", "count": completed_profile,
+        {"stage": "Регистрация", "count": registered, "percentage": 100},
+        {"stage": "Заполнение профиля", "count": completed_profile,
          "percentage": round(completed_profile / max(registered, 1) * 100, 1)},
-        {"stage": "?????? ????", "count": first_match,
+        {"stage": "Первый мэтч", "count": first_match,
          "percentage": round(first_match / max(registered, 1) * 100, 1)},
-        {"stage": "?????? ?????????", "count": first_message,
+        {"stage": "Первое сообщение", "count": first_message,
          "percentage": round(first_message / max(registered, 1) * 100, 1)},
-        {"stage": "????????", "count": premium,
+        {"stage": "Подписка", "count": premium,
          "percentage": round(premium / max(registered, 1) * 100, 1)},
     ]
 
@@ -417,7 +417,7 @@ async def get_ltv_prediction(
             "arpu": vip_arpu, "risk": "low",
         },
         {
-            "segment": "???????? (7?)", "users": active_count,
+            "segment": "Активные (7д)", "users": active_count,
             "percentage": round(active_count / max(total_users, 1) * 100, 1),
             "avg_ltv": round(estimated_ltv * 1.2, 2), "total_revenue": round(revenue_30d * 0.7, 2),
             "arpu": round(arpu_30d * 1.2, 2), "risk": "low",
@@ -428,7 +428,7 @@ async def get_ltv_prediction(
             "avg_ltv": free_potential_ltv, "total_revenue": 0, "arpu": 0, "risk": "medium",
         },
         {
-            "segment": "?????????? (30?+)", "users": inactive_count,
+            "segment": "Неактивные (30д+)", "users": inactive_count,
             "percentage": round(inactive_count / max(total_users, 1) * 100, 1),
             "avg_ltv": round(free_potential_ltv * 0.1, 2), "total_revenue": 0, "arpu": 0, "risk": "high",
         },
@@ -436,15 +436,15 @@ async def get_ltv_prediction(
 
     recommendations = []
     if vip_count < total_users * 0.05:
-        recommendations.append(f"VIP ????????? ?????? ({round(vip_count/max(total_users,1)*100,1)}%). ????????? ?????-????????")
+        recommendations.append(f"VIP конверсия низкая ({round(vip_count/max(total_users,1)*100,1)}%). Запустите промо-кампанию")
     if inactive_count > total_users * 0.3:
-        recommendations.append(f"{inactive_count} ?????????? ?????????????. ????????? re-engagement ????")
+        recommendations.append(f"{inactive_count} неактивных пользователей. Отправьте re-engagement пуши")
     if arppu_30d < 5:
-        recommendations.append("ARPPU ???? $5. ??????????? upsell ??? ???????? ?????????????")
+        recommendations.append("ARPPU ниже $5. Рассмотрите upsell для платящих пользователей")
     if conversion_rate < 0.03:
-        recommendations.append(f"????????? ? ???????? {round(conversion_rate*100,1)}%. ?????????? ??????? VIP ??????")
+        recommendations.append(f"Конверсия в платящих {round(conversion_rate*100,1)}%. Предложите пробный VIP период")
     if not recommendations:
-        recommendations.append("??????? LTV ? ?????. ??????????? ??????????")
+        recommendations.append("Метрики LTV в норме. Продолжайте мониторинг")
 
     return {
         "prediction_date": now.isoformat(),
@@ -475,21 +475,21 @@ async def get_geo_analytics(
 ):
     """Get geographic distribution of users"""
     points = [
-        {"city": "??????", "lat": 55.7558, "lng": 37.6173, "users": 12500, "vip": 620, "active": 10200},
-        {"city": "?????-?????????", "lat": 59.9343, "lng": 30.3351, "users": 6800, "vip": 340, "active": 5500},
-        {"city": "???????????", "lat": 55.0084, "lng": 82.9357, "users": 2200, "vip": 110, "active": 1800},
-        {"city": "????????????", "lat": 56.8389, "lng": 60.6057, "users": 2100, "vip": 105, "active": 1700},
-        {"city": "??????", "lat": 55.8304, "lng": 49.0661, "users": 1900, "vip": 98, "active": 1600},
-        {"city": "?????? ????????", "lat": 56.2965, "lng": 43.9361, "users": 1800, "vip": 95, "active": 1500},
-        {"city": "?????????", "lat": 45.0355, "lng": 38.9753, "users": 1650, "vip": 88, "active": 1400},
-        {"city": "??????", "lat": 53.1959, "lng": 50.1002, "users": 1400, "vip": 72, "active": 1150},
-        {"city": "??????-??-????", "lat": 47.2357, "lng": 39.7015, "users": 1350, "vip": 68, "active": 1100},
-        {"city": "???", "lat": 54.7388, "lng": 55.9721, "users": 1100, "vip": 55, "active": 900},
-        {"city": "???????", "lat": 51.6720, "lng": 39.1843, "users": 950, "vip": 45, "active": 800},
-        {"city": "??????????", "lat": 56.0153, "lng": 92.8932, "users": 880, "vip": 42, "active": 720},
-        {"city": "?????", "lat": 58.0105, "lng": 56.2502, "users": 820, "vip": 38, "active": 680},
-        {"city": "?????????", "lat": 48.7080, "lng": 44.5133, "users": 750, "vip": 35, "active": 620},
-        {"city": "?????????", "lat": 55.1644, "lng": 61.4368, "users": 1050, "vip": 52, "active": 870},
+        {"city": "Москва", "lat": 55.7558, "lng": 37.6173, "users": 12500, "vip": 620, "active": 10200},
+        {"city": "Санкт-Петербург", "lat": 59.9343, "lng": 30.3351, "users": 6800, "vip": 340, "active": 5500},
+        {"city": "Новосибирск", "lat": 55.0084, "lng": 82.9357, "users": 2200, "vip": 110, "active": 1800},
+        {"city": "Екатеринбург", "lat": 56.8389, "lng": 60.6057, "users": 2100, "vip": 105, "active": 1700},
+        {"city": "Казань", "lat": 55.8304, "lng": 49.0661, "users": 1900, "vip": 98, "active": 1600},
+        {"city": "Нижний Новгород", "lat": 56.2965, "lng": 43.9361, "users": 1800, "vip": 95, "active": 1500},
+        {"city": "Краснодар", "lat": 45.0355, "lng": 38.9753, "users": 1650, "vip": 88, "active": 1400},
+        {"city": "Самара", "lat": 53.1959, "lng": 50.1002, "users": 1400, "vip": 72, "active": 1150},
+        {"city": "Ростов-на-Дону", "lat": 47.2357, "lng": 39.7015, "users": 1350, "vip": 68, "active": 1100},
+        {"city": "Уфа", "lat": 54.7388, "lng": 55.9721, "users": 1100, "vip": 55, "active": 900},
+        {"city": "Воронеж", "lat": 51.6720, "lng": 39.1843, "users": 950, "vip": 45, "active": 800},
+        {"city": "Красноярск", "lat": 56.0153, "lng": 92.8932, "users": 880, "vip": 42, "active": 720},
+        {"city": "Пермь", "lat": 58.0105, "lng": 56.2502, "users": 820, "vip": 38, "active": 680},
+        {"city": "Волгоград", "lat": 48.7080, "lng": 44.5133, "users": 750, "vip": 35, "active": 620},
+        {"city": "Челябинск", "lat": 55.1644, "lng": 61.4368, "users": 1050, "vip": 52, "active": 870},
     ]
 
     total_users = sum(p["users"] for p in points)

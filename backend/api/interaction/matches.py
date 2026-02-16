@@ -35,8 +35,10 @@ async def get_matches(
             
         partner_data = None
         if partner:
-            from backend.services.chat import manager
-            is_online = manager.is_online(str(partner.id))
+            from backend.services.chat.state import state_manager
+            is_online = await state_manager.is_user_online(str(partner.id))
+            redis_last_seen = await state_manager.get_last_seen(str(partner.id))
+            last_seen = redis_last_seen or (partner.last_seen.isoformat() if getattr(partner, 'last_seen', None) else None)
             
             partner_data = {
                  "id": str(partner.id),
@@ -44,7 +46,7 @@ async def get_matches(
                  "photos": partner.photos,
                  "is_online": is_online,
                  "online_status": "online" if is_online else "offline",
-                 "last_seen": partner.last_seen.isoformat() if getattr(partner, 'last_seen', None) else None,
+                 "last_seen": last_seen,
                  "age": getattr(partner, 'age', None),
                  "bio": getattr(partner, 'bio', None),
                  "is_verified": getattr(partner, 'is_verified', False),
@@ -116,15 +118,18 @@ async def get_match_by_id(
         
     partner_data = None
     if partner:
-        from backend.services.chat import manager
-        is_online = manager.is_online(str(partner.id))
+        from backend.services.chat.state import state_manager
+        is_online = await state_manager.is_user_online(str(partner.id))
+        redis_last_seen = await state_manager.get_last_seen(str(partner.id))
+        # Prefer Redis last_seen (updated by heartbeat), fallback to DB
+        last_seen = redis_last_seen or (partner.last_seen.isoformat() if partner.last_seen else None)
         
         partner_data = {
             "id": str(partner.id),
             "name": partner.name,
             "photos": partner.photos,
             "is_online": is_online,
-            "last_seen": partner.last_seen.isoformat() if partner.last_seen else None,
+            "last_seen": last_seen,
             "is_premium": getattr(partner, 'is_vip', False)
         }
 

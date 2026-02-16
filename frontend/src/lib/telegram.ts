@@ -67,6 +67,10 @@ interface TelegramWebApp {
     isExpanded: boolean;
     disableVerticalSwipes?: () => void;
     safeAreaInset?: { top: number; bottom: number; left: number; right: number };
+    openTelegramLink: (url: string) => void;
+    openLink: (url: string, options?: { try_instant_view?: boolean }) => void;
+    switchInlineQuery: (query: string, choose_chat_types?: string[]) => void;
+    shareToStory?: (media_url: string, params?: { text?: string; widget_link?: { url: string; name?: string } }) => void;
 
     // CloudStorage (Hardware/Hardcore feature)
     CloudStorage: {

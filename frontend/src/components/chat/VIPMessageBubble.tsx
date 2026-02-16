@@ -81,13 +81,20 @@ export const VIPMessageBubble = ({
               <span className="text-[11px] font-medium tracking-tight flex items-center">{timeString}</span>
               {isOwn && (
                 <span className="flex items-center ml-0.5 h-[14px]">
-                  {(status === 'delivered' || status === 'read') ? (
+                  {status === 'read' ? (
+                    <span className="flex text-blue-400">
+                      <Check className="w-3 h-3 -mr-1" />
+                      <Check className="w-3 h-3" />
+                    </span>
+                  ) : status === 'delivered' ? (
                     <span className="flex">
                       <Check className="w-3 h-3 -mr-1" />
                       <Check className="w-3 h-3" />
                     </span>
+                  ) : status === 'sent' ? (
+                    <Check className="w-3 h-3" />
                   ) : (
-                    status === 'sent' ? <Check className="w-3 h-3" /> : <Clock className="w-3 h-3" />
+                    <Clock className="w-3 h-3" />
                   )}
                 </span>
               )}

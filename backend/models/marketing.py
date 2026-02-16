@@ -29,7 +29,7 @@ class Referral(Base):
         default=ReferralStatus.PENDING,
         nullable=False,
     )
-    reward_stars: Mapped[float] = mapped_column(Float, default=50.0, comment="Stars rewarded to referrer")
+    reward_stars: Mapped[float] = mapped_column(Numeric(12, 2), default=50.0, comment="Stars rewarded to referrer")
     reward_paid: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     converted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

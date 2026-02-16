@@ -162,7 +162,9 @@ async def send_message(
         pass
 
     # Push Notification if offline
-    if not manager.is_online(receiver_id):
+    from backend.services.chat.state import state_manager
+    is_recipient_online = await state_manager.is_user_online(receiver_id)
+    if not is_recipient_online:
         await increment_unread(receiver_id, msg.match_id)
         from backend.services.notification import send_push_notification
         push_body = msg.text or "New message"
@@ -178,6 +180,23 @@ async def send_message(
             body=push_body,
             url=f"/chat/{msg.match_id}"
         )
+
+        # Telegram Bot notification
+        try:
+            from backend.services.telegram_notify import notify_user_new_message
+            from backend.models.user import User as UserModel
+            sender_obj = await db.get(UserModel, UUID(current_user))
+            sender_name = sender_obj.name if sender_obj else "Кто-то"
+            await notify_user_new_message(
+                db,
+                recipient_id=receiver_id,
+                sender_id=current_user,
+                sender_name=sender_name,
+                message_preview=push_body,
+                match_id=msg.match_id,
+            )
+        except Exception as e:
+            logger.error(f"Telegram notification error: {e}")
 
     return MessageResponse(
         id=db_msg.id,
@@ -247,3 +266,130 @@ async def mark_read_endpoint(req: MarkReadRequest, current_user: str = Depends(a
 @router.get("/chat/unread")
 async def get_unread_endpoint(match_id: str = None, current_user: str = Depends(auth.get_current_user)):
     return await get_unread_count(current_user, match_id)
+
+
+@router.post("/chat/heartbeat")
+async def heartbeat(current_user: str = Depends(auth.get_current_user)):
+    """Keep user online status alive in Redis (call every 60s from frontend)."""
+    from backend.services.chat.state import state_manager
+    await state_manager.set_user_online(current_user)
+    return {"status": "ok"}
+
+
+@router.post("/chat/mark-read-batch")
+async def mark_read_batch(
+    match_id: str,
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db)
+):
+    """Mark all unread messages in a match as read (for the current user as receiver)."""
+    from backend.crud import chat as crud_chat
+    from backend.models.chat import Message
+
+    result = await db.execute(
+        select(Message).where(
+            and_(
+                Message.match_id == UUID(match_id),
+                Message.receiver_id == UUID(current_user),
+                Message.is_read == False
+            )
+        )
+    )
+    unread_msgs = result.scalars().all()
+
+    if not unread_msgs:
+        return {"status": "ok", "updated": 0}
+
+    msg_ids = [m.id for m in unread_msgs]
+    rowcount = await crud_chat.mark_messages_as_read(db, msg_ids, UUID(current_user))
+
+    from backend.services.chat.state import state_manager
+    await state_manager.clear_unread(current_user, match_id)
+
+    # Notify sender(s) that their messages were read (via WS if connected, or they'll see it on next poll)
+    if rowcount > 0:
+        sender_ids = set(str(m.sender_id) for m in unread_msgs if str(m.sender_id) != current_user)
+        for sender_id in sender_ids:
+            await manager.send_personal(sender_id, {
+                "type": "read",
+                "match_id": match_id,
+                "message_ids": [str(mid) for mid in msg_ids],
+                "reader_id": current_user,
+            })
+
+    return {"status": "ok", "updated": rowcount}
+
+
+@router.get("/chat/poll/{match_id}")
+async def poll_messages(
+    match_id: str,
+    after: Optional[str] = Query(None, description="ISO timestamp — return messages after this time"),
+    current_user: str = Depends(auth.get_current_user),
+    db: AsyncSession = Depends(database.get_db)
+):
+    """Poll for new messages since `after` timestamp. Fallback for when WS is unavailable."""
+    from backend.models.chat import Message
+    from backend.models.interaction import Match
+
+    match_obj = await db.get(Match, UUID(match_id))
+    if not match_obj:
+        raise HTTPException(404, "Match not found")
+
+    user1_id, user2_id = str(match_obj.user1_id), str(match_obj.user2_id)
+    if current_user not in (user1_id, user2_id):
+        raise HTTPException(403, "Access denied")
+
+    partner_id = user2_id if current_user == user1_id else user1_id
+
+    from backend.services.chat.state import state_manager
+    partner_online = await state_manager.is_user_online(partner_id)
+    partner_last_seen = await state_manager.get_last_seen(partner_id)
+
+    stmt = select(Message).where(Message.match_id == UUID(match_id))
+
+    if after:
+        from datetime import datetime
+        try:
+            after_dt = datetime.fromisoformat(after.replace("Z", "+00:00"))
+            stmt = stmt.where(Message.created_at > after_dt)
+        except ValueError:
+            pass
+
+    stmt = stmt.order_by(Message.created_at.asc()).limit(100)
+    result = await db.execute(stmt)
+    messages = result.scalars().all()
+
+    # Also return IDs of own messages that partner has read (for double-checkmark)
+    read_own_stmt = select(Message.id).where(
+        and_(
+            Message.match_id == UUID(match_id),
+            Message.sender_id == UUID(current_user),
+            Message.is_read == True
+        )
+    )
+    read_result = await db.execute(read_own_stmt)
+    read_own_ids = [str(mid) for mid in read_result.scalars().all()]
+
+    return {
+        "partner_online": partner_online,
+        "partner_last_seen": partner_last_seen,
+        "read_by_partner": read_own_ids,
+        "messages": [
+            {
+                "id": str(m.id),
+                "match_id": str(m.match_id),
+                "sender_id": str(m.sender_id),
+                "receiver_id": str(m.receiver_id),
+                "text": m.text,
+                "content": m.text,
+                "type": m.type or "text",
+                "photo_url": m.photo_url,
+                "audio_url": m.audio_url,
+                "media_url": m.photo_url or m.audio_url,
+                "duration": m.duration,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+                "is_read": m.is_read,
+            }
+            for m in messages
+        ]
+    }

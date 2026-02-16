@@ -95,7 +95,7 @@ async def notify_new_like(
     })
 
     # Push if offline
-    if not manager.is_online(liked_user_id):
+    if not await manager.is_online_async(liked_user_id):
         await send_push_notification(
             db, liked_user_id, title, body,
             url="/likes", tag="like"
@@ -131,7 +131,7 @@ async def notify_new_match(
             "partner_id": partner_id if target_id == user_id else user_id,
         })
 
-        if not manager.is_online(target_id):
+        if not await manager.is_online_async(target_id):
             await send_push_notification(
                 db, target_id, title, body,
                 url=chat_url, tag="match"
@@ -147,7 +147,7 @@ async def notify_new_message(
     match_id: Optional[str] = None,
 ):
     """Notify user about a new message (only if offline — WS handles online)."""
-    if manager.is_online(recipient_id):
+    if await manager.is_online_async(recipient_id):
         return  # WS already delivers the message in real-time
 
     pref = await _get_user_pref(db, recipient_id)
@@ -197,7 +197,7 @@ async def notify_gift_received(
         "gift_name": gift_name,
     })
 
-    if not manager.is_online(recipient_id):
+    if not await manager.is_online_async(recipient_id):
         await send_push_notification(
             db, recipient_id, title, body,
             url="/chat", tag="gift"

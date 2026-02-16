@@ -53,4 +53,6 @@ export interface WebSocketMessageData {
     is_online?: boolean;
     caller_id?: string;
     call_type?: 'audio' | 'video';
+    message_ids?: string[];
+    reader_id?: string;
 }

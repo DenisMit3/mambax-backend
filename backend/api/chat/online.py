@@ -16,4 +16,4 @@ async def get_online_users_list():
 
 @router.get("/chat/online/{user_id}")
 async def check_online_status_endpoint(user_id: str):
-    return get_online_status(user_id)
+    return await get_online_status(user_id)

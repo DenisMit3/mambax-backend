@@ -82,7 +82,7 @@ async def deliver_gift(
         "timestamp": transaction.created_at.isoformat()
     }
     
-    is_receiver_online = manager.is_online(str(receiver_id))
+    is_receiver_online = await manager.is_online_async(str(receiver_id))
     if is_receiver_online:
         await manager.send_personal(str(receiver_id), notification)
 
