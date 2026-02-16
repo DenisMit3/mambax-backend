@@ -20,6 +20,7 @@ import { authService } from "@/services/api";
 import { FALLBACK_AVATAR } from "@/lib/constants";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useGeolocation } from '@/hooks/useGeolocation';
 
 // ============================================
 // Типы
@@ -135,6 +136,7 @@ export default function EventsPage() {
     const router = useRouter();
     const haptic = useHaptic();
     const { isAuthed, isChecking } = useRequireAuth();
+    const { coords: geoCoords } = useGeolocation(!isAuthed);
 
     // Состояния
     const [activeCategory, setActiveCategory] = useState<Category>("All");
@@ -161,25 +163,7 @@ export default function EventsPage() {
     }, []);
 
     // ============================================
-    // Получение геолокации
-    // ============================================
-
-    const getCoords = useCallback((): Promise<{ lat: number; lon: number } | null> => {
-        return new Promise((resolve) => {
-            if (!navigator.geolocation) {
-                resolve(null);
-                return;
-            }
-            navigator.geolocation.getCurrentPosition(
-                (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-                () => resolve(null),
-                { timeout: 5000, maximumAge: 60000 }
-            );
-        });
-    }, []);
-
-    // ============================================
-    // Загрузка событий
+    // Загрузка событий (координаты из useGeolocation)
     // ============================================
 
     const loadEvents = useCallback(async () => {
@@ -187,9 +171,7 @@ export default function EventsPage() {
         setError(null);
 
         try {
-            // Пытаемся получить координаты пользователя
-            const coords = await getCoords();
-            const res = await authService.getEvents(coords?.lat, coords?.lon);
+            const res = await authService.getEvents(geoCoords?.lat, geoCoords?.lon);
 
             if (!cancelledRef.current) {
                 setEvents(res.events ?? []);
@@ -204,7 +186,7 @@ export default function EventsPage() {
                 setLoading(false);
             }
         }
-    }, [getCoords]);
+    }, [geoCoords]);
 
     useEffect(() => {
         if (!isAuthed) return;

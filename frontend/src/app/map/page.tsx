@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { authService } from "@/services/api";
 import dynamic from "next/dynamic";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useGeolocation } from '@/hooks/useGeolocation';
 
 // Import Leaflet CSS
 import "leaflet/dist/leaflet.css";
@@ -26,20 +27,19 @@ interface NearbyUser {
 }
 
 export default function MapPage() {
-    const { isAuthed, isChecking } = useRequireAuth();
+    const { isAuthed } = useRequireAuth();
+    const { coords, loading: geoLoading } = useGeolocation(!isAuthed);
     const [position, setPosition] = useState<[number, number] | null>(null);
     const [others, setOthers] = useState<NearbyUser[]>([]);
-    // Leaflet Icon type is complex and dynamic-imported, using unknown here
     const [leafletIcon, setLeafletIcon] = useState<unknown>(null);
     const [mounted, setMounted] = useState(false);
 
+    // Init Leaflet icon
     useEffect(() => {
         if (!isAuthed) return;
         setMounted(true);
 
-        // Import Leaflet and create icon only on client side
         import("leaflet").then((L) => {
-            // Fix Leaflet's default icon path issues in webpack
             delete (L.Icon.Default.prototype as Record<string, unknown>)._getIconUrl;
             L.Icon.Default.mergeOptions({
                 iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
@@ -54,34 +54,33 @@ export default function MapPage() {
             });
             setLeafletIcon(icon);
         });
-
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                const { latitude, longitude } = pos.coords;
-                setPosition([latitude, longitude]);
-
-                // Send to backend and fetch nearby users
-                await authService.updateLocation(latitude, longitude);
-
-                try {
-                    // Use authService to get real users nearby
-                    const result = await authService.getProfiles({ lat: latitude, lon: longitude, limit: 50 });
-                    // Filter users who have valid coordinates (location.lat/lon)
-                    const items = (result?.items || []);
-                    setOthers(items.filter(u => u.location?.lat && u.location?.lon).map(u => ({
-                        id: u.id,
-                        name: u.name,
-                        age: u.age,
-                        photos: u.photos,
-                        latitude: u.location!.lat,
-                        longitude: u.location!.lon,
-                    })));
-                } catch (e) {
-                    console.error("Failed to fetch nearby users", e);
-                }
-            });
-        }
     }, [isAuthed]);
+
+    // Load nearby users when coords ready
+    useEffect(() => {
+        if (!isAuthed || geoLoading || !coords) return;
+
+        setPosition([coords.lat, coords.lon]);
+
+        const loadNearby = async () => {
+            try {
+                const result = await authService.getProfiles({ lat: coords.lat, lon: coords.lon, limit: 50 });
+                const items = (result?.items || []);
+                setOthers(items.filter(u => u.location?.lat && u.location?.lon).map(u => ({
+                    id: u.id,
+                    name: u.name,
+                    age: u.age,
+                    photos: u.photos,
+                    latitude: u.location!.lat,
+                    longitude: u.location!.lon,
+                })));
+            } catch (e) {
+                console.error("Failed to fetch nearby users", e);
+            }
+        };
+
+        loadNearby();
+    }, [isAuthed, geoLoading, coords]);
 
     // Don't render map until we have the icon (client-side only)
     if (!mounted || !leafletIcon) {
@@ -129,7 +128,7 @@ export default function MapPage() {
                     </MapContainer>
                 ) : (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-                        <p>Загрузка карты... / Запрос геолокации...</p>
+                        <p>Загрузка карты...</p>
                     </div>
                 )}
             </div>

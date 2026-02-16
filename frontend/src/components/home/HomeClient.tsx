@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useTelegram } from '@/lib/telegram';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { MatchModal } from '@/components/discovery/MatchModal';
 import { FALLBACK_AVATAR } from '@/lib/constants';
 import { Toast } from '@/components/ui/Toast';
@@ -35,6 +36,7 @@ export function HomeClient() {
     const queryClient = useQueryClient();
     const { user, hapticFeedback } = useTelegram();
     const { isAuthed, isChecking } = useRequireAuth();
+    useGeolocation(!isAuthed); // Centralized geo — cached, sends to backend once
     
     // Реальные данные: суперлайки и буст
     const [superLikesLeft, setSuperLikesLeft] = useState(0);
@@ -66,21 +68,7 @@ export function HomeClient() {
         return [];
     });
 
-    // 0. Update Location on Mount
-    useEffect(() => {
-        if (isAuthed && typeof navigator !== 'undefined' && navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    authService.updateLocation(
-                        position.coords.latitude,
-                        position.coords.longitude
-                    ).catch(console.error);
-                },
-                (err) => { /* Location access denied or unavailable */ },
-                { timeout: 10000, maximumAge: 60000 }
-            );
-        }
-    }, [isAuthed]);
+    // 0. Update Location on Mount — handled by useGeolocation hook (centralized, cached)
 
     // 0.1 Загрузка данных суперлайков и буста
     useEffect(() => {

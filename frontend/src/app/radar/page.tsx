@@ -4,19 +4,25 @@ import { useState, useEffect } from 'react';
 import { GeoMapRadar } from '@/components/discovery/GeoMapRadar';
 import { authService, UserProfile, PaginatedResponse } from '@/services/api';
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useGeolocation } from '@/hooks/useGeolocation';
 
 // Координаты Москвы как фоллбэк
 const MOSCOW_LAT = 55.7558;
 const MOSCOW_LON = 37.6173;
 
 export default function RadarPage() {
-    const { isAuthed, isChecking } = useRequireAuth();
+    const { isAuthed } = useRequireAuth();
+    const { coords, loading: geoLoading } = useGeolocation(!isAuthed);
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!isAuthed) return;
-        const loadRadar = async (lat: number, lon: number) => {
+        if (!isAuthed || geoLoading) return;
+
+        const lat = coords?.lat ?? MOSCOW_LAT;
+        const lon = coords?.lon ?? MOSCOW_LON;
+
+        const loadRadar = async () => {
             try {
                 const data: PaginatedResponse<UserProfile> = await authService.getProfiles({ lat, lon, limit: 50 });
                 setUsers(data.items ?? []);
@@ -27,29 +33,8 @@ export default function RadarPage() {
             }
         };
 
-        // Пытаемся получить реальную геолокацию пользователя
-        if (typeof navigator !== 'undefined' && navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    // Успех — используем реальные координаты
-                    loadRadar(position.coords.latitude, position.coords.longitude);
-                },
-                (error) => {
-                    // Отказ или ошибка — фоллбэк на Москву
-                    console.warn('Геолокация недоступна, используем Москву:', error.message);
-                    loadRadar(MOSCOW_LAT, MOSCOW_LON);
-                },
-                {
-                    enableHighAccuracy: false,
-                    timeout: 8000,
-                    maximumAge: 300000, // Кэш 5 минут
-                }
-            );
-        } else {
-            // Браузер не поддерживает geolocation
-            loadRadar(MOSCOW_LAT, MOSCOW_LON);
-        }
-    }, [isAuthed]);
+        loadRadar();
+    }, [isAuthed, geoLoading, coords]);
 
     return (
         <main className="h-full">
