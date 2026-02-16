@@ -122,7 +122,6 @@ export default function ReferralPage() {
   }, [referral, haptic, showToast]);
 
   // Поделиться ссылкой через Telegram
-  const [shareDebug, setShareDebug] = useState("");
   const shareLink = useCallback(() => {
     if (!referral) return;
     haptic?.light();
@@ -133,12 +132,6 @@ export default function ReferralPage() {
 
     // Доступ к Telegram WebApp напрямую через window (не через React state)
     const tg = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
-    const debugInfo: string[] = [];
-    debugInfo.push(`tg=${!!tg}`);
-    debugInfo.push(`ver=${tg?.version || "?"}`);
-    debugInfo.push(`openTgLink=${typeof tg?.openTelegramLink}`);
-    debugInfo.push(`openLink=${typeof tg?.openLink}`);
-    debugInfo.push(`url=${tgShareUrl.substring(0, 60)}...`);
 
     let opened = false;
 
@@ -146,10 +139,9 @@ export default function ReferralPage() {
     if (tg?.openTelegramLink) {
       try {
         tg.openTelegramLink(tgShareUrl);
-        debugInfo.push("METHOD=openTelegramLink OK");
         opened = true;
-      } catch (e) {
-        debugInfo.push(`METHOD=openTelegramLink FAIL: ${e}`);
+      } catch {
+        // fallback ниже
       }
     }
 
@@ -157,10 +149,9 @@ export default function ReferralPage() {
     if (!opened && tg?.openLink) {
       try {
         tg.openLink(tgShareUrl);
-        debugInfo.push("METHOD=openLink OK");
         opened = true;
-      } catch (e) {
-        debugInfo.push(`METHOD=openLink FAIL: ${e}`);
+      } catch {
+        // fallback ниже
       }
     }
 
@@ -168,21 +159,16 @@ export default function ReferralPage() {
     if (!opened) {
       try {
         window.open(tgShareUrl, "_blank");
-        debugInfo.push("METHOD=window.open");
         opened = true;
-      } catch (e) {
-        debugInfo.push(`METHOD=window.open FAIL: ${e}`);
+      } catch {
+        // fallback ниже
       }
     }
 
     // Способ 4: location.href как последний вариант
     if (!opened) {
-      debugInfo.push("METHOD=location.href");
       window.location.href = tgShareUrl;
     }
-
-    setShareDebug(debugInfo.join(" | "));
-    console.log("[SHARE DEBUG]", debugInfo.join(" | "));
   }, [referral, haptic]);
 
   // Применение чужого кода
@@ -302,9 +288,6 @@ export default function ReferralPage() {
             <Share2 className="w-4 h-4" />
             Поделиться ссылкой
           </button>
-          {shareDebug && (
-            <p className="mt-2 text-[10px] text-yellow-400/70 break-all leading-tight">[DEBUG] {shareDebug}</p>
-          )}
         </motion.div>
 
         {/* Статистика */}

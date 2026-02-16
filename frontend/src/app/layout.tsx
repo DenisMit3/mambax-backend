@@ -12,6 +12,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
+    metadataBase: new URL('https://mambax.app'),
     title: 'MambaX | Premium Dating',
     description: 'The future of digital dating and artificial personality matching.',
     keywords: ['dating', 'знакомства', 'мамба', 'telegram dating', 'premium dating'],
