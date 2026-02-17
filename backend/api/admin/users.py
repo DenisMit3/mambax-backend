@@ -9,6 +9,9 @@ from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
 import uuid as uuid_module
+import logging
+
+logger = logging.getLogger(__name__)
 
 from backend.database import get_db
 from backend.models.user import User, UserRole, UserStatus, SubscriptionTier
@@ -414,29 +417,50 @@ async def get_user_details(
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
-        result = await db.execute(select(FraudScore).where(FraudScore.user_id == uid))
-        fraud = result.scalar_one_or_none()
+        fraud = None
+        try:
+            result = await db.execute(select(FraudScore).where(FraudScore.user_id == uid))
+            fraud = result.scalar_one_or_none()
+        except Exception as e:
+            logger.warning("FraudScore query failed for %s: %s", user_id, e)
+            await db.rollback()
         
-        result = await db.execute(
-            select(func.count(Match.id)).where(
-                or_(Match.user1_id == uid, Match.user2_id == uid)
+        matches_count = 0
+        try:
+            result = await db.execute(
+                select(func.count(Match.id)).where(
+                    or_(Match.user1_id == uid, Match.user2_id == uid)
+                )
             )
-        )
-        matches_count = result.scalar() or 0
+            matches_count = result.scalar() or 0
+        except Exception as e:
+            logger.warning("Match count query failed for %s: %s", user_id, e)
+            await db.rollback()
         
-        result = await db.execute(
-            select(func.count(Message.id)).where(Message.sender_id == uid)
-        )
-        messages_count = result.scalar() or 0
+        messages_count = 0
+        try:
+            result = await db.execute(
+                select(func.count(Message.id)).where(Message.sender_id == uid)
+            )
+            messages_count = result.scalar() or 0
+        except Exception as e:
+            logger.warning("Message count query failed for %s: %s", user_id, e)
+            await db.rollback()
         
-        result = await db.execute(
-            select(func.count(Report.id)).where(Report.reported_id == uid)
-        )
-        reports_received = result.scalar() or 0
-        result = await db.execute(
-            select(func.count(Report.id)).where(Report.reporter_id == uid)
-        )
-        reports_sent = result.scalar() or 0
+        reports_received = 0
+        reports_sent = 0
+        try:
+            result = await db.execute(
+                select(func.count(Report.id)).where(Report.reported_id == uid)
+            )
+            reports_received = result.scalar() or 0
+            result = await db.execute(
+                select(func.count(Report.id)).where(Report.reporter_id == uid)
+            )
+            reports_sent = result.scalar() or 0
+        except Exception as e:
+            logger.warning("Report count query failed for %s: %s", user_id, e)
+            await db.rollback()
         
         try:
             photos_list = user.photos or []
@@ -470,8 +494,9 @@ async def get_user_details(
         }
     except HTTPException:
         raise
-    except Exception:
-        raise HTTPException(status_code=500, detail="Ошибка загрузки данных пользователя")
+    except Exception as e:
+        logger.exception("Error loading user %s: %s", user_id, e)
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки данных пользователя: {str(e)}")
 
 
 @router.post("/users/{user_id}/stars")
