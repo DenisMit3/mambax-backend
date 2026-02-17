@@ -11,7 +11,8 @@ import { NotificationToast } from '@/components/ui/NotificationToast';
 import { UserProvider } from '@/context/UserContext';
 import { useTelegram } from '@/lib/telegram';
 import { measurePerformance } from '@/lib/performance';
-import { initRemoteLogger } from '@/utils/remoteLogger';
+// Remote logger disabled — no backend endpoint
+// import { initRemoteLogger } from '@/utils/remoteLogger';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -39,8 +40,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     // PERF: Register Service Worker and measure performance
     useEffect(() => {
-        // Enable remote logging for production debugging
-        initRemoteLogger();
+        // Remote logger disabled
+        // initRemoteLogger();
         
         // Register PWA Service Worker
         let intervalId: ReturnType<typeof setInterval> | undefined;
