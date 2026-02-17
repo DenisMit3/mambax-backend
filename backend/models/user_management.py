@@ -45,11 +45,10 @@ class UserNote(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    note: Mapped[str] = mapped_column(Text, nullable=False)  # actual DB column
-    type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, default="general")
+    note: Mapped[str] = mapped_column(Text, nullable=False)  # actual DB column for note text
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     author_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # legacy column in DB
+    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # legacy column
     is_internal: Mapped[bool] = mapped_column(Boolean, default=True)
 
     @property
