@@ -406,13 +406,14 @@ async def get_user_details(
     current_user: User = Depends(get_current_admin)
 ):
     """Get detailed user information"""
-    
+    _step = "init"
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Некорректный формат ID пользователя")
     
     try:
+        _step = "query_user"
         result = await db.execute(
             select(User)
             .options(selectinload(User.photos_rel), selectinload(User.interests_rel))
@@ -422,25 +423,44 @@ async def get_user_details(
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
-        # Cache photos/interests immediately before any potential rollback
-        # invalidates the loaded relationships
+        # === Eagerly cache ALL user attributes to prevent lazy loading after rollback ===
+        _step = "cache_attrs"
+        _id = str(user.id)
+        _name = user.name
+        _email = user.email
+        _phone = user.phone
+        _age = user.age
+        _gender = user.gender.value if user.gender else None
+        _bio = user.bio
+        _location = user.location
+        _city = user.city
+        _status = user.status.value if user.status else "active"
+        _sub_tier = user.subscription_tier.value if user.subscription_tier else "free"
+        _stars = user.stars_balance or 0
+        _verified = user.is_verified
+        _created = user.created_at.isoformat()
+        _updated = user.updated_at.isoformat() if user.updated_at else None
+
+        _step = "cache_photos"
         try:
             photos_list = [p.url for p in user.photos_rel]
         except Exception:
             photos_list = []
-        try:
-            interests_list = [i.name for i in user.interests_rel] if hasattr(user, 'interests_rel') else []
-        except Exception:
-            interests_list = []
-        
-        fraud = None
+
+        _step = "query_fraud"
+        fraud_score = 0
+        fraud_factors = {}
         try:
             result = await db.execute(select(FraudScore).where(FraudScore.user_id == uid))
             fraud = result.scalar_one_or_none()
+            if fraud:
+                fraud_score = fraud.score
+                fraud_factors = fraud.factors
         except Exception as e:
             logger.warning("FraudScore query failed for %s: %s", user_id, e)
             await db.rollback()
         
+        _step = "query_matches"
         matches_count = 0
         try:
             result = await db.execute(
@@ -453,6 +473,7 @@ async def get_user_details(
             logger.warning("Match count query failed for %s: %s", user_id, e)
             await db.rollback()
         
+        _step = "query_messages"
         messages_count = 0
         try:
             result = await db.execute(
@@ -463,6 +484,7 @@ async def get_user_details(
             logger.warning("Message count query failed for %s: %s", user_id, e)
             await db.rollback()
         
+        _step = "query_reports"
         reports_received = 0
         reports_sent = 0
         try:
@@ -478,36 +500,37 @@ async def get_user_details(
             logger.warning("Report count query failed for %s: %s", user_id, e)
             await db.rollback()
         
+        _step = "build_response"
         return {
-            "id": str(user.id),
-            "name": user.name,
-            "email": user.email,
-            "phone": user.phone,
-            "age": user.age,
-            "gender": user.gender.value if user.gender else None,
-            "bio": user.bio,
+            "id": _id,
+            "name": _name,
+            "email": _email,
+            "phone": _phone,
+            "age": _age,
+            "gender": _gender,
+            "bio": _bio,
             "photos": photos_list,
-            "location": user.location,
-            "city": user.city,
-            "status": user.status.value if user.status else "active",
-            "subscription_tier": user.subscription_tier.value if user.subscription_tier else "free",
-            "stars_balance": user.stars_balance or 0,
-            "is_verified": user.is_verified,
-            "created_at": user.created_at.isoformat(),
-            "updated_at": user.updated_at.isoformat() if user.updated_at else None,
-            "last_active": user.updated_at.isoformat() if user.updated_at else None,
+            "location": _location,
+            "city": _city,
+            "status": _status,
+            "subscription_tier": _sub_tier,
+            "stars_balance": _stars,
+            "is_verified": _verified,
+            "created_at": _created,
+            "updated_at": _updated,
+            "last_active": _updated,
             "matches_count": matches_count,
             "messages_count": messages_count,
             "reports_received": reports_received,
             "reports_sent": reports_sent,
-            "fraud_score": fraud.score if fraud else 0,
-            "fraud_factors": fraud.factors if fraud else {}
+            "fraud_score": fraud_score,
+            "fraud_factors": fraud_factors
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Error loading user %s: %s", user_id, e)
-        raise HTTPException(status_code=500, detail=f"Ошибка загрузки данных пользователя: {str(e)}")
+        logger.exception("Error loading user %s at step %s: %s", user_id, _step, e)
+        raise HTTPException(status_code=500, detail=f"[step={_step}] {type(e).__name__}: {e}")
 
 
 @router.post("/users/{user_id}/stars")
