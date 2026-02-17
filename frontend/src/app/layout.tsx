@@ -86,7 +86,7 @@ export default function RootLayout({
                 `}} />
                 <Script
                     src="https://telegram.org/js/telegram-web-app.js"
-                    strategy="beforeInteractive"
+                    strategy="afterInteractive"
                 />
             </head>
             <body className={`${manrope.variable} font-sans antialiased text-slate-900 bg-gray-50 overflow-hidden`}>

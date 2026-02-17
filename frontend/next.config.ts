@@ -119,6 +119,8 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'public.blob.vercel-storage.com' },
       { protocol: 'https', hostname: '*.supabase.co' },
       { protocol: 'https', hostname: 'placehold.co' }, // For dev fallback
+      // Backend API (photo serving)
+      { protocol: 'https', hostname: 'backend-pi-sable-56.vercel.app' },
     ],
   },
 };

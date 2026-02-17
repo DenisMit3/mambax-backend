@@ -191,7 +191,7 @@ export function GifPicker({ isOpen, onClose, onSelectGif }: GifPickerProps) {
                                             loading="lazy"
                                             className="w-full h-full object-cover"
                                             fill
-                                            unoptimized
+                                            sizes="100vw"
                                         />
                                     </motion.button>
                                 ))}

@@ -50,7 +50,7 @@ export default function OnboardingSummary({ userData, isSubmitting, onBack, onCo
             {/* Фото-шапка */}
             <div className="relative h-[62%] shrink-0 w-full overflow-hidden">
                 {userData.photos[0] ? (
-                    <Image src={userData.photos[0].preview} className="w-full h-full object-cover" alt="Profile" fill unoptimized />
+                    <Image src={userData.photos[0].preview} className="w-full h-full object-cover" alt="Profile" fill sizes="100vw" />
                 ) : (
                     <div className="w-full h-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-300">
                         <Camera size={48} className="opacity-50" />

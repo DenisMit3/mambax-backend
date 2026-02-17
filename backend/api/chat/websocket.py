@@ -403,20 +403,29 @@ async def _handle_read(user_id: str, data: dict):
     if match_id and message_ids:
         from backend.crud import chat as crud_chat
         from backend.models.chat import Message
+        from sqlalchemy import select
 
         async with async_session_maker() as db:
             valid_message_ids = []
             original_sender_id = None
-            for mid in message_ids:
-                try:
-                    msg = await db.get(Message, UUID(mid))
-                    if msg and str(msg.receiver_id) == user_id:
-                        valid_message_ids.append(UUID(mid))
-                        # Remember the sender so we can notify them
-                        if not original_sender_id:
-                            original_sender_id = str(msg.sender_id)
-                except Exception as e:
-                    logger.warning(f"Invalid message ID {mid}: {e}")
+
+            # Bulk-запрос вместо N отдельных get (N+1 fix)
+            try:
+                uuids = [UUID(mid) for mid in message_ids]
+            except ValueError as e:
+                logger.warning(f"Invalid UUID in message_ids: {e}")
+                return
+
+            result = await db.execute(
+                select(Message).where(Message.id.in_(uuids))
+            )
+            msgs = result.scalars().all()
+
+            for msg in msgs:
+                if str(msg.receiver_id) == user_id:
+                    valid_message_ids.append(msg.id)
+                    if not original_sender_id:
+                        original_sender_id = str(msg.sender_id)
 
             if not valid_message_ids:
                 return

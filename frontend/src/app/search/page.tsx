@@ -26,7 +26,7 @@ const StoryCircle = memo(({ user, index }: { user: UserProfile; index: number })
     >
         <div className="w-[66px] h-[66px] rounded-full p-[2px] bg-gradient-to-tr from-[#ff4b91] to-[#ff9e4a] group-hover:scale-105 transition-transform">
             <div className="w-full h-full rounded-full border-2 border-black overflow-hidden relative">
-                <Image src={getPhotoUrl(user.photos)} alt={user.name} className="w-full h-full object-cover" loading="lazy" fill unoptimized />
+                <Image src={getPhotoUrl(user.photos)} alt={user.name} className="w-full h-full object-cover" loading="lazy" fill sizes="56px" />
             </div>
         </div>
         <span className="text-[10px] text-white font-medium truncate w-full text-center">{user.name}</span>
@@ -239,7 +239,7 @@ export default function SearchPage() {
                                         decoding="async"
                                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                                         fill
-                                        unoptimized
+                                        sizes="100vw"
                                     />
 
                                     {/* Gradient & Info */}
@@ -418,7 +418,7 @@ export default function SearchPage() {
                                 alt={selectedUser.name}
                                 className="w-full h-full object-cover"
                                 fill
-                                unoptimized
+                                sizes="100vw"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-90" />
 

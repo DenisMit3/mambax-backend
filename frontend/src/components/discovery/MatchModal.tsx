@@ -110,7 +110,7 @@ export const MatchModal = ({
                                 animate={{ x: 0, opacity: 1, rotate: -5 }}
                                 transition={{ type: 'spring', damping: 12, delay: 0.3 }}
                             >
-                                <Image src={userAvatar || FALLBACK_AVATAR} alt="You" loading="lazy" className="w-full h-full object-cover" fill unoptimized />
+                                <Image src={userAvatar || FALLBACK_AVATAR} alt="You" loading="lazy" className="w-full h-full object-cover" fill sizes="128px" />
                             </motion.div>
 
                             <motion.div
@@ -128,7 +128,7 @@ export const MatchModal = ({
                                 animate={{ x: 0, opacity: 1, rotate: 5 }}
                                 transition={{ type: 'spring', damping: 12, delay: 0.3 }}
                             >
-                                <Image src={matchAvatar || FALLBACK_AVATAR} alt={matchName} loading="lazy" className="w-full h-full object-cover" fill unoptimized />
+                                <Image src={matchAvatar || FALLBACK_AVATAR} alt={matchName} loading="lazy" className="w-full h-full object-cover" fill sizes="128px" />
                             </motion.div>
 
                             {/* Neon Pulse Rings */}

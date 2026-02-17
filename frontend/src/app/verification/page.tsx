@@ -156,7 +156,7 @@ export default function VerificationPage() {
                     className="w-full max-w-sm aspect-[3/4] rounded-2xl border-2 border-dashed border-white/10 bg-white/5 flex items-center justify-center overflow-hidden relative cursor-pointer hover:border-white/20 transition"
                 >
                     {preview ? (
-                        <Image src={preview} alt="Селфи" fill className="object-cover" unoptimized />
+                        <Image src={preview} alt="Селфи" fill sizes="100vw" className="object-cover" />
                     ) : (
                         <div className="flex flex-col items-center text-slate-500">
                             <Camera className="w-12 h-12 mb-2" />

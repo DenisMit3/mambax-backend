@@ -30,7 +30,6 @@ export function GridView({ users, onSelectUser }: GridViewProps) {
                             fill
                             sizes="(max-width: 768px) 50vw, 200px"
                             className="object-cover"
-                            unoptimized
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                         <div className="absolute bottom-2 left-3 text-white">

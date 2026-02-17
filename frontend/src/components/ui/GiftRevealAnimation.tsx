@@ -151,7 +151,6 @@ export function GiftRevealAnimation({
                                         className="w-24 h-24 object-contain drop-shadow-2xl"
                                         width={96}
                                         height={96}
-                                        unoptimized
                                         onError={(e) => {
                                             (e.target as HTMLImageElement).style.display = "none";
                                         }}

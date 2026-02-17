@@ -118,7 +118,7 @@ export default function MapPage() {
                                 <Popup>
                                     <div style={{ textAlign: "center", color: "black" }}>
                                         {user.photos?.[0] && (
-                                            <Image src={user.photos[0]} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", margin: "0 auto" }} alt={user.name} width={40} height={40} unoptimized />
+                                            <Image src={user.photos[0]} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", margin: "0 auto" }} alt={user.name} width={40} height={40} />
                                         )}
                                         <div style={{ fontWeight: "bold", marginTop: 5 }}>{user.name}, {user.age}</div>
                                     </div>

@@ -57,7 +57,7 @@ export function SettingsBlocked() {
                     <div key={user.id} className="p-4 rounded-2xl bg-white/5 flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 overflow-hidden">
                             {user.photo_url ? (
-                                <Image src={user.photo_url} alt={user.name || 'Аватар'} className="w-full h-full object-cover" width={48} height={48} unoptimized />
+                                <Image src={user.photo_url} alt={user.name || 'Аватар'} className="w-full h-full object-cover" width={48} height={48} />
                             ) : (
                                 <UserX size={18} />
                             )}

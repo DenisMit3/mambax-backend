@@ -76,7 +76,7 @@ export default function OnboardingChatView({
                                     <div className="grid grid-cols-2 gap-3">
                                         {userData.photos.map((photoData, idx) => (
                                             <motion.div layout key={photoData.preview || idx} className="aspect-[3/4] rounded-xl overflow-hidden relative border border-white/10 shadow-sm">
-                                                <Image src={photoData.preview} className="w-full h-full object-cover" alt={`Photo ${idx + 1}`} fill unoptimized />
+                                                <Image src={photoData.preview} className="w-full h-full object-cover" alt={`Photo ${idx + 1}`} fill sizes="128px" />
                                             </motion.div>
                                         ))}
                                         {userData.photos.length < 4 && (

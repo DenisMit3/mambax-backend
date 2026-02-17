@@ -129,8 +129,8 @@ export default function ProfilePage() {
                                     src={profile.photos[0]}
                                     alt="Avatar"
                                     fill
+                                    sizes="128px"
                                     className="object-cover"
-                                    unoptimized
                                 />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-slate-500">

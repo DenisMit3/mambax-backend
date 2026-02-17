@@ -156,7 +156,6 @@ export const VIPMessageList = ({
                       className="max-w-full h-auto rounded-2xl cursor-zoom-in"
                       width={300}
                       height={400}
-                      unoptimized
                       onLoad={() => scrollToBottom()}
                       onClick={(e) => {
                         e.stopPropagation();

@@ -165,7 +165,7 @@ export const GeoMapRadar = ({ users = [], loading = false }: GeoMapRadarProps) =
                                         whileHover={{ scale: 1.5, borderColor: '#FF3B30' }}
                                         onClick={() => hapticFeedback.selection()}
                                     >
-                                        <Image src={user.photo} className="w-full h-full object-cover" alt={`${user.name} profile`} fill unoptimized />
+                                        <Image src={user.photo} className="w-full h-full object-cover" alt={`${user.name} profile`} fill sizes="56px" />
                                     </motion.div>
                                     {user.isOnline && (
                                         <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border border-black animate-pulse" />

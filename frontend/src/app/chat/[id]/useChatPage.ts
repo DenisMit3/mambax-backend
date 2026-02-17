@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Message, ChatUser } from '@/components/chat/VIPChatSystem';
 import { useTelegram } from '@/lib/telegram';
 import { authService } from '@/services/api';
@@ -33,6 +34,7 @@ export function useChatPage() {
     const { id } = useParams() as { id: string };
     const { hapticFeedback } = useTelegram();
     const { isAuthed, isChecking } = useRequireAuth();
+    const queryClient = useQueryClient();
 
     // UI toggles
     const [showGiftPicker, setShowGiftPicker] = useState(false);
@@ -40,11 +42,28 @@ export function useChatPage() {
     const [showIcebreakers, setShowIcebreakers] = useState(false);
     const [injectInputText, setInjectInputText] = useState('');
 
-    // Core state
+    // Core state - messages stay in useState (updated by polling/WS)
     const [messages, setMessages] = useState<Message[]>([]);
     const [user, setUser] = useState<ChatUser | null>(null);
-    const [loading, setLoading] = useState(true);
     const [gifts, setGifts] = useState<UIGift[]>([]);
+
+    // React Query: cache match data (staleTime 60s - instant on back-navigation)
+    const { data: matchData, isLoading: matchLoading } = useQuery({
+        queryKey: ['chat-match', id],
+        queryFn: () => authService.getMatch(id),
+        staleTime: 60000,
+        enabled: !!id && isAuthed,
+    });
+
+    // React Query: cache gifts catalog (staleTime 5min)
+    const { data: catalogData } = useQuery({
+        queryKey: ['gifts-catalog'],
+        queryFn: () => authService.getGiftsCatalog(),
+        staleTime: 5 * 60 * 1000,
+        enabled: isAuthed,
+    });
+
+    const loading = matchLoading;
 
     // Call state
     const [showCall, setShowCall] = useState(false);
@@ -60,7 +79,7 @@ export function useChatPage() {
     const ws = useRef<WebSocket | null>(null);
     const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
     const wsReconnectAttempts = useRef(0);
-    const MAX_WS_RECONNECT = 5;
+    const MAX_WS_RECONNECT = 2;
     const currentUserIdRef = useRef<string | null>(null);
     const mountedRef = useRef(true);
     const userRef = useRef(user);
@@ -69,6 +88,8 @@ export function useChatPage() {
     const pollInterval = useRef<NodeJS.Timeout | null>(null);
     const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
     const lastMessageTime = useRef<string | null>(null);
+    const pollIntervalMs = useRef(5000);
+    const lastNewMessageAt = useRef(Date.now());
 
     const ephemeralEnabledRef = useRef(ephemeralEnabled);
     const ephemeralSecondsRef = useRef(ephemeralSeconds);
@@ -78,18 +99,52 @@ export function useChatPage() {
     // --- Init ---
     useEffect(() => {
         if (id && isAuthed) {
-            loadInitialData();
+            loadMessages();
             connectWebSocket();
             startHeartbeat();
         }
         return () => {
             mountedRef.current = false;
             if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-            if (pollInterval.current) clearInterval(pollInterval.current);
+            if (pollInterval.current) clearTimeout(pollInterval.current);
             if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
             if (ws.current) ws.current.close();
         };
     }, [id, isAuthed]);
+
+    // Process match data from React Query cache
+    useEffect(() => {
+        if (matchData?.user) {
+            setUser({
+                id: matchData.user.id,
+                name: matchData.user.name,
+                photo: getFullUrl(matchData.user.photos?.[0]) || '',
+                isOnline: matchData.user.is_online,
+                lastSeen: matchData.user.last_seen ? new Date(matchData.user.last_seen) : undefined,
+                isTyping: false,
+                isPremium: matchData.user.is_premium || false
+            });
+            currentUserIdRef.current = matchData.current_user_id || null;
+        }
+    }, [matchData]);
+
+    // Process gifts catalog from React Query cache
+    useEffect(() => {
+        if (catalogData?.gifts) {
+            const mappedGifts = catalogData.gifts.map((g: BackendGift) => {
+                const cat = catalogData.categories.find((c: BackendCategory) => c.id === g.category_id);
+                const catName = cat ? cat.name.toLowerCase() : 'romantic';
+                let uiCategory = 'romantic';
+                if (catName.includes('fun')) uiCategory = 'funny';
+                else if (catName.includes('epic') || catName.includes('premium')) uiCategory = 'epic';
+                return {
+                    id: g.id, name: g.name, image: getFullUrl(g.image_url),
+                    price: g.price, category: uiCategory, rarity: getRarity(g.price)
+                };
+            });
+            setGifts(mappedGifts);
+        }
+    }, [catalogData]);
 
     // --- Heartbeat: keep online status alive in Redis ---
     const startHeartbeat = () => {
@@ -102,11 +157,10 @@ export function useChatPage() {
     };
 
     // --- Polling fallback: when WS is not connected ---
-    const startPolling = () => {
-        if (pollInterval.current) return; // already polling
-        pollInterval.current = setInterval(async () => {
+    const schedulePoll = () => {
+        if (pollInterval.current) return;
+        const doPoll = async () => {
             if (!mountedRef.current || wsConnected.current) {
-                if (pollInterval.current) clearInterval(pollInterval.current);
                 pollInterval.current = null;
                 return;
             }
@@ -170,90 +224,65 @@ export function useChatPage() {
                         return updated;
                     });
 
+                    // Got new messages - reset to fast polling
+                    lastNewMessageAt.current = Date.now();
+                    pollIntervalMs.current = 5000;
+
                     // Auto mark-read incoming messages via REST
                     if (hasIncoming) {
                         authService.markReadBatch(id).catch(() => {});
+                    }
+                } else {
+                    // No new messages - adaptive backoff: slow down after 30s of silence
+                    if (Date.now() - lastNewMessageAt.current > 30000) {
+                        pollIntervalMs.current = Math.min(pollIntervalMs.current + 2000, 15000);
                     }
                 }
             } catch {
                 // Polling error — silent
             }
-        }, 3000);
+            // Schedule next poll
+            if (mountedRef.current && !wsConnected.current) {
+                pollInterval.current = setTimeout(doPoll, pollIntervalMs.current);
+            } else {
+                pollInterval.current = null;
+            }
+        };
+        pollInterval.current = setTimeout(doPoll, pollIntervalMs.current);
+    };
+
+    const startPolling = () => {
+        pollIntervalMs.current = 5000;
+        lastNewMessageAt.current = Date.now();
+        schedulePoll();
     };
 
     const stopPolling = () => {
         if (pollInterval.current) {
-            clearInterval(pollInterval.current);
+            clearTimeout(pollInterval.current);
             pollInterval.current = null;
         }
     };
 
-    const loadInitialData = async () => {
+    const loadMessages = async () => {
         try {
-            // FIX: Run ALL requests in parallel for faster load
-            const [matchData, msgsResult, catalogResult] = await Promise.allSettled([
-                authService.getMatch(id),
-                authService.getMessages(id),
-                authService.getGiftsCatalog()
-            ]);
-
-            // Process match (critical)
-            if (matchData.status === 'fulfilled' && matchData.value?.user) {
-                const md = matchData.value;
-                setUser({
-                    id: md.user.id,
-                    name: md.user.name,
-                    photo: getFullUrl(md.user.photos?.[0]) || '',
-                    isOnline: md.user.is_online,
-                    lastSeen: md.user.last_seen ? new Date(md.user.last_seen) : undefined,
-                    isTyping: false,
-                    isPremium: md.user.is_premium || false
-                });
-                currentUserIdRef.current = md.current_user_id || null;
-
-                // Process messages
-                const currentUserId = md.current_user_id;
-                if (msgsResult.status === 'fulfilled') {
-                    const uiMessages: Message[] = (msgsResult.value as BackendMessage[]).map((m) => {
-                        const isOwn = m.sender_id === currentUserId;
-                        return {
-                            id: m.id,
-                            text: m.content || m.text,
-                            image: getFullUrl(m.photo_url || m.media_url),
-                            timestamp: new Date(m.created_at || m.timestamp),
-                            isOwn,
-                            status: isOwn ? (m.is_read ? 'read' : 'delivered') : 'delivered',
-                            type: (m.type === 'gift' || m.type === 'super_like') ? 'super_like' : (m.photo_url ? 'image' : 'text')
-                        };
-                    });
-                    setMessages(uiMessages);
-                }
-            }
-
-            // Process gifts catalog (non-critical)
-            if (catalogResult.status === 'fulfilled') {
-                const catalogData = catalogResult.value;
-                const mappedGifts = catalogData.gifts.map((g: BackendGift) => {
-                    const cat = catalogData.categories.find((c: BackendCategory) => c.id === g.category_id);
-                    const catName = cat ? cat.name.toLowerCase() : 'romantic';
-                    let uiCategory = 'romantic';
-                    if (catName.includes('fun')) uiCategory = 'funny';
-                    else if (catName.includes('epic') || catName.includes('premium')) uiCategory = 'epic';
-                    return {
-                        id: g.id,
-                        name: g.name,
-                        image: getFullUrl(g.image_url),
-                        price: g.price,
-                        category: uiCategory,
-                        rarity: getRarity(g.price)
-                    };
-                });
-                setGifts(mappedGifts);
-            }
+            const msgs = await authService.getMessages(id);
+            const currentUserId = matchData?.current_user_id || currentUserIdRef.current;
+            const uiMessages: Message[] = (msgs as BackendMessage[]).map((m) => {
+                const isOwn = m.sender_id === currentUserId;
+                return {
+                    id: m.id,
+                    text: m.content || m.text,
+                    image: getFullUrl(m.photo_url || m.media_url),
+                    timestamp: new Date(m.created_at || m.timestamp),
+                    isOwn,
+                    status: isOwn ? (m.is_read ? 'read' : 'delivered') : 'delivered',
+                    type: (m.type === 'gift' || m.type === 'super_like') ? 'super_like' : (m.photo_url ? 'image' : 'text')
+                };
+            });
+            setMessages(uiMessages);
         } catch (error) {
-            console.error('Failed to load chat:', error);
-        } finally {
-            setLoading(false);
+            console.error('Failed to load messages:', error);
         }
     };
 

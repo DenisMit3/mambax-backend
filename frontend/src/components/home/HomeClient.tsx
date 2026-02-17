@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authService, UserProfile } from '@/services/api';
-import { motion } from 'framer-motion';
+
 import { useRouter } from 'next/navigation';
 import { useTelegram } from '@/lib/telegram';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
@@ -300,10 +300,8 @@ export function HomeClient() {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-black p-6">
                 <div className="relative">
-                    <motion.div
-                        className="w-20 h-20 border-2 border-primary-red/20 rounded-full border-t-primary-red"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    <div
+                        className="w-20 h-20 border-2 border-primary-red/20 rounded-full border-t-primary-red animate-spin"
                     />
                     <div className="mt-8 text-center text-primary-red font-mono text-[10px] uppercase tracking-[0.3em]">
                         Загрузка анкет...
@@ -333,10 +331,8 @@ export function HomeClient() {
     if (!profiles || profiles.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-black text-white p-6 text-center">
-                <motion.div
-                    className="w-16 h-16 border-2 border-blue-500/30 rounded-full border-t-blue-500"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                <div
+                    className="w-16 h-16 border-2 border-blue-500/30 rounded-full border-t-blue-500 animate-spin"
                 />
                 <p className="text-gray-400 mt-4 text-sm">Загружаем ещё анкеты...</p>
             </div>

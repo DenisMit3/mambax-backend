@@ -51,7 +51,7 @@ export function ExpandedProfile({ profile, onClose, onSwipe }: ExpandedProfilePr
                             className="w-full h-full object-cover"
                             alt={profile.name || 'Фото профиля'}
                             fill
-                            unoptimized
+                            sizes="100vw"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
                         <div className="absolute bottom-0 left-0 p-6 w-full">
@@ -116,7 +116,7 @@ export function ExpandedProfile({ profile, onClose, onSwipe }: ExpandedProfilePr
 
                         <div className="space-y-4">
                             {profile.photos?.slice(1).map((photo, i) => (
-                                <Image key={photo} src={photo} className="w-full rounded-3xl" alt={`${profile.name || 'Профиль'} — фото ${i + 2}`} width={400} height={500} unoptimized />
+                                <Image key={photo} src={photo} className="w-full rounded-3xl" alt={`${profile.name || 'Профиль'} — фото ${i + 2}`} width={400} height={500} />
                             ))}
                         </div>
                     </div>

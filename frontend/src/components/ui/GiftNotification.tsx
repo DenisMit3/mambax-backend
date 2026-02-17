@@ -52,7 +52,7 @@ export function GiftNotification({ data, onClose }: GiftNotificationProps) {
                         <div className="relative">
                             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-neon-pink to-neon-purple flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                                 {data?.gift_image ? (
-                                    <Image src={data.gift_image} alt="Gift" className="w-4/5 h-4/5 object-contain" width={80} height={80} unoptimized />
+                                    <Image src={data.gift_image} alt="Gift" className="w-4/5 h-4/5 object-contain" width={80} height={80} />
                                 ) : <Sparkles size={20} className="text-white" />}
                             </div>
                             {data?.bonus_received && data.bonus_received > 0 && (

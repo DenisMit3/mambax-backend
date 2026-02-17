@@ -6,7 +6,7 @@ import logging
 from uuid import UUID
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -325,9 +325,14 @@ async def poll_messages(
     match_id: str,
     after: Optional[str] = Query(None, description="ISO timestamp — return messages after this time"),
     current_user: str = Depends(auth.get_current_user),
-    db: AsyncSession = Depends(database.get_db)
+    db: AsyncSession = Depends(database.get_db),
+    response: Response = None,
 ):
     """Poll for new messages since `after` timestamp. Fallback for when WS is unavailable."""
+    # Кэширование на CDN (Vercel) — 2 секунды
+    if response:
+        response.headers["Cache-Control"] = "public, max-age=2"
+
     from backend.models.chat import Message
     from backend.models.interaction import Match
 

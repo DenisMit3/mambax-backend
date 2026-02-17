@@ -217,7 +217,6 @@ export default function ChatListPage() {
                                                     fill
                                                     sizes="56px"
                                                     className="object-cover"
-                                                    unoptimized
                                                 />
                                             </div>
                                             {/* Premium Badge */}
@@ -275,7 +274,6 @@ export default function ChatListPage() {
                                             fill
                                             sizes="52px"
                                             className="rounded-full object-cover"
-                                            unoptimized
                                         />
                                         {/* Online indicator on list item too? Optional */}
                                     </div>

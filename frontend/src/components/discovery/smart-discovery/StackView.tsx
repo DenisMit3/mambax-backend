@@ -63,7 +63,6 @@ export function StackView({
                             sizes="100vw"
                             className="object-cover"
                             priority={false}
-                            unoptimized
                         />
                     </motion.div>
                 )}
@@ -87,7 +86,7 @@ export function StackView({
                             alt=""
                             aria-hidden="true"
                             fill
-                            unoptimized
+                            sizes="100vw"
                         />
                         <div className="absolute inset-0 bg-black/30" />
                     </div>
@@ -101,7 +100,7 @@ export function StackView({
                             draggable={false}
                             loading="eager"
                             fill
-                            unoptimized
+                            sizes="100vw"
                         />
                     </div>
 

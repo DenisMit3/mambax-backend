@@ -62,7 +62,6 @@ export function ActiveChatsList({ chats, onChatClick }: ActiveChatsListProps) {
                                         width={48}
                                         height={48}
                                         className="rounded-full object-cover"
-                                        unoptimized
                                     />
                                     {chat.user.isOnline && (
                                         <motion.div

@@ -165,7 +165,7 @@ export function SendGiftModal({
                     <div className="flex items-center gap-3 px-5 py-3 bg-surface text-sm text-muted-foreground">
                         <div className="w-9 h-9 rounded-full overflow-hidden">
                             {receiverPhoto ? (
-                                <Image src={receiverPhoto} alt={receiverName} loading="lazy" className="w-full h-full object-cover" width={48} height={48} unoptimized />
+                                <Image src={receiverPhoto} alt={receiverName} loading="lazy" className="w-full h-full object-cover" width={48} height={48} />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary to-accent text-white font-semibold">
                                     {receiverName.charAt(0).toUpperCase()}
