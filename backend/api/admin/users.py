@@ -156,7 +156,7 @@ async def get_users_list(
             }
         except Exception as fallback_err:
             logger.error(f"Fallback also failed: {fallback_err}", exc_info=True)
-            raise HTTPException(status_code=500, detail="Ошибка загрузки пользователей")
+            raise HTTPException(status_code=500, detail=f"Main: {str(e)[:200]} | Fallback: {str(fallback_err)[:200]}")
 
 
 async def _get_users_list_impl(
