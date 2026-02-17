@@ -422,6 +422,17 @@ async def get_user_details(
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
+        # Cache photos/interests immediately before any potential rollback
+        # invalidates the loaded relationships
+        try:
+            photos_list = [p.url for p in user.photos_rel]
+        except Exception:
+            photos_list = []
+        try:
+            interests_list = [i.name for i in user.interests_rel] if hasattr(user, 'interests_rel') else []
+        except Exception:
+            interests_list = []
+        
         fraud = None
         try:
             result = await db.execute(select(FraudScore).where(FraudScore.user_id == uid))
@@ -466,11 +477,6 @@ async def get_user_details(
         except Exception as e:
             logger.warning("Report count query failed for %s: %s", user_id, e)
             await db.rollback()
-        
-        try:
-            photos_list = user.photos or []
-        except Exception:
-            photos_list = []
         
         return {
             "id": str(user.id),
