@@ -22,7 +22,7 @@ from sqlalchemy import select
 from backend.core.config import settings
 from backend.config.settings import settings as app_settings
 from backend.core.redis import redis_manager
-from backend.db.session import get_db, async_session_maker
+from backend.db.session import get_db
 
 # Models
 from backend.models.user import User
@@ -268,22 +268,21 @@ async def get_current_user_from_token(
         if user_id is None:
             raise HTTPException(status_code=401, detail="Token missing subject")
         
-        async with async_session_maker() as session:
-            try:
-                uid = uuid_module.UUID(user_id)
-            except ValueError:
-                raise HTTPException(status_code=401, detail="Invalid user ID in token")
-            
-            result = await session.execute(select(User).where(User.id == uid))
-            user = result.scalar_one_or_none()
-            
-            if user is None:
-                raise HTTPException(status_code=401, detail="User not found")
-            
-            if user.status and str(user.status).lower() == "banned":
-                raise HTTPException(status_code=401, detail="User is banned")
-            
-            return user
+        try:
+            uid = uuid_module.UUID(user_id)
+        except ValueError:
+            raise HTTPException(status_code=401, detail="Invalid user ID in token")
+        
+        result = await db.execute(select(User).where(User.id == uid))
+        user = result.scalar_one_or_none()
+        
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        if user.status and str(user.status).lower() == "banned":
+            raise HTTPException(status_code=401, detail="User is banned")
+        
+        return user
             
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")

@@ -413,9 +413,6 @@ async def get_user_details(
         raise HTTPException(status_code=400, detail="Некорректный формат ID пользователя")
     
     try:
-        # #region agent log
-        logger.warning("[DEBUG-H1] Starting user query for %s", user_id)
-        # #endregion
         result = await db.execute(
             select(User)
             .options(selectinload(User.photos_rel), selectinload(User.interests_rel))
@@ -425,10 +422,6 @@ async def get_user_details(
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
-        # #region agent log
-        logger.warning("[DEBUG-H2] User loaded, checking scalar fields: name=%s, gender=%s, status=%s", user.name, user.gender, user.status)
-        # #endregion
-        
         fraud = None
         try:
             result = await db.execute(select(FraudScore).where(FraudScore.user_id == uid))
@@ -436,10 +429,6 @@ async def get_user_details(
         except Exception as e:
             logger.warning("FraudScore query failed for %s: %s", user_id, e)
             await db.rollback()
-        
-        # #region agent log
-        logger.warning("[DEBUG-H3] FraudScore done, fraud=%s", fraud)
-        # #endregion
         
         matches_count = 0
         try:
@@ -478,27 +467,10 @@ async def get_user_details(
             logger.warning("Report count query failed for %s: %s", user_id, e)
             await db.rollback()
         
-        # #region agent log
-        logger.warning("[DEBUG-H4] All counts done. matches=%s, messages=%s, reports_recv=%s, reports_sent=%s", matches_count, messages_count, reports_received, reports_sent)
-        # #endregion
-        
         try:
-            # #region agent log
-            logger.warning("[DEBUG-H5] About to access user.photos property")
-            # #endregion
             photos_list = user.photos or []
-            # #region agent log
-            logger.warning("[DEBUG-H5b] photos_list=%s", photos_list)
-            # #endregion
-        except Exception as photo_err:
-            # #region agent log
-            logger.warning("[DEBUG-H5-ERR] photos access failed: %s", photo_err)
-            # #endregion
+        except Exception:
             photos_list = []
-        
-        # #region agent log
-        logger.warning("[DEBUG-H6] Building response dict")
-        # #endregion
         
         return {
             "id": str(user.id),
