@@ -5,6 +5,7 @@ Admin User Management: list, create, delete, actions, bulk, fraud, segments.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, desc, and_, or_, select
+from sqlalchemy.orm import selectinload
 from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
@@ -412,7 +413,7 @@ async def get_user_details(
         raise HTTPException(status_code=400, detail="Некорректный формат ID пользователя")
     
     try:
-        result = await db.execute(select(User).where(User.id == uid))
+        result = await db.execute(select(User).options(selectinload(User.photos_rel)).where(User.id == uid))
         user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
