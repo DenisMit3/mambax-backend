@@ -207,6 +207,7 @@ async def rate_limit_middleware(request: Request, call_next):
             request.url.path.startswith("/health/") or
             request.url.path == "/ping" or
             request.url.path.startswith("/debug") or
+            request.url.path.startswith("/api/photos") or
             request.url.path == "/docs" or
             request.url.path == "/openapi.json" or
             request.url.path == "/redoc" or
