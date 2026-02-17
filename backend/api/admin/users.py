@@ -77,11 +77,39 @@ async def get_users_list(
         logger.error(f"_get_users_list_impl failed, using fallback: {e}", exc_info=True)
         await db.rollback()
         try:
+            fallback_conditions = []
+            if status and status != 'all':
+                try:
+                    fallback_conditions.append(User.status == UserStatus(status))
+                except ValueError:
+                    pass
+            if subscription and subscription != 'all':
+                try:
+                    fallback_conditions.append(User.subscription_tier == SubscriptionTier(subscription))
+                except ValueError:
+                    pass
+            if verified is not None:
+                fallback_conditions.append(User.is_verified == verified)
+            if search:
+                safe_search = search.replace("%", "\\%").replace("_", "\\_")
+                fallback_conditions.append(
+                    or_(
+                        User.name.ilike(f"%{safe_search}%"),
+                        User.email.ilike(f"%{safe_search}%"),
+                        User.phone.ilike(f"%{safe_search}%")
+                    )
+                )
+
             count_q = select(func.count()).select_from(User)
+            if fallback_conditions:
+                count_q = count_q.where(and_(*fallback_conditions))
             result = await db.execute(count_q)
             total = result.scalar() or 0
             
-            simple_q = select(User).order_by(desc(User.created_at)).offset((page - 1) * page_size).limit(page_size)
+            simple_q = select(User).order_by(desc(User.created_at))
+            if fallback_conditions:
+                simple_q = simple_q.where(and_(*fallback_conditions))
+            simple_q = simple_q.offset((page - 1) * page_size).limit(page_size)
             result = await db.execute(simple_q)
             rows = result.scalars().all()
 
@@ -191,9 +219,15 @@ async def _get_users_list_impl(
     
     conditions = []
     if status and status != 'all':
-        conditions.append(User.status == status)
+        try:
+            conditions.append(User.status == UserStatus(status))
+        except ValueError:
+            pass  # Неизвестный статус — игнорируем фильтр
     if subscription and subscription != 'all':
-        conditions.append(User.subscription_tier == subscription)
+        try:
+            conditions.append(User.subscription_tier == SubscriptionTier(subscription))
+        except ValueError:
+            pass
     if verified is not None:
         conditions.append(User.is_verified == verified)
         
