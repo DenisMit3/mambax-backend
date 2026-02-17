@@ -1,19 +1,25 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Shield,
   AlertTriangle,
   CheckCircle,
   ChevronRight,
+  AlertOctagon,
+  Loader2,
 } from 'lucide-react';
+import { httpClient } from '@/lib/http-client';
 
-// Статические данные алертов безопасности
-const securityAlerts = [
-  { id: 1, type: 'warning', message: 'High number of failed login attempts from IP 192.168.1.100', time: '5 min ago' },
-  { id: 2, type: 'info', message: 'New admin user created: moderator2@mambax.com', time: '1 hour ago' },
-  { id: 3, type: 'success', message: 'SSL certificate renewed successfully', time: '6 hours ago' },
-];
+interface SecurityAlert {
+  id: string;
+  type: string;
+  severity: string;
+  message: string;
+  user_id: string | null;
+  created_at: string;
+}
 
 // Цвета для типов алертов
 const alertColors: Record<string, { bg: string; color: string }> = {
@@ -21,9 +27,48 @@ const alertColors: Record<string, { bg: string; color: string }> = {
   info: { bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' },
   success: { bg: 'rgba(16, 185, 129, 0.15)', color: '#10b981' },
   error: { bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' },
+  high: { bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' },
+  medium: { bg: 'rgba(249, 115, 22, 0.15)', color: '#f97316' },
+  fraud: { bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' },
+  ban: { bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' },
+  spike: { bg: 'rgba(249, 115, 22, 0.15)', color: '#f97316' },
 };
 
+function getAlertStyle(alert: SecurityAlert) {
+  return alertColors[alert.severity] || alertColors[alert.type] || alertColors.info;
+}
+
+function getAlertIcon(alert: SecurityAlert) {
+  if (alert.severity === 'high' || alert.type === 'fraud') return <AlertOctagon size={14} />;
+  if (alert.severity === 'medium' || alert.type === 'spike') return <AlertTriangle size={14} />;
+  if (alert.type === 'ban') return <Shield size={14} />;
+  return <CheckCircle size={14} />;
+}
+
+function formatTime(isoString: string) {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'только что';
+  if (diffMin < 60) return `${diffMin} мин назад`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours} ч назад`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} дн назад`;
+}
+
 export default function SecurityAlerts() {
+  const [alerts, setAlerts] = useState<SecurityAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    httpClient.get<{ alerts: SecurityAlert[]; total: number }>('/admin/security/alerts')
+      .then(data => setAlerts(data.alerts || []))
+      .catch(() => setAlerts([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <div className="security-alerts glass-panel">
       <div className="panel-header">
@@ -34,7 +79,20 @@ export default function SecurityAlerts() {
       </div>
 
       <div className="alerts-list">
-        {securityAlerts.map((alert) => (
+        {loading && (
+          <div className="alert-empty">
+            <Loader2 size={20} className="animate-spin" style={{ color: '#64748b' }} />
+          </div>
+        )}
+
+        {!loading && alerts.length === 0 && (
+          <div className="alert-empty">
+            <CheckCircle size={20} style={{ color: '#10b981' }} />
+            <span>Нет активных алертов</span>
+          </div>
+        )}
+
+        {!loading && alerts.map((alert) => (
           <motion.div
             key={alert.id}
             className="alert-item"
@@ -43,15 +101,13 @@ export default function SecurityAlerts() {
           >
             <div
               className="alert-icon"
-              style={alertColors[alert.type]}
+              style={getAlertStyle(alert)}
             >
-              {alert.type === 'warning' && <AlertTriangle size={14} />}
-              {alert.type === 'info' && <Shield size={14} />}
-              {alert.type === 'success' && <CheckCircle size={14} />}
+              {getAlertIcon(alert)}
             </div>
             <div className="alert-content">
               <span className="alert-message">{alert.message}</span>
-              <span className="alert-time">{alert.time}</span>
+              <span className="alert-time">{formatTime(alert.created_at)}</span>
             </div>
             <ChevronRight size={16} className="alert-arrow" />
           </motion.div>
@@ -130,6 +186,16 @@ export default function SecurityAlerts() {
           font-size: 11px;
           color: #64748b;
           margin-top: 4px;
+        }
+        
+        .alert-empty {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 24px;
+          color: #64748b;
+          font-size: 13px;
         }
         
         :global(.alert-arrow) {

@@ -440,13 +440,63 @@ async def get_user_segments(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get list of user segments"""
+    """Get list of user segments with real counts from DB"""
+    from datetime import timedelta
+
+    now = datetime.utcnow()
+
+    # New users: registered in last 7 days
+    result = await db.execute(
+        select(func.count(User.id)).where(User.created_at >= now - timedelta(days=7))
+    )
+    new_users_count = result.scalar() or 0
+
+    # Power users: last seen in 3 days AND sent > 100 messages total
+    power_sub = (
+        select(Message.sender_id)
+        .group_by(Message.sender_id)
+        .having(func.count(Message.id) > 100)
+    ).subquery()
+    result = await db.execute(
+        select(func.count(User.id)).where(
+            and_(
+                User.last_seen >= now - timedelta(days=3),
+                User.id.in_(select(power_sub.c.sender_id))
+            )
+        )
+    )
+    power_users_count = result.scalar() or 0
+
+    # At risk: no activity for 14 days
+    result = await db.execute(
+        select(func.count(User.id)).where(
+            and_(
+                User.last_seen.isnot(None),
+                User.last_seen < now - timedelta(days=14)
+            )
+        )
+    )
+    at_risk_count = result.scalar() or 0
+
+    # Whales: spent > $100 this month
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    whale_sub = (
+        select(RevenueTransaction.user_id)
+        .where(RevenueTransaction.created_at >= month_start)
+        .group_by(RevenueTransaction.user_id)
+        .having(func.sum(RevenueTransaction.amount) > 100)
+    ).subquery()
+    result = await db.execute(
+        select(func.count()).select_from(whale_sub)
+    )
+    whales_count = result.scalar() or 0
+
     return {
         "segments": [
-            {"id": "new_users", "name": "Новые пользователи", "count": 145, "description": "Зарегистрированы за последние 7 дней"},
-            {"id": "power_users", "name": "Активные пользователи", "count": 56, "description": "Ежедневно активны, >100 сообщений"},
-            {"id": "at_risk", "name": "В зоне риска", "count": 230, "description": "Нет активности 14 дней"},
-            {"id": "whales", "name": "Киты", "count": 12, "description": "Потратили >$100 в этом месяце"}
+            {"id": "new_users", "name": "Новые пользователи", "count": new_users_count, "description": "Зарегистрированы за последние 7 дней"},
+            {"id": "power_users", "name": "Активные пользователи", "count": power_users_count, "description": "Ежедневно активны, >100 сообщений"},
+            {"id": "at_risk", "name": "В зоне риска", "count": at_risk_count, "description": "Нет активности 14 дней"},
+            {"id": "whales", "name": "Киты", "count": whales_count, "description": "Потратили >$100 в этом месяце"}
         ]
     }
 

@@ -214,13 +214,25 @@ async def get_moderation_stats(
         )
     )
     rejected = result.scalar() or 0
-    
+
+    # today_received: items created today
+    result = await db.execute(
+        select(func.count(ModerationQueueItemModel.id)).where(
+            cast(ModerationQueueItemModel.created_at, Date) == today
+        )
+    )
+    today_received = result.scalar() or 0
+
+    # accuracy: approved / (approved + rejected) * 100
+    total_decided = approved + rejected
+    accuracy = round(approved / total_decided * 100, 1) if total_decided > 0 else None
+
     return {
         "pending": pending,
         "today_reviewed": today_reviewed,
-        "today_received": 0,
+        "today_received": today_received,
         "approved": approved,
         "rejected": rejected,
-        "ai_processed": 0,
-        "accuracy": 95.5
+        "ai_processed": None,
+        "accuracy": accuracy
     }

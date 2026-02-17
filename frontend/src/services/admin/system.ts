@@ -15,9 +15,9 @@ export async function getSystemHealth(): Promise<{
     } catch {
         return {
             services: [
-                { name: 'API', status: 'healthy', uptime: 'N/A', response: 'N/A' },
-                { name: 'Database', status: 'healthy', uptime: 'N/A', response: 'N/A' },
-                { name: 'Redis', status: 'healthy', uptime: 'N/A', response: 'N/A' },
+                { name: 'API', status: 'unknown', uptime: 'N/A', response: 'N/A' },
+                { name: 'Database', status: 'unknown', uptime: 'N/A', response: 'N/A' },
+                { name: 'Redis', status: 'unknown', uptime: 'N/A', response: 'N/A' },
             ],
             overall_status: 'unknown',
             last_checked: new Date().toISOString(),

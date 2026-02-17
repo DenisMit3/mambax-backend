@@ -4,7 +4,7 @@ Admin Analytics endpoints: overview, funnel, retention, realtime, churn, ltv, ge
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, desc, and_, or_, cast, Date, select
+from sqlalchemy import func, desc, and_, or_, cast, Date, select, case
 from typing import Optional
 from datetime import datetime, timedelta
 
@@ -473,23 +473,35 @@ async def get_geo_analytics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    """Get geographic distribution of users"""
+    """Get geographic distribution of users from real DB data"""
+    now = datetime.utcnow()
+
+    result = await db.execute(
+        select(
+            User.city,
+            func.avg(User.latitude).label("lat"),
+            func.avg(User.longitude).label("lng"),
+            func.count(User.id).label("users"),
+            func.count(case((User.is_premium == True, 1))).label("vip"),
+            func.count(case((User.last_seen >= now - timedelta(days=7), 1))).label("active"),
+        )
+        .where(and_(User.city.isnot(None), User.city != ""))
+        .group_by(User.city)
+        .order_by(desc("users"))
+        .limit(30)
+    )
+    rows = result.all()
+
     points = [
-        {"city": "Москва", "lat": 55.7558, "lng": 37.6173, "users": 12500, "vip": 620, "active": 10200},
-        {"city": "Санкт-Петербург", "lat": 59.9343, "lng": 30.3351, "users": 6800, "vip": 340, "active": 5500},
-        {"city": "Новосибирск", "lat": 55.0084, "lng": 82.9357, "users": 2200, "vip": 110, "active": 1800},
-        {"city": "Екатеринбург", "lat": 56.8389, "lng": 60.6057, "users": 2100, "vip": 105, "active": 1700},
-        {"city": "Казань", "lat": 55.8304, "lng": 49.0661, "users": 1900, "vip": 98, "active": 1600},
-        {"city": "Нижний Новгород", "lat": 56.2965, "lng": 43.9361, "users": 1800, "vip": 95, "active": 1500},
-        {"city": "Краснодар", "lat": 45.0355, "lng": 38.9753, "users": 1650, "vip": 88, "active": 1400},
-        {"city": "Самара", "lat": 53.1959, "lng": 50.1002, "users": 1400, "vip": 72, "active": 1150},
-        {"city": "Ростов-на-Дону", "lat": 47.2357, "lng": 39.7015, "users": 1350, "vip": 68, "active": 1100},
-        {"city": "Уфа", "lat": 54.7388, "lng": 55.9721, "users": 1100, "vip": 55, "active": 900},
-        {"city": "Воронеж", "lat": 51.6720, "lng": 39.1843, "users": 950, "vip": 45, "active": 800},
-        {"city": "Красноярск", "lat": 56.0153, "lng": 92.8932, "users": 880, "vip": 42, "active": 720},
-        {"city": "Пермь", "lat": 58.0105, "lng": 56.2502, "users": 820, "vip": 38, "active": 680},
-        {"city": "Волгоград", "lat": 48.7080, "lng": 44.5133, "users": 750, "vip": 35, "active": 620},
-        {"city": "Челябинск", "lat": 55.1644, "lng": 61.4368, "users": 1050, "vip": 52, "active": 870},
+        {
+            "city": row.city,
+            "lat": round(float(row.lat), 4) if row.lat else 0,
+            "lng": round(float(row.lng), 4) if row.lng else 0,
+            "users": row.users,
+            "vip": row.vip,
+            "active": row.active,
+        }
+        for row in rows
     ]
 
     total_users = sum(p["users"] for p in points)
