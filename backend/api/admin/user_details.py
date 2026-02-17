@@ -334,21 +334,27 @@ async def add_user_note(
     current_user: User = Depends(get_current_admin)
 ):
     """Add admin note to a user"""
+    import traceback
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Некорректный ID")
 
-    note = UserNote(
-        user_id=uid,
-        author_id=current_user.id,
-        content=data.text,
-        is_internal=(data.type == "internal" or data.type == "general")
-    )
-    db.add(note)
-    await db.commit()
-
-    return {"status": "success", "message": "Заметка добавлена", "id": str(note.id)}
+    try:
+        note = UserNote(
+            user_id=uid,
+            author_id=current_user.id,
+            content=data.text,
+            is_internal=(data.type == "internal" or data.type == "general")
+        )
+        db.add(note)
+        await db.commit()
+        await db.refresh(note)
+        return {"status": "success", "message": "Заметка добавлена", "id": str(note.id)}
+    except Exception as e:
+        traceback.print_exc()
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка сохранения заметки: {type(e).__name__}: {e}")
 
 
 # ============================================

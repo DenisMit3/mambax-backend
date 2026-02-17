@@ -477,7 +477,9 @@ async def get_user_details(
         messages_count = 0
         try:
             result = await db.execute(
-                select(func.count(Message.id)).where(Message.sender_id == uid)
+                select(func.count(Message.id)).where(
+                    or_(Message.sender_id == uid, Message.receiver_id == uid)
+                )
             )
             messages_count = result.scalar() or 0
         except Exception as e:
