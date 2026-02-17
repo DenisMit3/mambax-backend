@@ -14,12 +14,14 @@ import {
   Calendar,
   Crown,
   CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import { UserListItem } from '@/services/admin';
 
 interface Props {
   user: UserListItem;
   onAction: (action: string, user: UserListItem) => void;
+  actionInProgress?: string | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -48,8 +50,9 @@ function getFraudColor(score: number) {
   return 'text-emerald-400';
 }
 
-export default function UserCard({ user, onAction }: Props) {
+export default function UserCard({ user, onAction, actionInProgress }: Props) {
   const router = useRouter();
+  const isActioning = actionInProgress === user.id;
 
   const statusStyle = STATUS_STYLES[user.status] || STATUS_STYLES.pending;
   const subStyle = SUBSCRIPTION_STYLES[user.subscription] || SUBSCRIPTION_STYLES.free;
@@ -148,6 +151,12 @@ export default function UserCard({ user, onAction }: Props) {
 
       {/* Кнопки действий */}
       <div className="flex items-center justify-between mt-3 gap-1.5">
+        {isActioning ? (
+          <div className="w-full flex items-center justify-center py-1">
+            <Loader2 size={18} className="animate-spin text-blue-400" />
+          </div>
+        ) : (
+        <>
         {/* Просмотр */}
         <button
           onClick={(e) => { stop(e); onAction('view', user); }}
@@ -193,6 +202,8 @@ export default function UserCard({ user, onAction }: Props) {
         >
           <Trash2 className="w-4 h-4" />
         </button>
+        </>
+        )}
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Crown,
   Mail,
+  Loader2,
 } from 'lucide-react';
 import { UserListItem } from '@/services/admin';
 
@@ -21,6 +22,7 @@ interface UsersTableProps {
   selectedUsers: Set<string>;
   onSelectUser: (userId: string) => void;
   onSelectAll: () => void;
+  actionInProgress?: string | null;
 }
 
 // === Маппинг статусов на русские названия ===
@@ -80,6 +82,7 @@ export function UsersTable({
   selectedUsers,
   onSelectUser,
   onSelectAll,
+  actionInProgress,
 }: UsersTableProps) {
   const router = useRouter();
 
@@ -135,6 +138,8 @@ export function UsersTable({
               const subStyle = SUBSCRIPTION_STYLES[user.subscription] || SUBSCRIPTION_STYLES.free;
               const isSelected = selectedUsers.has(user.id);
               const isSuspended = user.status === 'suspended';
+              const isBanned = user.status === 'banned';
+              const isActioning = actionInProgress === user.id;
 
               return (
                 <tr
@@ -262,6 +267,12 @@ export function UsersTable({
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center gap-1.5">
+                      {isActioning ? (
+                        <div className="w-8 h-8 flex items-center justify-center">
+                          <Loader2 size={16} className="animate-spin text-blue-400" />
+                        </div>
+                      ) : (
+                      <>
                       {/* Просмотр */}
                       <button
                         onClick={() => router.push(`/admin/users/${user.id}`)}
@@ -272,7 +283,15 @@ export function UsersTable({
                       </button>
 
                       {/* Активировать / Приостановить */}
-                      {isSuspended ? (
+                      {isBanned ? (
+                        <button
+                          onClick={() => onAction('activate', user)}
+                          title="Разблокировать"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-700/50 bg-slate-800/50 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 hover:border-emerald-500/30 transition-all duration-150"
+                        >
+                          <Shield size={15} />
+                        </button>
+                      ) : isSuspended ? (
                         <button
                           onClick={() => onAction('activate', user)}
                           title="Активировать"
@@ -290,14 +309,16 @@ export function UsersTable({
                         </button>
                       )}
 
-                      {/* Заблокировать */}
-                      <button
-                        onClick={() => onAction('ban', user)}
-                        title="Заблокировать"
-                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-700/50 bg-slate-800/50 text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30 transition-all duration-150"
-                      >
-                        <Ban size={15} />
-                      </button>
+                      {/* Заблокировать (скрыть если уже забанен) */}
+                      {!isBanned && (
+                        <button
+                          onClick={() => onAction('ban', user)}
+                          title="Заблокировать"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-700/50 bg-slate-800/50 text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30 transition-all duration-150"
+                        >
+                          <Ban size={15} />
+                        </button>
+                      )}
 
                       {/* Удалить */}
                       <button
@@ -307,6 +328,8 @@ export function UsersTable({
                       >
                         <Trash2 size={15} />
                       </button>
+                      </>
+                      )}
                     </div>
                   </td>
                 </tr>

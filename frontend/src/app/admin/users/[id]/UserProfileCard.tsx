@@ -43,7 +43,18 @@ export default function UserProfileCard({ user }: UserProfileCardProps) {
                 <div className="profile-header">
                     <div className="avatar-container">
                         <div className="avatar">
-                            <User size={48} />
+                            {user.photos && user.photos.length > 0 ? (
+                                <img
+                                    src={user.photos[0].startsWith('http') ? user.photos[0] : `/api/photos/${user.photos[0].split('/api/photos/').pop()}`}
+                                    alt={user.name || ''}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                />
+                            ) : (
+                                <User size={48} />
+                            )}
                         </div>
                         {user.is_verified && (
                             <div className="verified-badge">

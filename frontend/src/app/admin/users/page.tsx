@@ -40,6 +40,7 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [actionInProgress, setActionInProgress] = useState<string | null>(null); // userId
 
   // Загрузка списка пользователей
   const fetchUsers = useCallback(async () => {
@@ -134,11 +135,29 @@ export default function UsersPage() {
     };
     const mapped = actionMap[action];
     if (mapped) {
+      setActionInProgress(user.id);
+      // Оптимистичное обновление статуса в UI
+      const statusMap: Record<string, string> = {
+        ban: 'banned',
+        suspend: 'suspended',
+        activate: 'active',
+      };
+      if (statusMap[action]) {
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === user.id ? { ...u, status: statusMap[action] } : u
+          )
+        );
+      }
       try {
         await adminApi.users.action(user.id, mapped);
-        fetchUsers();
+        await fetchUsers();
       } catch (err) {
         console.error(`Failed to ${action} user:`, err);
+        // Откат — перезагрузить реальные данные
+        await fetchUsers();
+      } finally {
+        setActionInProgress(null);
       }
     }
   };
@@ -250,11 +269,12 @@ export default function UsersPage() {
               selectedUsers={selectedUsers}
               onSelectUser={handleSelectUser}
               onSelectAll={handleSelectAll}
+              actionInProgress={actionInProgress}
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {users.map((user) => (
-                <UserCard key={user.id} user={user} onAction={handleAction} />
+                <UserCard key={user.id} user={user} onAction={handleAction} actionInProgress={actionInProgress} />
               ))}
             </div>
           )}

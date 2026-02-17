@@ -72,7 +72,9 @@ async def get_users_list(
             page, page_size, status, subscription, verified,
             verification_pending, search, fraud_risk, sort_by, sort_order, db
         )
-    except Exception:
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"_get_users_list_impl failed, using fallback: {e}", exc_info=True)
         await db.rollback()
         try:
             count_q = select(func.count()).select_from(User)
@@ -82,7 +84,21 @@ async def get_users_list(
             simple_q = select(User).order_by(desc(User.created_at)).offset((page - 1) * page_size).limit(page_size)
             result = await db.execute(simple_q)
             rows = result.scalars().all()
-            
+
+            # Подтянем фото для fallback
+            user_ids = [u.id for u in rows]
+            photo_map = {}
+            if user_ids:
+                from backend.models.user import UserPhoto
+                photo_q = (
+                    select(UserPhoto.user_id, func.min(UserPhoto.url).label('photo_url'))
+                    .where(UserPhoto.user_id.in_(user_ids))
+                    .group_by(UserPhoto.user_id)
+                )
+                photo_result = await db.execute(photo_q)
+                for pr in photo_result:
+                    photo_map[pr.user_id] = pr.photo_url
+
             return {
                 "users": [
                     {
@@ -100,7 +116,7 @@ async def get_users_list(
                         "last_active": u.updated_at.isoformat() if u.updated_at else None,
                         "matches": 0,
                         "messages": 0,
-                        "photo_url": None,
+                        "photo_url": photo_map.get(u.id),
                         "is_online": False
                     }
                     for u in rows
