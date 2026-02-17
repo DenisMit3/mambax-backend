@@ -43,8 +43,8 @@ export default function UsersPage() {
   const [actionInProgress, setActionInProgress] = useState<string | null>(null); // userId
 
   // Загрузка списка пользователей
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
+  const fetchUsers = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const apiFilters: UserFilters = {
@@ -70,7 +70,7 @@ export default function UsersPage() {
       console.error('Error fetching users:', err);
       setError(err instanceof Error ? err.message : 'Не удалось загрузить пользователей');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [currentPage, filters]);
 
@@ -116,7 +116,7 @@ export default function UsersPage() {
       setDeletingUserId(user.id);
       try {
         await adminApi.users.delete(user.id);
-        fetchUsers();
+        fetchUsers(true);
       } catch (err) {
         console.error('Failed to delete user:', err);
         alert(err instanceof Error ? err.message : 'Ошибка удаления пользователя');
@@ -151,11 +151,11 @@ export default function UsersPage() {
       }
       try {
         await adminApi.users.action(user.id, mapped);
-        await fetchUsers();
+        await fetchUsers(true);
       } catch (err) {
         console.error(`Failed to ${action} user:`, err);
         // Откат — перезагрузить реальные данные
-        await fetchUsers();
+        await fetchUsers(true);
       } finally {
         setActionInProgress(null);
       }
