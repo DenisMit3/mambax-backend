@@ -154,7 +154,8 @@ async def get_users_list(
                 "page_size": page_size,
                 "total_pages": (total + page_size - 1) // page_size
             }
-        except Exception:
+        except Exception as fallback_err:
+            logger.error(f"Fallback also failed: {fallback_err}", exc_info=True)
             raise HTTPException(status_code=500, detail="Ошибка загрузки пользователей")
 
 
