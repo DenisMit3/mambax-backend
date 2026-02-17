@@ -45,13 +45,13 @@ class UserNote(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    author_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False) # Admin who wrote the note
-    
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    is_internal: Mapped[bool] = mapped_column(Boolean, default=True)  # Internal admin note
-    
+    note: Mapped[str] = mapped_column(Text, nullable=False)  # actual DB column
+    type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, default="general")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    
+    author_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # legacy column in DB
+    is_internal: Mapped[bool] = mapped_column(Boolean, default=True)
+
     @property
     def created_by(self):
         """Alias for author_id for compatibility"""

@@ -311,8 +311,8 @@ async def get_user_notes(
             "notes": [
                 {
                     "id": str(note.id),
-                    "text": note.content,
-                    "type": "internal" if note.is_internal else "general",
+                    "text": note.note,
+                    "type": note.type or "general",
                     "admin_name": name or "Система",
                     "created_at": note.created_at.isoformat()
                 }
@@ -344,8 +344,8 @@ async def add_user_note(
         note = UserNote(
             user_id=uid,
             author_id=current_user.id,
-            content=data.text,
-            is_internal=(data.type == "internal" or data.type == "general")
+            note=data.text,
+            type=data.type or "general",
         )
         db.add(note)
         await db.commit()
