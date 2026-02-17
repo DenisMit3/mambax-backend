@@ -55,6 +55,8 @@ export interface UserListItem {
     last_active: string | null;
     matches: number;
     messages: number;
+    photo_url: string | null;
+    is_online: boolean;
 }
 
 export interface UserListResponse {

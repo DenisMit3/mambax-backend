@@ -77,13 +77,28 @@ export default function UserCard({ user, onAction }: Props) {
       <div className="flex items-start gap-3.5">
         {/* Аватар */}
         <div className="relative flex-shrink-0">
-          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
-            {initial}
+          <div className="w-14 h-14 rounded-xl overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
+            {user.photo_url ? (
+              <img
+                src={user.photo_url.startsWith('http') ? user.photo_url : `/api_proxy${user.photo_url}`}
+                alt={user.name || ''}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                  (e.target as HTMLImageElement).parentElement!.textContent = initial;
+                }}
+              />
+            ) : (
+              initial
+            )}
           </div>
           {user.verified && (
             <div className="absolute -bottom-1 -right-1 bg-[#0f1225] rounded-full p-0.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 fill-emerald-400/20" />
             </div>
+          )}
+          {user.is_online && (
+            <div className="absolute top-0 right-0 w-3 h-3 bg-green-400 border-2 border-[#0f1225] rounded-full" />
           )}
         </div>
 

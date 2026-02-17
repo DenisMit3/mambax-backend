@@ -251,6 +251,11 @@ async def delete_user(db: AsyncSession, user_id: UUID) -> bool:
                     await r.delete(*keys)
                 if cur == 0:
                     break
+            
+            # Clean up online/presence keys
+            await r.delete(f"user:online:{user_id_str}")
+            await r.delete(f"user:last_seen:{user_id_str}")
+            await r.delete(f"unread:{user_id_str}")
                 
             # Also remove from Geo Index
             from backend.services.geo import geo_service

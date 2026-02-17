@@ -119,6 +119,9 @@ export function UsersTable({
                 Последняя активность
               </th>
               <th className="p-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-800/60">
+                Онлайн
+              </th>
+              <th className="p-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider bg-slate-800/60">
                 Действия
               </th>
             </tr>
@@ -160,12 +163,28 @@ export function UsersTable({
                   {/* Пользователь: аватар + имя + email */}
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      {/* Аватар с первой буквой и градиентом */}
-                      <div className="relative shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white">
-                        {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                      {/* Аватар с реальным фото или первой буквой */}
+                      <div className="relative shrink-0 w-10 h-10 rounded-full overflow-hidden flex items-center justify-center text-sm font-bold text-white bg-gradient-to-br from-blue-500 to-purple-600">
+                        {user.photo_url ? (
+                          <img
+                            src={user.photo_url.startsWith('http') ? user.photo_url : `/api_proxy${user.photo_url}`}
+                            alt={user.name || ''}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).parentElement!.textContent = user.name?.charAt(0)?.toUpperCase() || 'U';
+                            }}
+                          />
+                        ) : (
+                          user.name?.charAt(0)?.toUpperCase() || 'U'
+                        )}
                         {/* Зелёная точка верификации */}
                         {user.verified && (
                           <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-[#0f1225] rounded-full" />
+                        )}
+                        {/* Онлайн-индикатор */}
+                        {user.is_online && (
+                          <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-[#0f1225] rounded-full" />
                         )}
                       </div>
                       <div className="flex flex-col min-w-0">
@@ -226,6 +245,14 @@ export function UsersTable({
                   <td className="p-4">
                     <span className="text-sm text-slate-400">
                       {formatDate(user.last_active)}
+                    </span>
+                  </td>
+
+                  {/* Онлайн-статус */}
+                  <td className="p-4">
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${user.is_online ? 'text-green-400' : 'text-slate-500'}`}>
+                      <span className={`w-2 h-2 rounded-full ${user.is_online ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.5)]' : 'bg-slate-600'}`} />
+                      {user.is_online ? 'Онлайн' : 'Офлайн'}
                     </span>
                   </td>
 

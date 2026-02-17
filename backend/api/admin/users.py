@@ -15,7 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from backend.database import get_db
-from backend.models.user import User, UserRole, UserStatus, SubscriptionTier
+from backend.models.user import User, UserRole, UserStatus, SubscriptionTier, UserPhoto
 from backend.models.interaction import Report, Match
 from backend.models.moderation import BannedUser
 from backend.models.monetization import RevenueTransaction
@@ -23,6 +23,7 @@ from backend.models.chat import Message
 from backend.models.system import AuditLog
 from backend.models.user_management import FraudScore
 from backend.services.fraud_detection import fraud_service
+from backend.core.redis import redis_manager
 from .deps import get_current_admin
 
 router = APIRouter()
@@ -98,7 +99,9 @@ async def get_users_list(
                         "registered_at": u.created_at.isoformat(),
                         "last_active": u.updated_at.isoformat() if u.updated_at else None,
                         "matches": 0,
-                        "messages": 0
+                        "messages": 0,
+                        "photo_url": None,
+                        "is_online": False
                     }
                     for u in rows
                 ],
@@ -143,6 +146,16 @@ async def _get_users_list_impl(
         .subquery()
     )
     
+    # Subquery for first photo URL
+    first_photo_subq = (
+        select(
+            UserPhoto.user_id,
+            func.min(UserPhoto.url).label('photo_url')
+        )
+        .group_by(UserPhoto.user_id)
+        .subquery()
+    )
+    
     query = (
         select(
             User,
@@ -150,12 +163,14 @@ async def _get_users_list_impl(
             FraudScore.risk_level.label('fraud_risk_level'),
             func.coalesce(matches_subq.c.match_count, 0).label('matches_as_user1'),
             func.coalesce(matches_subq2.c.match_count, 0).label('matches_as_user2'),
-            func.coalesce(messages_subq.c.message_count, 0).label('messages_count')
+            func.coalesce(messages_subq.c.message_count, 0).label('messages_count'),
+            first_photo_subq.c.photo_url.label('photo_url')
         )
         .outerjoin(FraudScore, User.id == FraudScore.user_id)
         .outerjoin(matches_subq, User.id == matches_subq.c.user_id)
         .outerjoin(matches_subq2, User.id == matches_subq2.c.user_id)
         .outerjoin(messages_subq, User.id == messages_subq.c.user_id)
+        .outerjoin(first_photo_subq, User.id == first_photo_subq.c.user_id)
     )
     
     conditions = []
@@ -220,6 +235,18 @@ async def _get_users_list_impl(
     result = await db.execute(query)
     rows = result.all()
     
+    # Check online status via Redis
+    online_statuses = {}
+    try:
+        r = await redis_manager.get_redis()
+        if r:
+            for row in rows:
+                uid_str = str(row.User.id)
+                is_online = await r.get(f"user:online:{uid_str}")
+                online_statuses[uid_str] = is_online == "true"
+    except Exception:
+        pass
+    
     return {
         "users": [
             {
@@ -236,7 +263,9 @@ async def _get_users_list_impl(
                 "registered_at": row.User.created_at.isoformat(),
                 "last_active": row.User.updated_at.isoformat() if row.User.updated_at else None,
                 "matches": (row.matches_as_user1 or 0) + (row.matches_as_user2 or 0),
-                "messages": row.messages_count or 0
+                "messages": row.messages_count or 0,
+                "photo_url": row.photo_url,
+                "is_online": online_statuses.get(str(row.User.id), False)
             }
             for row in rows
         ],
