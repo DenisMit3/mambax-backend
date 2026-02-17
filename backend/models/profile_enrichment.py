@@ -27,7 +27,7 @@ class UserPrompt(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationship
-    user_rel = relationship("User", backref="prompts", lazy="selectin")
+    user_rel = relationship("User", backref="prompts", lazy="noload")
 
     def __repr__(self):
         return f"<UserPrompt {self.user_id} - {self.question[:20]}...>"
@@ -60,7 +60,7 @@ class UserPreference(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationship
-    user_rel = relationship("User", backref="preferences", lazy="selectin")
+    user_rel = relationship("User", backref="preferences", lazy="noload")
 
     def __repr__(self):
         return f"<UserPreference {self.user_id} - {self.key} (Dealbreaker: {self.is_dealbreaker})>"

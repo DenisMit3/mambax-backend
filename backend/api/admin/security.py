@@ -23,10 +23,13 @@ router = APIRouter()
 
 class AutoBanRuleCreate(BaseModel):
     name: str
-    condition_type: str
-    threshold: float
-    action: str = "ban"
-    is_active: bool = True
+    trigger_type: str
+    threshold: int
+    time_window_hours: int = 24
+    action: str = "suspend"
+    action_duration_hours: Optional[int] = None
+    is_enabled: bool = True
+    priority: int = 0
     description: Optional[str] = None
 
 
@@ -117,11 +120,13 @@ async def get_auto_ban_rules(
             {
                 "id": str(r.id),
                 "name": r.name,
-                "condition_type": r.condition_type,
+                "trigger_type": r.trigger_type,
                 "threshold": r.threshold,
+                "time_window_hours": r.time_window_hours,
                 "action": r.action,
-                "is_active": r.is_active,
-                "triggers_count": r.triggers_count or 0,
+                "action_duration_hours": r.action_duration_hours,
+                "is_enabled": r.is_enabled,
+                "priority": r.priority,
                 "created_at": r.created_at.isoformat(),
             }
             for r in rules
@@ -138,10 +143,13 @@ async def create_auto_ban_rule(
     """Create a new auto-ban rule"""
     rule = AutoBanRule(
         name=data.name,
-        condition_type=data.condition_type,
+        trigger_type=data.trigger_type,
         threshold=data.threshold,
+        time_window_hours=data.time_window_hours,
         action=data.action,
-        is_active=data.is_active,
+        action_duration_hours=data.action_duration_hours,
+        is_enabled=data.is_enabled,
+        priority=data.priority,
         description=data.description,
     )
     db.add(rule)
@@ -150,7 +158,7 @@ async def create_auto_ban_rule(
         admin_id=current_user.id,
         action="create_autoban_rule",
         target_resource=f"rule:{data.name}",
-        changes={"condition": data.condition_type, "threshold": data.threshold}
+        changes={"trigger_type": data.trigger_type, "threshold": data.threshold}
     ))
 
     await db.commit()
@@ -176,10 +184,13 @@ async def update_auto_ban_rule(
         raise HTTPException(status_code=404, detail="Правило не найдено")
 
     rule.name = data.name
-    rule.condition_type = data.condition_type
+    rule.trigger_type = data.trigger_type
     rule.threshold = data.threshold
+    rule.time_window_hours = data.time_window_hours
     rule.action = data.action
-    rule.is_active = data.is_active
+    rule.action_duration_hours = data.action_duration_hours
+    rule.is_enabled = data.is_enabled
+    rule.priority = data.priority
     if data.description is not None:
         rule.description = data.description
 

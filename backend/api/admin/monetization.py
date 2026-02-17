@@ -21,9 +21,11 @@ router = APIRouter()
 
 class PromoCodeCreate(BaseModel):
     code: str
-    discount_percent: int = 0
-    discount_amount: float = 0
+    name: str = ""
+    discount_type: str = "percentage"
+    discount_value: float = 0
     max_uses: int = 100
+    valid_from: Optional[str] = None
     valid_until: Optional[str] = None
     description: Optional[str] = None
 
@@ -141,9 +143,9 @@ async def get_subscriptions_overview(
             "user_id": str(sub.user_id),
             "user_name": name,
             "user_email": email,
-            "plan": sub.plan,
+            "plan": sub.plan_id,
             "status": sub.status,
-            "amount": float(sub.amount) if sub.amount else 0,
+            "amount": 0,
             "started_at": sub.created_at.isoformat(),
             "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
         })
@@ -219,10 +221,11 @@ async def get_promo_codes(
             {
                 "id": str(p.id),
                 "code": p.code,
-                "discount_percent": p.discount_percent,
-                "discount_amount": float(p.discount_amount) if p.discount_amount else 0,
+                "discount_type": p.discount_type,
+                "discount_value": float(p.discount_value) if p.discount_value else 0,
                 "max_uses": p.max_uses,
                 "current_uses": p.current_uses,
+                "valid_from": p.valid_from.isoformat() if p.valid_from else None,
                 "valid_until": p.valid_until.isoformat() if p.valid_until else None,
                 "is_active": p.is_active,
                 "created_at": p.created_at.isoformat(),
@@ -248,13 +251,22 @@ async def create_promo_code(
         try:
             valid_until = datetime.fromisoformat(data.valid_until)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Некорректный формат даты")
+            raise HTTPException(status_code=400, detail="Некорректный формат даты valid_until")
+
+    valid_from = None
+    if data.valid_from:
+        try:
+            valid_from = datetime.fromisoformat(data.valid_from)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Некорректный формат даты valid_from")
 
     promo = PromoCode(
         code=data.code,
-        discount_percent=data.discount_percent,
-        discount_amount=data.discount_amount,
+        name=data.name or data.code,
+        discount_type=data.discount_type,
+        discount_value=data.discount_value,
         max_uses=data.max_uses,
+        valid_from=valid_from,
         valid_until=valid_until,
         description=data.description,
         is_active=True,
@@ -265,7 +277,7 @@ async def create_promo_code(
         admin_id=current_user.id,
         action="create_promo",
         target_resource=f"promo:{data.code}",
-        changes={"code": data.code, "discount_percent": data.discount_percent}
+        changes={"code": data.code, "discount_type": data.discount_type, "discount_value": data.discount_value}
     ))
 
     await db.commit()

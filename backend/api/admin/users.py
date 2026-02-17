@@ -67,11 +67,8 @@ async def get_users_list(
             page, page_size, status, subscription, verified,
             verification_pending, search, fraud_risk, sort_by, sort_order, db
         )
-    except Exception as e:
+    except Exception:
         await db.rollback()
-        import traceback
-        print(f"[ADMIN] get_users_list main query failed: {e}")
-        traceback.print_exc()
         try:
             count_q = select(func.count()).select_from(User)
             result = await db.execute(count_q)
@@ -106,11 +103,8 @@ async def get_users_list(
                 "page_size": page_size,
                 "total_pages": (total + page_size - 1) // page_size
             }
-        except Exception as fallback_err:
-            import traceback
-            print(f"[ADMIN] get_users_list FALLBACK also failed: {fallback_err}")
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Ошибка загрузки пользователей: {str(fallback_err)}")
+        except Exception:
+            raise HTTPException(status_code=500, detail="Ошибка загрузки пользователей")
 
 
 async def _get_users_list_impl(
@@ -173,11 +167,12 @@ async def _get_users_list_impl(
         conditions.append(User.is_verified == False)
 
     if search:
+        safe_search = search.replace("%", "\\%").replace("_", "\\_")
         conditions.append(
             or_(
-                User.name.ilike(f"%{search}%"),
-                User.email.ilike(f"%{search}%"),
-                User.phone.ilike(f"%{search}%")
+                User.name.ilike(f"%{safe_search}%"),
+                User.email.ilike(f"%{safe_search}%"),
+                User.phone.ilike(f"%{safe_search}%")
             )
         )
     
@@ -287,7 +282,7 @@ async def admin_create_user(
         role_map = {"user": UserRole.USER, "admin": UserRole.ADMIN, "moderator": UserRole.MODERATOR}
         role = role_map.get(data.role, UserRole.USER)
         
-        password = data.password or "admin_created_user"
+        password = data.password or uuid_module.uuid4().hex[:16]
         new_user = User(
             email=data.email,
             phone=data.phone,
@@ -305,7 +300,8 @@ async def admin_create_user(
         )
         
         db.add(new_user)
-        await db.flush()
+        await db.commit()
+        await db.refresh(new_user)
         
         return {
             "status": "success",
@@ -412,61 +408,70 @@ async def get_user_details(
     except ValueError:
         raise HTTPException(status_code=400, detail="Некорректный формат ID пользователя")
     
-    result = await db.execute(select(User).where(User.id == uid))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-    
-    result = await db.execute(select(FraudScore).where(FraudScore.user_id == uid))
-    fraud = result.scalar_one_or_none()
-    
-    result = await db.execute(
-        select(func.count(Match.id)).where(
-            or_(Match.user1_id == uid, Match.user2_id == uid)
+    try:
+        result = await db.execute(select(User).where(User.id == uid))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        result = await db.execute(select(FraudScore).where(FraudScore.user_id == uid))
+        fraud = result.scalar_one_or_none()
+        
+        result = await db.execute(
+            select(func.count(Match.id)).where(
+                or_(Match.user1_id == uid, Match.user2_id == uid)
+            )
         )
-    )
-    matches_count = result.scalar() or 0
-    
-    result = await db.execute(
-        select(func.count(Message.id)).where(Message.sender_id == uid)
-    )
-    messages_count = result.scalar() or 0
-    
-    result = await db.execute(
-        select(func.count(Report.id)).where(Report.reported_id == uid)
-    )
-    reports_received = result.scalar() or 0
-    
-    result = await db.execute(
-        select(func.count(Report.id)).where(Report.reporter_id == uid)
-    )
-    reports_sent = result.scalar() or 0
-    
-    return {
-        "id": str(user.id),
-        "name": user.name,
-        "email": user.email,
-        "phone": user.phone,
-        "age": user.age,
-        "gender": user.gender,
-        "bio": user.bio,
-        "photos": user.photos or [],
-        "location": user.location,
-        "city": user.city,
-        "status": user.status,
-        "subscription_tier": user.subscription_tier,
-        "stars_balance": user.stars_balance or 0,
-        "is_verified": user.is_verified,
-        "created_at": user.created_at.isoformat(),
-        "updated_at": user.updated_at.isoformat() if user.updated_at else None,
-        "last_active": user.updated_at.isoformat() if user.updated_at else None,
-        "matches_count": matches_count,
-        "messages_count": messages_count,
-        "reports_received": reports_received,
-        "reports_sent": reports_sent,
-        "fraud_score": fraud.score if fraud else 0,
-        "fraud_factors": fraud.factors if fraud else {}
-    }
+        matches_count = result.scalar() or 0
+        
+        result = await db.execute(
+            select(func.count(Message.id)).where(Message.sender_id == uid)
+        )
+        messages_count = result.scalar() or 0
+        
+        result = await db.execute(
+            select(func.count(Report.id)).where(Report.reported_id == uid)
+        )
+        reports_received = result.scalar() or 0
+        result = await db.execute(
+            select(func.count(Report.id)).where(Report.reporter_id == uid)
+        )
+        reports_sent = result.scalar() or 0
+        
+        try:
+            photos_list = user.photos or []
+        except Exception:
+            photos_list = []
+        
+        return {
+            "id": str(user.id),
+            "name": user.name,
+            "email": user.email,
+            "phone": user.phone,
+            "age": user.age,
+            "gender": user.gender.value if user.gender else None,
+            "bio": user.bio,
+            "photos": photos_list,
+            "location": user.location,
+            "city": user.city,
+            "status": user.status.value if user.status else "active",
+            "subscription_tier": user.subscription_tier.value if user.subscription_tier else "free",
+            "stars_balance": user.stars_balance or 0,
+            "is_verified": user.is_verified,
+            "created_at": user.created_at.isoformat(),
+            "updated_at": user.updated_at.isoformat() if user.updated_at else None,
+            "last_active": user.updated_at.isoformat() if user.updated_at else None,
+            "matches_count": matches_count,
+            "messages_count": messages_count,
+            "reports_received": reports_received,
+            "reports_sent": reports_sent,
+            "fraud_score": fraud.score if fraud else 0,
+            "fraud_factors": fraud.factors if fraud else {}
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Ошибка загрузки данных пользователя")
 
 
 @router.post("/users/{user_id}/stars")
@@ -620,7 +625,7 @@ async def perform_bulk_user_action(
                 elif data.action == "activate":
                     user.status = UserStatus.ACTIVE
                 success_count += 1
-        except:
+        except Exception:
             continue
     
     await db.commit()

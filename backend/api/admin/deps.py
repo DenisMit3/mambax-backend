@@ -2,27 +2,14 @@
 Admin shared dependencies, schemas and auth.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, WebSocket, WebSocketDisconnect
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, desc, and_, or_, select, delete, cast, case, Date, text
-from sqlalchemy.orm import aliased
+from fastapi import Depends, HTTPException, status
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 from pydantic import BaseModel
 from enum import Enum
-import uuid as uuid_module
 
-from backend.database import get_db
-from backend.auth import get_current_user_from_token, decode_jwt
-from backend.models.user import User, UserRole, UserStatus, SubscriptionTier, UserPhoto
-from backend.models.interaction import Report, Block, Match
-from backend.models.moderation import ModerationQueueItem as ModerationQueueItemModel, BannedUser
-from backend.models.monetization import UserSubscription, RevenueTransaction
-from backend.models.chat import Message
-from backend.models.analytics import RetentionCohort, DailyMetric
-from backend.models.system import FeatureFlag, AuditLog, AutoBanRule
-from backend.models.user_management import FraudScore, VerificationRequest, UserSegment, UserNote
-from backend.services.fraud_detection import fraud_service
+from backend.auth import get_current_user_from_token
+from backend.models.user import User, UserRole
 
 
 # ============================================

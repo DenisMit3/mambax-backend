@@ -171,7 +171,7 @@ class RevenueTransaction(Base):
     )
     
     # Transaction details
-    transaction_type: Mapped[str] = mapped_column(
+    type: Mapped[str] = mapped_column(
         String(30), nullable=False,
         comment="subscription, boost, superlike, gift, feature"
     )

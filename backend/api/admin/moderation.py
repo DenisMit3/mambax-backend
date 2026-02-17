@@ -11,7 +11,7 @@ from pydantic import BaseModel
 import uuid as uuid_module
 
 from backend.database import get_db
-from backend.models.user import User, UserPhoto
+from backend.models.user import User, UserPhoto, UserStatus
 from backend.models.moderation import ModerationQueueItem as ModerationQueueItemModel, BannedUser
 from backend.models.system import AuditLog
 from .deps import get_current_admin
@@ -100,11 +100,15 @@ async def get_moderation_queue(
     }
 
 
+class ReviewRequest(BaseModel):
+    action: str
+    notes: Optional[str] = None
+
+
 @router.post("/moderation/{item_id}/review")
 async def review_moderation_item(
     item_id: str,
-    action: str,
-    notes: Optional[str] = None,
+    data: ReviewRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
@@ -123,6 +127,9 @@ async def review_moderation_item(
     if not item:
         raise HTTPException(status_code=404, detail="Элемент не найден")
     
+    action = data.action
+    notes = data.notes
+    
     if action == "approve":
         item.status = "approved"
     elif action == "reject":
@@ -140,7 +147,7 @@ async def review_moderation_item(
         user_result = await db.execute(select(User).where(User.id == item.user_id))
         user = user_result.scalar_one_or_none()
         if user:
-            user.status = "banned"
+            user.status = UserStatus.BANNED
             ban = BannedUser(
                 user_id=item.user_id,
                 reason=notes or "Действие модерации",

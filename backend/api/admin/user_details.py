@@ -65,56 +65,69 @@ async def get_user_timeline(
     current_user: User = Depends(get_current_admin)
 ):
     """Get user activity timeline"""
+    import traceback
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Некорректный ID")
 
-    events = []
+    try:
+        events = []
 
-    # Audit logs related to this user
-    result = await db.execute(
-        select(AuditLog).where(
-            AuditLog.target_resource.like(f"%{user_id}%")
-        ).order_by(desc(AuditLog.created_at)).limit(limit)
-    )
-    for log in result.scalars().all():
-        events.append({
-            "type": "admin_action",
-            "action": log.action,
-            "details": log.changes,
-            "timestamp": log.created_at.isoformat()
-        })
+        # Audit logs related to this user
+        result = await db.execute(
+            select(AuditLog).where(
+                AuditLog.target_resource.like(f"%{user_id}%")
+            ).order_by(desc(AuditLog.created_at)).limit(limit)
+        )
+        for log in result.scalars().all():
+            events.append({
+                "type": "admin_action",
+                "action": log.action,
+                "details": log.changes,
+                "timestamp": log.created_at.isoformat()
+            })
 
-    # Recent messages
-    result = await db.execute(
-        select(Message).where(Message.sender_id == uid).order_by(desc(Message.created_at)).limit(20)
-    )
-    for msg in result.scalars().all():
-        events.append({
-            "type": "message",
-            "action": "sent_message",
-            "details": {"chat_id": str(msg.chat_room_id)},
-            "timestamp": msg.created_at.isoformat()
-        })
+        # Recent messages
+        try:
+            result = await db.execute(
+                select(Message).where(Message.sender_id == uid).order_by(desc(Message.created_at)).limit(20)
+            )
+            for msg in result.scalars().all():
+                events.append({
+                    "type": "message",
+                    "action": "sent_message",
+                    "details": {"chat_id": str(msg.match_id)},
+                    "timestamp": msg.created_at.isoformat()
+                })
+        except Exception as e:
+            print(f"[TIMELINE] messages query failed: {e}")
 
-    # Reports
-    result = await db.execute(
-        select(Report).where(
-            or_(Report.reporter_id == uid, Report.reported_id == uid)
-        ).order_by(desc(Report.created_at)).limit(20)
-    )
-    for report in result.scalars().all():
-        is_reporter = str(report.reporter_id) == user_id
-        events.append({
-            "type": "report",
-            "action": "filed_report" if is_reporter else "was_reported",
-            "details": {"reason": report.reason, "status": report.status},
-            "timestamp": report.created_at.isoformat()
-        })
+        # Reports
+        try:
+            result = await db.execute(
+                select(Report).where(
+                    or_(Report.reporter_id == uid, Report.reported_id == uid)
+                ).order_by(desc(Report.created_at)).limit(20)
+            )
+            for report in result.scalars().all():
+                is_reporter = str(report.reporter_id) == user_id
+                events.append({
+                    "type": "report",
+                    "action": "filed_report" if is_reporter else "was_reported",
+                    "details": {"reason": report.reason, "status": report.status},
+                    "timestamp": report.created_at.isoformat()
+                })
+        except Exception as e:
+            print(f"[TIMELINE] reports query failed: {e}")
 
-    events.sort(key=lambda x: x["timestamp"], reverse=True)
-    return {"events": events[:limit]}
+        events.sort(key=lambda x: x["timestamp"], reverse=True)
+        return {"events": events[:limit]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"DEBUG timeline: {type(e).__name__}: {e}")
 
 
 @router.get("/users/{user_id}/notes")
@@ -124,30 +137,37 @@ async def get_user_notes(
     current_user: User = Depends(get_current_admin)
 ):
     """Get admin notes for a user"""
+    import traceback
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Некорректный ID")
 
-    result = await db.execute(
-        select(UserNote, User.name).outerjoin(
-            User, UserNote.admin_id == User.id
-        ).where(UserNote.user_id == uid).order_by(desc(UserNote.created_at))
-    )
-    rows = result.all()
+    try:
+        result = await db.execute(
+            select(UserNote, User.name).outerjoin(
+                User, UserNote.author_id == User.id
+            ).where(UserNote.user_id == uid).order_by(desc(UserNote.created_at))
+        )
+        rows = result.all()
 
-    return {
-        "notes": [
-            {
-                "id": str(note.id),
-                "text": note.text,
-                "type": note.type,
-                "admin_name": name or "Система",
-                "created_at": note.created_at.isoformat()
-            }
-            for note, name in rows
-        ]
-    }
+        return {
+            "notes": [
+                {
+                    "id": str(note.id),
+                    "text": note.content,
+                    "type": "internal" if note.is_internal else "general",
+                    "admin_name": name or "Система",
+                    "created_at": note.created_at.isoformat()
+                }
+                for note, name in rows
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"DEBUG notes: {type(e).__name__}: {e}")
 
 
 @router.post("/users/{user_id}/notes")
@@ -165,9 +185,9 @@ async def add_user_note(
 
     note = UserNote(
         user_id=uid,
-        admin_id=current_user.id,
-        text=data.text,
-        type=data.type
+        author_id=current_user.id,
+        content=data.text,
+        is_internal=(data.type == "internal" or data.type == "general")
     )
     db.add(note)
     await db.commit()
@@ -186,58 +206,82 @@ async def gdpr_export_user_data(
     current_user: User = Depends(get_current_admin)
 ):
     """Export all user data for GDPR compliance"""
+    import traceback
     try:
         uid = uuid_module.UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Некорректный ID")
 
-    result = await db.execute(select(User).where(User.id == uid))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    try:
+        result = await db.execute(select(User).where(User.id == uid))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-    result = await db.execute(
-        select(Message).where(Message.sender_id == uid).order_by(Message.created_at)
-    )
-    messages = result.scalars().all()
+        messages = []
+        try:
+            result = await db.execute(
+                select(Message).where(Message.sender_id == uid).order_by(Message.created_at)
+            )
+            messages = result.scalars().all()
+        except Exception as e:
+            print(f"[GDPR] messages query failed: {e}")
 
-    result = await db.execute(
-        select(Match).where(or_(Match.user1_id == uid, Match.user2_id == uid))
-    )
-    matches = result.scalars().all()
+        matches = []
+        try:
+            result = await db.execute(
+                select(Match).where(or_(Match.user1_id == uid, Match.user2_id == uid))
+            )
+            matches = result.scalars().all()
+        except Exception as e:
+            print(f"[GDPR] matches query failed: {e}")
 
-    result = await db.execute(
-        select(RevenueTransaction).where(RevenueTransaction.user_id == uid)
-    )
-    transactions = result.scalars().all()
+        transactions = []
+        try:
+            result = await db.execute(
+                select(RevenueTransaction).where(RevenueTransaction.user_id == uid)
+            )
+            transactions = result.scalars().all()
+        except Exception as e:
+            print(f"[GDPR] transactions query failed: {e}")
 
-    return {
-        "user": {
-            "id": str(user.id),
-            "name": user.name,
-            "email": user.email,
-            "phone": user.phone,
-            "age": user.age,
-            "gender": str(user.gender) if user.gender else None,
-            "bio": user.bio,
-            "city": user.city,
-            "photos": user.photos or [],
-            "created_at": user.created_at.isoformat(),
-        },
-        "messages": [
-            {"id": str(m.id), "content": m.content, "created_at": m.created_at.isoformat()}
-            for m in messages
-        ],
-        "matches": [
-            {"id": str(m.id), "created_at": m.created_at.isoformat()}
-            for m in matches
-        ],
-        "transactions": [
-            {"id": str(t.id), "amount": float(t.amount), "created_at": t.created_at.isoformat()}
-            for t in transactions
-        ],
-        "exported_at": datetime.utcnow().isoformat()
-    }
+        try:
+            photos_list = user.photos or []
+        except Exception:
+            photos_list = []
+
+        return {
+            "user": {
+                "id": str(user.id),
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "age": user.age,
+                "gender": str(user.gender) if user.gender else None,
+                "bio": user.bio,
+                "city": user.city,
+                "photos": photos_list,
+                "created_at": user.created_at.isoformat(),
+            },
+            "messages": [
+                {"id": str(m.id), "content": m.text, "created_at": m.created_at.isoformat()}
+                for m in messages
+            ],
+            "matches": [
+                {"id": str(m.id), "created_at": m.created_at.isoformat()}
+                for m in matches
+            ],
+            "transactions": [
+                {"id": str(t.id), "amount": float(t.amount), "created_at": t.created_at.isoformat()}
+                for t in transactions
+            ],
+            "exported_at": datetime.utcnow().isoformat()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"DEBUG gdpr: {type(e).__name__}: {e}")
 
 
 # ============================================
@@ -251,28 +295,33 @@ async def get_user_payments(
     current_user: User = Depends(get_current_admin)
 ):
     """Get user payment history"""
-    uid = uuid_module.UUID(user_id)
+    import traceback
+    try:
+        uid = uuid_module.UUID(user_id)
 
-    result = await db.execute(
-        select(RevenueTransaction).where(
-            RevenueTransaction.user_id == uid
-        ).order_by(desc(RevenueTransaction.created_at))
-    )
-    txs = result.scalars().all()
+        result = await db.execute(
+            select(RevenueTransaction).where(
+                RevenueTransaction.user_id == uid
+            ).order_by(desc(RevenueTransaction.created_at))
+        )
+        txs = result.scalars().all()
 
-    return {
-        "payments": [
-            {
-                "id": str(t.id),
-                "amount": float(t.amount),
-                "currency": t.currency,
-                "type": t.type,
-                "status": t.status,
-                "created_at": t.created_at.isoformat()
-            }
-            for t in txs
-        ]
-    }
+        return {
+            "payments": [
+                {
+                    "id": str(t.id),
+                    "amount": float(t.amount),
+                    "currency": t.currency,
+                    "type": t.type,
+                    "status": t.status,
+                    "created_at": t.created_at.isoformat()
+                }
+                for t in txs
+            ]
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"DEBUG payments: {type(e).__name__}: {e}")
 
 
 @router.get("/users/{user_id}/chats")
@@ -383,25 +432,28 @@ async def get_user_photos(
     current_user: User = Depends(get_current_admin)
 ):
     """Get user photos"""
-    uid = uuid_module.UUID(user_id)
+    import traceback
+    try:
+        uid = uuid_module.UUID(user_id)
 
-    result = await db.execute(
-        select(UserPhoto).where(UserPhoto.user_id == uid).order_by(UserPhoto.created_at)
-    )
-    photos = result.scalars().all()
+        result = await db.execute(
+            select(UserPhoto).where(UserPhoto.user_id == uid).order_by(UserPhoto.created_at)
+        )
+        photos = result.scalars().all()
 
-    return {
-        "photos": [
-            {
-                "id": str(p.id),
-                "url": p.url,
-                "is_primary": p.is_primary,
-                "is_verified": p.is_verified,
-                "created_at": p.created_at.isoformat()
-            }
-            for p in photos
-        ]
-    }
+        return {
+            "photos": [
+                {
+                    "id": str(p.id),
+                    "url": p.url,
+                    "created_at": p.created_at.isoformat()
+                }
+                for p in photos
+            ]
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"DEBUG photos: {type(e).__name__}: {e}")
 
 
 # ============================================
@@ -591,8 +643,8 @@ async def impersonate_user(
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-    from backend.auth import create_access_token
-    token = create_access_token(data={"sub": str(user.id), "impersonated_by": str(current_user.id)})
+    from backend.core.security import create_access_token
+    token = create_access_token(user_id=user.id)
 
     db.add(AuditLog(
         admin_id=current_user.id,

@@ -74,16 +74,23 @@ async def get_dashboard_metrics(
 
     traffic_history = []
     now = datetime.utcnow()
+    start_24h = now - timedelta(hours=24)
+    
+    result = await db.execute(
+        select(
+            func.date_trunc('hour', User.updated_at).label('hour'),
+            func.count(User.id).label('cnt')
+        ).where(
+            User.updated_at >= start_24h
+        ).group_by(
+            func.date_trunc('hour', User.updated_at)
+        ).order_by('hour')
+    )
+    hour_counts = {row.hour: row.cnt for row in result.all()}
+    
     for i in range(24):
-        start_dt = now - timedelta(hours=i+1)
-        end_dt = now - timedelta(hours=i)
-        res = await db.execute(
-            select(func.count(User.id)).where(
-                and_(User.updated_at >= start_dt, User.updated_at < end_dt)
-            )
-        )
-        count = res.scalar() or 0
-        traffic_history.insert(0, count)
+        hour_start = (now - timedelta(hours=23 - i)).replace(minute=0, second=0, microsecond=0)
+        traffic_history.append(hour_counts.get(hour_start, 0))
     
     return DashboardMetrics(
         total_users=total_users,

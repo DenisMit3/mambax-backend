@@ -68,7 +68,7 @@ async def send_admin_update(event_type: str, data: dict):
 @router.websocket("/ws/admin")
 async def admin_websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for admin real-time updates."""
-    from backend.auth import decode_token
+    from backend.auth import decode_jwt
 
     token = websocket.query_params.get("token")
     if not token:
@@ -76,8 +76,7 @@ async def admin_websocket_endpoint(websocket: WebSocket):
         return
 
     try:
-        payload = decode_token(token)
-        admin_id = payload.get("sub")
+        admin_id = await decode_jwt(token)
         if not admin_id:
             await websocket.close(code=4001, reason="Invalid token")
             return
