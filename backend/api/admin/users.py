@@ -80,12 +80,14 @@ async def get_users_list(
             fallback_conditions = []
             if status and status != 'all':
                 try:
-                    fallback_conditions.append(User.status == UserStatus(status))
+                    valid_status = UserStatus(status)
+                    fallback_conditions.append(User.status == valid_status.value)
                 except ValueError:
                     pass
             if subscription and subscription != 'all':
                 try:
-                    fallback_conditions.append(User.subscription_tier == SubscriptionTier(subscription))
+                    valid_sub = SubscriptionTier(subscription)
+                    fallback_conditions.append(User.subscription_tier == valid_sub.value)
                 except ValueError:
                     pass
             if verified is not None:
@@ -156,7 +158,7 @@ async def get_users_list(
             }
         except Exception as fallback_err:
             logger.error(f"Fallback also failed: {fallback_err}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Main: {str(e)[:200]} | Fallback: {str(fallback_err)[:200]}")
+            raise HTTPException(status_code=500, detail="Ошибка загрузки пользователей")
 
 
 async def _get_users_list_impl(
@@ -221,12 +223,14 @@ async def _get_users_list_impl(
     conditions = []
     if status and status != 'all':
         try:
-            conditions.append(User.status == UserStatus(status))
+            valid_status = UserStatus(status)
+            conditions.append(User.status == valid_status.value)
         except ValueError:
             pass  # Неизвестный статус — игнорируем фильтр
     if subscription and subscription != 'all':
         try:
-            conditions.append(User.subscription_tier == SubscriptionTier(subscription))
+            valid_sub = SubscriptionTier(subscription)
+            conditions.append(User.subscription_tier == valid_sub.value)
         except ValueError:
             pass
     if verified is not None:
