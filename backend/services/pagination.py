@@ -171,13 +171,15 @@ async def get_profiles_paginated(
     if has_more:
         profiles = profiles[:limit]  # Убираем лишний элемент
     
-    # Import chat manager to check online status
-    from backend.services.chat import manager
+    # Batch check online status via Redis MGET (вместо N отдельных запросов)
+    from backend.services.chat.state import state_manager
+    profile_ids = [str(p.id) for p in profiles]
+    online_map = await state_manager.is_users_online_batch(profile_ids)
     
     # Формируем ответ
     items = []
     for profile in profiles:
-        is_online = await manager.is_online_async(str(profile.id))
+        is_online = online_map.get(str(profile.id), False)
         items.append({
             "id": str(profile.id),
             "name": profile.name,
@@ -256,8 +258,10 @@ async def get_matches_paginated(
         for p in profiles_result.scalars().all():
             profiles_map[p.id] = p
     
-    # Import chat manager to check online status
-    from backend.services.chat import manager
+    # Batch check online status via Redis MGET
+    from backend.services.chat.state import state_manager
+    partner_id_list = [str(pid) for pid in partner_ids]
+    online_map = await state_manager.is_users_online_batch(partner_id_list)
     
     items = []
     for match in matches:
@@ -265,7 +269,7 @@ async def get_matches_paginated(
         profile = profiles_map.get(other_id)
         
         if profile:
-            is_online = await manager.is_online_async(str(profile.id))
+            is_online = online_map.get(str(profile.id), False)
             items.append({
                 "id": str(match.id),
                 "created_at": str(match.created_at),

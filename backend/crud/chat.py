@@ -1,5 +1,5 @@
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.chat import Message
@@ -19,7 +19,7 @@ async def create_message(
         audio_url=msg_data.get("audio_url"),
         photo_url=msg_data.get("photo_url"),
         duration=float(msg_data.get("duration")) if msg_data.get("duration") is not None else None,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
     db.add(msg)
     await db.commit()

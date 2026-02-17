@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { MatchHub } from '@/components/activity/MatchHub';
 import { authService } from '@/services/api';
 import { FALLBACK_AVATAR } from '@/lib/constants';
@@ -38,23 +39,13 @@ export default function ActivityPage() {
         timestamp?: Date;
     }
 
-    const [matches, setMatches] = useState<UIMatch[]>([]);
-    const [chats, setChats] = useState<UIChat[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
-    const [isPremium, setIsPremium] = useState(false);
+    const [chats] = useState<UIChat[]>([]);
 
-    useEffect(() => {
-        if (isAuthed) loadData();
-    }, [isAuthed]);
-
-    const loadData = async () => {
-        try {
-            setError(false);
+    const { data: matchesRaw = [], isLoading: matchesLoading, error: matchesError, refetch: loadData } = useQuery({
+        queryKey: ['activity', 'matches'],
+        queryFn: async () => {
             const matchesData = await authService.getMatches();
-
-            // Map backend data to UI format
-            const uiMatches = (matchesData as BackendMatch[]).map((m: BackendMatch) => ({
+            return (matchesData as BackendMatch[]).map((m: BackendMatch) => ({
                 id: m.id,
                 user: {
                     id: m.user.id,
@@ -63,33 +54,24 @@ export default function ActivityPage() {
                     age: m.user.age
                 },
                 matchedAt: new Date(m.created_at),
-                isNew: (Date.now() - new Date(m.created_at).getTime()) < 1000 * 60 * 60 * 24 // New if < 24h
+                isNew: (Date.now() - new Date(m.created_at).getTime()) < 1000 * 60 * 60 * 24
             }));
+        },
+        staleTime: 30000,
+        enabled: isAuthed,
+    });
+    const matches = matchesRaw as UIMatch[];
+    const error = !!matchesError;
+    const loading = matchesLoading;
 
-            setMatches(uiMatches);
-
-            // For chats, we'd normally fetch last messages. 
-            // For now, let's treat matches with messages as chats.
-            // Since we don't have last_message in /matches, we'll show empty placeholder chats or fetch history
-            // In a real production app, the backend should return this in one call.
-            setChats([]);
-
-        } catch (error) {
-            console.error('Failed to load activity data', error);
-            setError(true);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Загрузка статуса подписки
-    useEffect(() => {
-        if (isAuthed) {
-            authService.getMe().then(me => {
-                setIsPremium(me.subscription_tier !== 'free');
-            }).catch((e) => console.warn('Silent catch:', e));
-        }
-    }, [isAuthed]);
+    // Загрузка статуса подписки через единый cache key
+    const { data: meData } = useQuery({
+        queryKey: ['user', 'me'],
+        queryFn: () => authService.getMe(),
+        staleTime: 5 * 60 * 1000,
+        enabled: isAuthed,
+    });
+    const isPremium = meData?.subscription_tier !== 'free';
 
     if (isChecking || loading) {
         return (

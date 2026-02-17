@@ -5,6 +5,7 @@ import { Search, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect, useDeferredValue } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { authService, Match, MatchMessage } from '@/services/api';
 import { wsService } from '@/services/websocket';
 import { motion } from 'framer-motion';
@@ -17,43 +18,25 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { ErrorState } from '@/components/ui/ErrorState';
 
 export default function ChatListPage() {
-    const [matches, setMatches] = useState<Match[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const soundService = useSoundService();
     const haptic = useHaptic();
     const prefersReducedMotion = useReducedMotion();
     const { isAuthed, isChecking } = useRequireAuth();
+    const queryClient = useQueryClient();
     // FIX: Use deferred value to prevent UI blocking during search
     const deferredSearchQuery = useDeferredValue(searchQuery);
 
-    const fetchMatches = async () => {
-        try {
-            setError(false);
+    const { data: matches = [], isLoading: loading, error: matchesError, refetch: fetchMatches } = useQuery({
+        queryKey: ['matches'],
+        queryFn: async () => {
             const data = await authService.getMatches();
-            if (data && Array.isArray(data)) {
-                setMatches(data);
-            } else {
-                setMatches([]);
-            }
-        } catch (err) {
-            console.error('Matches error', err);
-            setError(true);
-            setMatches([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (!isAuthed) return;
-        let cancelled = false;
-        fetchMatches().then(() => {
-            if (cancelled) return;
-        });
-        return () => { cancelled = true; };
-    }, [isAuthed]);
+            return (data && Array.isArray(data)) ? data : [];
+        },
+        staleTime: 30000,
+        enabled: isAuthed,
+    });
+    const error = !!matchesError;
 
     // Обновление last_message в реальном времени через WebSocket
     useEffect(() => {
@@ -73,21 +56,24 @@ export default function ChatListPage() {
                 else previewText = 'Новое сообщение';
             }
 
-            setMatches(prev => prev.map(m => {
-                if (m.id === matchId) {
-                    return {
-                        ...m,
-                        last_message: {
-                            id: (data.id || data.message_id) as string,
-                            text: previewText!,
-                            type: msgType,
-                            sender_id: senderId,
-                            created_at: createdAt || new Date().toISOString(),
-                        }
-                    };
-                }
-                return m;
-            }));
+            queryClient.setQueryData(['matches'], (prev: Match[] | undefined) => {
+                if (!prev) return prev;
+                return prev.map(m => {
+                    if (m.id === matchId) {
+                        return {
+                            ...m,
+                            last_message: {
+                                id: (data.id || data.message_id) as string,
+                                text: previewText!,
+                                type: msgType,
+                                sender_id: senderId,
+                                created_at: createdAt || new Date().toISOString(),
+                            }
+                        };
+                    }
+                    return m;
+                });
+            });
         };
 
         wsService.on('text', handleIncomingMessage);
@@ -226,7 +212,9 @@ export default function ChatListPage() {
                                                 </div>
                                             )}
                                             {/* Online Dot */}
-                                            <div className="absolute bottom-0.5 right-0.5 w-[10px] h-[10px] bg-green-500 rounded-full border-2 border-slate-950" />
+                                            {m.user.is_online && (
+                                                <div className="absolute bottom-0.5 right-0.5 w-[10px] h-[10px] bg-green-500 rounded-full border-2 border-slate-950" />
+                                            )}
                                         </div>
                                         <span className="text-[10px] font-bold text-slate-400 truncate w-full text-center group-hover:text-white transition-colors">
                                             {m.user.name}
@@ -275,7 +263,10 @@ export default function ChatListPage() {
                                             sizes="52px"
                                             className="rounded-full object-cover"
                                         />
-                                        {/* Online indicator on list item too? Optional */}
+                                        {/* Online indicator */}
+                                        {m.user.is_online && (
+                                            <div className="absolute bottom-0 right-0 w-[10px] h-[10px] bg-green-500 rounded-full border-2 border-slate-950" />
+                                        )}
                                     </div>
 
                                     <div className="flex-1 min-w-0 border-b border-white/5 pb-3 group-hover:border-transparent transition-colors">

@@ -120,7 +120,7 @@ export function HomeClient() {
 
     // 0.2 Check Profile Status (Onboarding Guard)
     const { data: me, error: meError } = useQuery({
-        queryKey: ['me'],
+        queryKey: ['user', 'me'],
         queryFn: authService.getMe,
         retry: false,
         staleTime: 1000 * 60 * 5,

@@ -281,6 +281,7 @@ async def _handle_message(websocket: WebSocket, sender_id: str, data: dict):
             await increment_unread(recipient_id, match_id)
             
             # Create in-app notification + push
+            sender_name = "Кто-то"
             try:
                 from backend.services.notify import notify_new_message
                 from backend.models.user import User as UserModel

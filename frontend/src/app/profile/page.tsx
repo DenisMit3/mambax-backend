@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Star, Plus, Settings, Edit3, Shield, Zap, ChevronRight, LogOut, Rocket, Eye, Gift as GiftIcon, Hash, MessageCircle, Users, Bell, HelpCircle, CheckCircle2, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
@@ -31,9 +32,6 @@ export default function ProfilePage() {
         [key: string]: unknown;
     }
 
-    const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
     const [showTopUp, setShowTopUp] = useState(false);
     const [showBoost, setShowBoost] = useState(false);
     const [showDailyRewards, setShowDailyRewards] = useState(false);
@@ -41,29 +39,25 @@ export default function ProfilePage() {
     const [verificationStatus, setVerificationStatus] = useState<VerificationStatus | null>(null);
     const router = useRouter();
     const { isAuthed, isChecking } = useRequireAuth();
+    const queryClient = useQueryClient();
 
-    useEffect(() => {
-        if (isAuthed) loadProfile();
-    }, [isAuthed]);
+    const { data: profile = null, isLoading: loading, error: profileError, refetch: refetchProfile } = useQuery<UserProfile | null>({
+        queryKey: ['user', 'me'],
+        queryFn: async () => {
+            const data = await authService.getMe();
+            return data as UserProfile;
+        },
+        staleTime: 5 * 60 * 1000,
+        enabled: isAuthed,
+    });
+    const error = !!profileError;
+    const loadProfile = useCallback(() => { refetchProfile(); }, [refetchProfile]);
 
     useEffect(() => {
         if (isAuthed) {
             verificationApi.getStatus().then(setVerificationStatus).catch(() => {});
         }
     }, [isAuthed]);
-
-    const loadProfile = async () => {
-        setError(false);
-        try {
-            const data = await authService.getMe();
-            setProfile(data);
-        } catch (error: unknown) {
-            console.error('Failed to load profile:', error);
-            setError(true);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     if (isChecking || loading) {
         return (

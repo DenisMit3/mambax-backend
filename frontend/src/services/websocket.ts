@@ -12,6 +12,7 @@ const MAX_PENDING_MESSAGES = 100;
 // FIX (STABILITY): Exponential backoff for reconnection
 const INITIAL_RECONNECT_DELAY = 3000;
 const MAX_RECONNECT_DELAY = 60000;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 class WebSocketService {
     private socket: WebSocket | null = null;
@@ -22,6 +23,7 @@ class WebSocketService {
     private url: string;
     private pendingMessages: WebSocketMessage[] = [];
     private reconnectDelay: number = INITIAL_RECONNECT_DELAY; // FIX: Track backoff delay
+    private reconnectAttempts = 0;
 
     constructor() {
         this.url = getWsUrl();
@@ -39,6 +41,8 @@ class WebSocketService {
             this.socket = new WebSocket(this.url);
 
             this.socket.onopen = () => {
+                this.reconnectAttempts = 0;
+                this.reconnectDelay = INITIAL_RECONNECT_DELAY;
                 // Send auth message immediately after connection
                 this.socket?.send(JSON.stringify({ type: "auth", token: this.token }));
             };
@@ -73,6 +77,12 @@ class WebSocketService {
                 this.isConnecting = false;
 
                 // FIX (STABILITY): Exponential backoff with jitter
+                if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                    console.warn('[WS] Max reconnect attempts reached, stopping');
+                    return;
+                }
+                this.reconnectAttempts++;
+
                 const jitter = Math.random() * 1000; // 0-1s random jitter
                 const delay = Math.min(this.reconnectDelay + jitter, MAX_RECONNECT_DELAY);
 

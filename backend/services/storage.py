@@ -76,10 +76,12 @@ class StorageService:
         file: UploadFile,
         db: AsyncSession,
         category: str = "uploads",
+        content_bytes: bytes = None,
     ) -> str:
         """
         Process and save photo to PostgreSQL.
         Returns URL path: /api/photos/{blob_id}
+        Если content_bytes передан — пропускаем повторное чтение файла.
         """
         from backend.models.user import PhotoBlob
 
@@ -90,8 +92,8 @@ class StorageService:
                 detail=f"Invalid file type '{file.content_type}'. Allowed: {', '.join(ALLOWED_IMAGE_TYPES)}"
             )
 
-        # 2. Read and validate size
-        content = await file.read()
+        # 2. Read and validate size (используем переданные байты или читаем из файла)
+        content = content_bytes if content_bytes is not None else await file.read()
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=413,
@@ -162,8 +164,8 @@ class StorageService:
 
     # --- Convenience methods matching old API ---
 
-    async def save_user_photo(self, file: UploadFile, db: AsyncSession) -> str:
-        return await self.save_photo(file, db, category="uploads")
+    async def save_user_photo(self, file: UploadFile, db: AsyncSession, content_bytes: bytes = None) -> str:
+        return await self.save_photo(file, db, category="uploads", content_bytes=content_bytes)
 
     async def save_verification_photo(self, file: UploadFile, db: AsyncSession) -> str:
         return await self.save_photo(file, db, category="verifications")

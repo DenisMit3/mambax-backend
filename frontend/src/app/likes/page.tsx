@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Heart, Zap, Loader2, X } from 'lucide-react';
@@ -24,65 +25,60 @@ interface LikeUser {
 
 export default function LikesPage() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const { isAuthed, isChecking } = useRequireAuth();
     const [isPremium, setIsPremium] = useState(false);
     const [showTopUp, setShowTopUp] = useState(false);
-    const [likes, setLikes] = useState<LikeUser[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
-    const [currentBalance, setCurrentBalance] = useState(0);
     const [selectedUser, setSelectedUser] = useState<LikeUser | null>(null);
     const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
     const prefersReducedMotion = useReducedMotion();
     const haptic = useHaptic();
 
+    interface LikeItem {
+        id: string;
+        user: { id: string; name?: string; age?: number; photos?: string[] };
+        is_super?: boolean;
+    }
+
+    const { data: likesData, isLoading: likesLoading, error: likesError } = useQuery({
+        queryKey: ['likes', 'received'],
+        queryFn: async () => {
+            const likesRes = await authService.getLikesReceived();
+            return (likesRes.likes || []).map((u: LikeItem) => ({
+                id: u.user.id,
+                name: u.user.name || 'Анон',
+                age: u.user.age,
+                photos: u.user.photos || [],
+                isSuper: u.is_super || false
+            }));
+        },
+        staleTime: 30000,
+        enabled: isAuthed,
+    });
+    const [likes, setLikes] = useState<LikeUser[]>([]);
+    const loading = likesLoading;
+    const error = !!likesError;
+
+    // Sync query data to local state (needed for optimistic updates in handleLike/handleDislike)
     useEffect(() => {
-        if (!isAuthed) return;
-        let cancelled = false;
-        const fetchData = async () => {
-            try {
-                const [likesRes, meRes] = await Promise.all([
-                    authService.getLikesReceived(),
-                    authService.getMe()
-                ]);
+        if (likesData) setLikes(likesData as LikeUser[]);
+    }, [likesData]);
 
-                if (cancelled) return;
-
-                interface LikeItem {
-                    id: string;
-                    user: { id: string; name?: string; age?: number; photos?: string[] };
-                    is_super?: boolean;
-                }
-
-                const likesData = (likesRes.likes || []).map((u: LikeItem) => ({
-                    id: u.user.id,
-                    name: u.user.name || 'Анон',
-                    age: u.user.age,
-                    photos: u.user.photos || [],
-                    isSuper: u.is_super || false
-                }));
-                setLikes(likesData);
-                setCurrentBalance(meRes.stars_balance || 0);
-            } catch (e: unknown) {
-                if (cancelled) return;
-                setError(true);
-                console.error('Failed to load likes data:', e);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-        fetchData();
-        return () => { cancelled = true; };
-    }, [isAuthed]);
+    // Use unified cache key for getMe
+    const { data: meData } = useQuery({
+        queryKey: ['user', 'me'],
+        queryFn: () => authService.getMe(),
+        staleTime: 5 * 60 * 1000,
+        enabled: isAuthed,
+    });
+    const currentBalance = meData?.stars_balance || 0;
 
     const handleUnlock = async () => {
-        // FIX: Use cached balance instead of duplicate getMe() call
         if (currentBalance >= 100) {
             try {
-                // Auto spend 100 stars
                 await authService.spendStarsDev(100);
                 setIsPremium(true);
-                setCurrentBalance(prev => prev - 100);
+                queryClient.invalidateQueries({ queryKey: ['user', 'me'] });
             } catch (e) {
                 console.error(e);
                 setToast({message: "Ошибка списания звёзд", type: 'error'});

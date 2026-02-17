@@ -3,7 +3,7 @@ Chat - Online status & unread counters
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from backend.services.chat.state import state_manager
@@ -50,11 +50,20 @@ async def get_online_status(user_id: str) -> dict:
     return {"user_id": user_id, "is_online": is_online, "last_seen": last_seen}
 
 
-def format_last_seen(last_seen: datetime) -> str:
+def format_last_seen(last_seen) -> str:
     """Format last seen time for display"""
     if not last_seen:
         return "Unknown"
-    now = datetime.utcnow()
+    # Handle string input from Redis
+    if isinstance(last_seen, str):
+        try:
+            last_seen = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return "Unknown"
+    now = datetime.now(timezone.utc)
+    # Make last_seen timezone-aware if naive
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
     delta = now - last_seen
     total_secs = int(delta.total_seconds())
     if total_secs < 60:

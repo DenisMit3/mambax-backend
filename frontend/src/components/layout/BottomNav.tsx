@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Search, Heart, Layers, MessageCircle, User } from 'lucide-react';
-import { motion } from 'framer-motion';
+
 import { useHaptic } from '@/hooks/useHaptic';
 
 export function BottomNav() {
@@ -43,23 +43,11 @@ export function BottomNav() {
                         >
                             {/* Active Liquid Glow Background */}
                             {isActive && (
-                                <motion.div
-                                    layoutId="nav-glow"
-                                    className="absolute inset-1 bg-gradient-to-tr from-[#ff4b91]/20 to-[#ff9e4a]/20 rounded-2xl -z-10 blur-sm"
-                                    transition={{ type: "spring", stiffness: 350, damping: 25 }}
-                                />
+                                <div className="absolute inset-1 bg-gradient-to-tr from-[#ff4b91]/20 to-[#ff9e4a]/20 rounded-2xl -z-10 blur-sm animate-pulse" />
                             )}
 
                             {/* Icon Animation */}
-                            <motion.div
-                                whileTap={{ scale: 0.8 }}
-                                animate={{
-                                    y: isActive ? -4 : 0,
-                                    scale: isActive ? 1.2 : 1
-                                }}
-                                transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                                className="relative"
-                            >
+                            <div className={`relative transition-transform duration-300 ${isActive ? '-translate-y-1 scale-110' : ''} active:scale-90`}>
                                 <Icon
                                     size={24}
                                     strokeWidth={isActive ? 2.5 : 2}
@@ -68,15 +56,11 @@ export function BottomNav() {
                                         : 'text-slate-500 hover:text-slate-300'
                                         }`}
                                 />
-                            </motion.div>
+                            </div>
 
                             {/* Glowing Active Dot */}
                             {isActive && (
-                                <motion.div
-                                    layoutId="nav-dot"
-                                    className="absolute bottom-2 w-1.5 h-1.5 bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] rounded-full shadow-[0_0_10px_#ff4b91]"
-                                    transition={{ type: "spring", stiffness: 350, damping: 25 }}
-                                />
+                                <div className="absolute bottom-2 w-1.5 h-1.5 bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] rounded-full shadow-[0_0_10px_#ff4b91]" />
                             )}
                         </Link>
                     );

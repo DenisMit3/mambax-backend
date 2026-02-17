@@ -30,6 +30,10 @@ class MarkReadRequest(BaseModel):
     message_ids: Optional[List[str]] = None
 
 
+class MarkReadBatchRequest(BaseModel):
+    match_id: str
+
+
 class ReactionRequest(BaseModel):
     message_id: str
     emoji: Optional[str] = None  # None = remove reaction

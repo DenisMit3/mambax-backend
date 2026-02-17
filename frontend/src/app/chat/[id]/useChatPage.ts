@@ -7,7 +7,7 @@ import { useTelegram } from '@/lib/telegram';
 import { authService } from '@/services/api';
 import { useParams } from 'next/navigation';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
-import { getWsUrl } from '@/utils/env';
+import { wsService } from '@/services/websocket';
 import {
     UIGift,
     BackendMessage,
@@ -76,15 +76,10 @@ export function useChatPage() {
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
     // Refs
-    const ws = useRef<WebSocket | null>(null);
-    const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
-    const wsReconnectAttempts = useRef(0);
-    const MAX_WS_RECONNECT = 2;
     const currentUserIdRef = useRef<string | null>(null);
     const mountedRef = useRef(true);
     const userRef = useRef(user);
     useEffect(() => { userRef.current = user; }, [user]);
-    const wsConnected = useRef(false);
     const pollInterval = useRef<NodeJS.Timeout | null>(null);
     const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
     const lastMessageTime = useRef<string | null>(null);
@@ -97,18 +92,31 @@ export function useChatPage() {
     useEffect(() => { ephemeralSecondsRef.current = ephemeralSeconds; }, [ephemeralSeconds]);
 
     // --- Init ---
+    const wsHandlerRef = useRef<(data: WebSocketMessageData) => void>(() => {});
+    wsHandlerRef.current = (data: WebSocketMessageData) => handleWebSocketMessage(data);
+
     useEffect(() => {
+        mountedRef.current = true;
         if (id && isAuthed) {
             loadMessages();
-            connectWebSocket();
+
+            const handler = (data: Record<string, unknown>) => wsHandlerRef.current(data as WebSocketMessageData);
+
+            // Subscribe to global wsService events
+            const events = ['text', 'message', 'photo', 'voice', 'super_like', 'typing', 'online_status', 'read', 'offer'];
+            events.forEach(e => wsService.on(e, handler));
             startHeartbeat();
+            startPolling();
+
+            return () => {
+                mountedRef.current = false;
+                if (pollInterval.current) clearTimeout(pollInterval.current);
+                if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
+                events.forEach(e => wsService.off(e, handler));
+            };
         }
         return () => {
             mountedRef.current = false;
-            if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-            if (pollInterval.current) clearTimeout(pollInterval.current);
-            if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
-            if (ws.current) ws.current.close();
         };
     }, [id, isAuthed]);
 
@@ -160,7 +168,7 @@ export function useChatPage() {
     const schedulePoll = () => {
         if (pollInterval.current) return;
         const doPoll = async () => {
-            if (!mountedRef.current || wsConnected.current) {
+            if (!mountedRef.current) {
                 pollInterval.current = null;
                 return;
             }
@@ -242,7 +250,7 @@ export function useChatPage() {
                 // Polling error — silent
             }
             // Schedule next poll
-            if (mountedRef.current && !wsConnected.current) {
+            if (mountedRef.current) {
                 pollInterval.current = setTimeout(doPoll, pollIntervalMs.current);
             } else {
                 pollInterval.current = null;
@@ -255,13 +263,6 @@ export function useChatPage() {
         pollIntervalMs.current = 5000;
         lastNewMessageAt.current = Date.now();
         schedulePoll();
-    };
-
-    const stopPolling = () => {
-        if (pollInterval.current) {
-            clearTimeout(pollInterval.current);
-            pollInterval.current = null;
-        }
     };
 
     const loadMessages = async () => {
@@ -286,63 +287,7 @@ export function useChatPage() {
         }
     };
 
-    // --- WebSocket ---
-    const connectWebSocket = () => {
-        const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-        if (!token) {
-            startPolling();
-            return;
-        }
-
-        const wsUrl = getWsUrl();
-        if (!wsUrl) {
-            startPolling();
-            return;
-        }
-
-        try {
-            const socket = new WebSocket(wsUrl);
-
-            socket.onopen = () => {
-                wsConnected.current = true;
-                wsReconnectAttempts.current = 0; // Reset on successful connect
-                stopPolling();
-                socket.send(JSON.stringify({ type: 'auth', token }));
-            };
-
-            socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    handleWebSocketMessage(data);
-                } catch (e) {
-                    console.error('WS Parse Error', e);
-                }
-            };
-
-            socket.onclose = () => {
-                ws.current = null;
-                wsConnected.current = false;
-                if (mountedRef.current) {
-                    startPolling();
-                    // Exponential backoff with max retries — stop hammering if WS unavailable (e.g. Vercel serverless)
-                    if (wsReconnectAttempts.current < MAX_WS_RECONNECT) {
-                        const delay = Math.min(5000 * Math.pow(2, wsReconnectAttempts.current), 60000);
-                        reconnectTimeout.current = setTimeout(connectWebSocket, delay);
-                        wsReconnectAttempts.current++;
-                    }
-                }
-            };
-
-            socket.onerror = () => {
-                socket.close();
-            };
-
-            ws.current = socket;
-        } catch {
-            startPolling();
-        }
-    };
-
+    // --- WebSocket message handler (uses global wsService) ---
     const handleWebSocketMessage = (data: WebSocketMessageData) => {
         if (data.type === 'message' || data.type === 'text' || data.type === 'photo' || data.type === 'voice' || data.type === 'super_like') {
             if (data.match_id !== id) return;
@@ -355,17 +300,22 @@ export function useChatPage() {
                     return prev.map(m => m.id === msgId ? { ...m, status: 'delivered' } : m);
                 }
 
+                // BUG-16: If this is our own message confirmed by server, update pending -> sent
                 if (data.sender_id === currentUserIdRef.current) {
                     const pendingMatch = prev.find(m =>
-                        m.status === 'sending' &&
+                        (m.status === 'sending' || m.status === 'sent') &&
                         m.text === (data.text || data.content) &&
                         m.isOwn
                     );
                     if (pendingMatch) {
                         return prev.map(m => m.id === pendingMatch.id ? {
-                            ...m, id: data.id || data.message_id, status: 'sent',
+                            ...m, id: data.id || data.message_id, status: 'delivered',
                             timestamp: new Date(data.timestamp || Date.now())
                         } : m);
+                    }
+                    // Own message echo from server - skip to prevent duplicate
+                    if (prev.some(m => m.isOwn && m.text === (data.text || data.content) && (m.status === 'sent' || m.status === 'delivered'))) {
+                        return prev;
                     }
                 }
 
@@ -382,17 +332,12 @@ export function useChatPage() {
 
                 // Auto-send read receipt for incoming messages
                 if (!newMsg.isOwn) {
-                    if (ws.current?.readyState === WebSocket.OPEN) {
-                        ws.current.send(JSON.stringify({
-                            type: 'read',
-                            match_id: id,
-                            message_ids: [msgId],
-                            sender_id: data.sender_id,
-                        }));
-                    } else {
-                        // REST fallback for read receipt
-                        authService.markReadBatch(id).catch(() => {});
-                    }
+                    wsService.send({
+                        type: 'read',
+                        match_id: id,
+                        message_ids: [msgId],
+                        sender_id: data.sender_id,
+                    });
                 }
 
                 return [...prev, newMsg];
@@ -431,9 +376,38 @@ export function useChatPage() {
         }
     };
 
+    // --- Typing indicator ---
+    const typingDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+    const sendTypingEvent = (isTyping: boolean) => {
+        if (!user) return;
+        wsService.send({
+            type: 'typing',
+            match_id: id,
+            is_typing: isTyping,
+            recipient_id: user.id,
+        });
+    };
+
+    const handleTypingStart = () => {
+        sendTypingEvent(true);
+        if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+        typingDebounceRef.current = setTimeout(() => {
+            sendTypingEvent(false);
+            typingDebounceRef.current = null;
+        }, 2500);
+    };
+
     // --- Send handlers ---
     const handleSendMessage = async (text: string) => {
         if (!text.trim()) return;
+
+        // Stop typing indicator on send
+        if (typingDebounceRef.current) {
+            clearTimeout(typingDebounceRef.current);
+            typingDebounceRef.current = null;
+        }
+        sendTypingEvent(false);
 
         const tempId = `temp-${Date.now()}`;
         const optimisticMsg: Message = {
@@ -443,53 +417,26 @@ export function useChatPage() {
         setMessages(prev => [...prev, optimisticMsg]);
         hapticFeedback.impactOccurred('light');
 
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-            ws.current.send(JSON.stringify({
-                type: 'message', match_id: id, content: text,
-                is_ephemeral: ephemeralEnabledRef.current,
-                ephemeral_seconds: ephemeralEnabledRef.current ? ephemeralSecondsRef.current : undefined
-            }));
-        } else {
-            try {
-                const sentMsg = await authService.sendMessage(id, text) as { id: string; created_at?: string; timestamp?: string };
-                setMessages(prev => prev.map(m => m.id === tempId ? {
-                    ...m, id: sentMsg.id, status: 'sent',
-                    timestamp: new Date(sentMsg.created_at || sentMsg.timestamp || Date.now())
-                } : m));
-            } catch (error) {
-                console.error('Failed to send', error);
-                setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
-            }
+        // Send via global wsService (queues if not connected, REST fallback)
+        wsService.send({
+            type: 'message', match_id: id, content: text,
+            is_ephemeral: ephemeralEnabledRef.current,
+            ephemeral_seconds: ephemeralEnabledRef.current ? ephemeralSecondsRef.current : undefined
+        });
+
+        // Also try REST as fallback to confirm delivery
+        try {
+            const sentMsg = await authService.sendMessage(id, text) as { id: string; created_at?: string; timestamp?: string };
+            setMessages(prev => prev.map(m => m.id === tempId ? {
+                ...m, id: sentMsg.id, status: 'sent',
+                timestamp: new Date(sentMsg.created_at || sentMsg.timestamp || Date.now())
+            } : m));
+        } catch {
+            // WS should handle it, mark as sent optimistically
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
         }
 
-        // DEV ONLY: Simulated reply
-        if (process.env.NODE_ENV === 'development') {
-            setTimeout(() => {
-                setMessages(prev => prev.map(m =>
-                    (m.isOwn && (m.status === 'sent' || m.status === 'delivered'))
-                        ? { ...m, status: 'read' } : m
-                ));
-                setUser(prev => prev ? { ...prev, isTyping: true } : null);
-
-                setTimeout(() => {
-                    setUser(prev => prev ? { ...prev, isTyping: false } : null);
-                    const replies = [
-                        "Интересно! Расскажи подробнее 🤔",
-                        "Ха-ха, это точно! 😂",
-                        "Ты супер! 🔥",
-                        "Я тут, слушаю внимательно...",
-                        "Круто звучит!"
-                    ];
-                    const randomReply = replies[Math.floor(Math.random() * replies.length)];
-                    const aiMsg: Message = {
-                        id: `ai-${Date.now()}`, text: randomReply,
-                        timestamp: new Date(), isOwn: false, status: 'read', type: 'text'
-                    };
-                    setMessages(prev => [...prev, aiMsg]);
-                    hapticFeedback.notificationOccurred('success');
-                }, 1500 + Math.random() * 1000);
-            }, 1000);
-        }
+        // DEV auto-responder removed (BUG-15) — backend handles dev replies
     };
 
     const handleReaction = (msgId: string, reaction: string) => {
@@ -567,12 +514,12 @@ export function useChatPage() {
         ephemeralSeconds, setEphemeralSeconds,
         toast, setToast,
         // Refs
-        ws,
         currentUserIdRef,
         // Handlers
         handleSendMessage,
         handleReaction,
         handleSendImage,
         handleSendGift,
+        handleTypingStart,
     };
 }

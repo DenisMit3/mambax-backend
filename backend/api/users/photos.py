@@ -183,11 +183,8 @@ async def upload_photo(
             detail="Invalid file content. File signature does not match allowed image types."
         )
     
-    # Reset file position for storage service
-    await file.seek(0)
-
-    # Save file via StorageService
-    file_url = await storage_service.save_user_photo(file, db)
+    # PERF: Передаём уже прочитанные байты, избегая повторного чтения файла
+    file_url = await storage_service.save_user_photo(file, db, content_bytes=contents)
     
     # Moderation Check
     try:

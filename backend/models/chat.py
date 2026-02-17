@@ -1,10 +1,10 @@
 # Chat ORM Model - SQLAlchemy модель сообщений чата
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, Uuid, Boolean, Index, Float
+from sqlalchemy import String, Text, DateTime, ForeignKey, Uuid, Boolean, Index, Float, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.db.base import Base
@@ -67,13 +67,19 @@ class Message(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
     is_read: Mapped[bool] = mapped_column(
         Boolean,
         default=False,
         nullable=False,
+    )
+    reactions: Mapped[Optional[dict]] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="Reactions: {user_id: emoji, ...}",
     )
     
     def __repr__(self) -> str:

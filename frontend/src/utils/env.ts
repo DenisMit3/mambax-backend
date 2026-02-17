@@ -29,5 +29,5 @@ export const getWsUrl = (): string => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
 
-    return `${protocol}//${host}/chat/ws`;
+    return `${protocol}//${host}/api/chat/ws`;
 };

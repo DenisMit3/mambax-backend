@@ -57,12 +57,28 @@ async def mark_as_read(match_id: str, user_id: str, message_ids: List[str] = Non
 
 
 async def add_reaction(message_id: str, user_id: str, emoji: str) -> dict:
-    """Add reaction to a message"""
+    """Add reaction to a message and persist in DB"""
+    async with async_session_maker() as db:
+        from backend.models.chat import Message
+        msg = await db.get(Message, uuid.UUID(message_id))
+        if msg:
+            reactions = dict(msg.reactions or {})
+            reactions[user_id] = emoji
+            msg.reactions = reactions
+            await db.commit()
     return {"type": "reaction", "message_id": message_id, "user_id": user_id, "emoji": emoji, "action": "add"}
 
 
 async def remove_reaction(message_id: str, user_id: str) -> dict:
-    """Remove reaction from a message"""
+    """Remove reaction from a message and persist in DB"""
+    async with async_session_maker() as db:
+        from backend.models.chat import Message
+        msg = await db.get(Message, uuid.UUID(message_id))
+        if msg and msg.reactions:
+            reactions = dict(msg.reactions)
+            reactions.pop(user_id, None)
+            msg.reactions = reactions if reactions else None
+            await db.commit()
     return {"type": "reaction", "message_id": message_id, "user_id": user_id, "action": "remove"}
 
 

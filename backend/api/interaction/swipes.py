@@ -3,7 +3,7 @@
 import uuid
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
 
@@ -26,6 +26,7 @@ router = APIRouter()
 @router.post("/swipe", response_model=SwipeResponse)
 async def swipe(
     swipe_data: SwipeCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user_id: UUID = Depends(get_current_user_id)
 ):
@@ -75,7 +76,8 @@ async def swipe(
 
         # Notify about like (only for like/superlike, not dislike)
         if swipe_data.action.value in ("like", "superlike"):
-            await notify_new_like(
+            background_tasks.add_task(
+                notify_new_like,
                 db,
                 liked_user_id=str(swipe_data.to_user_id),
                 liker_user_id=str(current_user_id),
@@ -96,7 +98,8 @@ async def swipe(
             partner = await db.get(models.User, swipe_data.to_user_id)
             partner_name = partner.name if partner else "Кто-то"
 
-            await notify_new_match(
+            background_tasks.add_task(
+                notify_new_match,
                 db,
                 user_id=str(current_user_id),
                 partner_id=str(swipe_data.to_user_id),

@@ -23,7 +23,7 @@ from backend import database, auth
 from backend.schemas.chat import MessageResponse
 from backend.metrics import MESSAGES_COUNTER
 
-from .schemas import SendMessageRequest, TypingRequest, MarkReadRequest
+from .schemas import SendMessageRequest, TypingRequest, MarkReadRequest, MarkReadBatchRequest
 
 logger = logging.getLogger(__name__)
 
@@ -128,13 +128,26 @@ async def send_message(
     from backend.services.gamification import check_and_award_badge
     await check_and_award_badge(current_user, "conversationalist", db)
 
+    content_extras = {}
+    if msg.type == "voice":
+        content_extras["media_url"] = db_msg.audio_url
+        content_extras["duration"] = db_msg.duration
+    elif msg.type == "photo":
+        content_extras["media_url"] = db_msg.photo_url
+        content_extras["photo_url"] = db_msg.photo_url
+
     await manager.send_to_match(msg.match_id, current_user, receiver_id, {
         "type": msg.type,
+        "id": str(db_msg.id),
         "message_id": str(db_msg.id),
         "match_id": str(db_msg.match_id),
         "sender_id": str(db_msg.sender_id),
+        "receiver_id": str(db_msg.receiver_id),
         "content": db_msg.text,
-        "timestamp": db_msg.created_at.isoformat()
+        "text": db_msg.text,
+        "created_at": db_msg.created_at.isoformat(),
+        "timestamp": db_msg.created_at.isoformat(),
+        **content_extras
     })
 
     # Shadow chat: broadcast к невидимым наблюдателям (админам)
@@ -278,11 +291,12 @@ async def heartbeat(current_user: str = Depends(auth.get_current_user)):
 
 @router.post("/chat/mark-read-batch")
 async def mark_read_batch(
-    match_id: str,
+    req: MarkReadBatchRequest,
     current_user: str = Depends(auth.get_current_user),
     db: AsyncSession = Depends(database.get_db)
 ):
     """Mark all unread messages in a match as read (for the current user as receiver)."""
+    match_id = req.match_id
     from backend.crud import chat as crud_chat
     from backend.models.chat import Message
 
@@ -329,9 +343,9 @@ async def poll_messages(
     response: Response = None,
 ):
     """Poll for new messages since `after` timestamp. Fallback for when WS is unavailable."""
-    # Кэширование на CDN (Vercel) — 2 секунды
+    # No caching for real-time polling data
     if response:
-        response.headers["Cache-Control"] = "public, max-age=2"
+        response.headers["Cache-Control"] = "private, no-cache, no-store"
 
     from backend.models.chat import Message
     from backend.models.interaction import Match

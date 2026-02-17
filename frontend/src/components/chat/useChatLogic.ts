@@ -150,7 +150,7 @@ export function useChatLogic(chat: Chat, currentUserId: string, otherParticipant
         typingDebounceRef.current = setTimeout(() => {
             wsService.send({ type: 'typing', match_id: chat.matchId, is_typing: false, recipient_id: otherParticipant?.id });
             typingDebounceRef.current = null;
-        }, 300);
+        }, 2500);
         if (typingTimeoutTimerRef.current) clearTimeout(typingTimeoutTimerRef.current);
         typingTimeoutTimerRef.current = setTimeout(() => {
             wsService.send({ type: 'typing', match_id: chat.matchId, is_typing: false, recipient_id: otherParticipant?.id });

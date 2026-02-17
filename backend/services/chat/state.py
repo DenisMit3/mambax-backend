@@ -33,6 +33,32 @@ class ChatStateManager:
         """Get ISO timestamp of when user was last online."""
         return await redis_manager.get_value(f"user:last_seen:{user_id}")
 
+    async def is_users_online_batch(self, user_ids: list[str]) -> dict[str, bool]:
+        """Batch check online status for multiple users via MGET."""
+        r = await redis_manager.get_redis()
+        if not r or not user_ids:
+            return {uid: False for uid in user_ids}
+        try:
+            keys = [f"user:online:{uid}" for uid in user_ids]
+            results = await r.mget(*keys)
+            return {uid: (val == "true") for uid, val in zip(user_ids, results)}
+        except Exception as e:
+            logger.error(f"Batch online check error: {e}")
+            return {uid: False for uid in user_ids}
+
+    async def get_last_seen_batch(self, user_ids: list[str]) -> dict[str, str | None]:
+        """Batch get last seen for multiple users via MGET."""
+        r = await redis_manager.get_redis()
+        if not r or not user_ids:
+            return {uid: None for uid in user_ids}
+        try:
+            keys = [f"user:last_seen:{uid}" for uid in user_ids]
+            results = await r.mget(*keys)
+            return {uid: val for uid, val in zip(user_ids, results)}
+        except Exception as e:
+            logger.error(f"Batch last seen error: {e}")
+            return {uid: None for uid in user_ids}
+
     async def set_typing(self, match_id: str, user_id: str, is_typing: bool):
         """Set/remove typing indicator using Redis Set for efficient retrieval"""
         key = f"typing:{match_id}"

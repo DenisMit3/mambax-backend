@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
 
 from backend.crud.interaction import get_user_matches
-from backend.crud.chat import get_messages, get_last_message
+from backend.crud.chat import get_messages
 from backend.models.interaction import Match
 from backend.db.session import get_db
 from backend.api.interaction.deps import get_current_user_id
@@ -26,6 +26,36 @@ async def get_matches(
     """
     matches = await get_user_matches(db, current_user_id)
     
+    # Batch: собираем все partner IDs и делаем один запрос в Redis
+    partner_ids = []
+    for m in matches:
+        pid = str(m.user2.id if m.user1_id == current_user_id else m.user1.id) if (m.user2 if m.user1_id == current_user_id else m.user1) else None
+        if pid:
+            partner_ids.append(pid)
+    
+    from backend.services.chat.state import state_manager
+    online_map = await state_manager.is_users_online_batch(partner_ids)
+    last_seen_map = await state_manager.get_last_seen_batch(partner_ids)
+    
+    # Batch fetch last messages for all matches (N+1 → 2 запроса)
+    from backend.models.chat import Message
+    from sqlalchemy import func
+    match_ids = [m.id for m in matches]
+    if match_ids:
+        last_msg_subq = (
+            select(Message.match_id, func.max(Message.created_at).label("max_ts"))
+            .where(Message.match_id.in_(match_ids))
+            .group_by(Message.match_id)
+            .subquery()
+        )
+        last_msgs_result = await db.execute(
+            select(Message)
+            .join(last_msg_subq, (Message.match_id == last_msg_subq.c.match_id) & (Message.created_at == last_msg_subq.c.max_ts))
+        )
+        last_msgs_map = {msg.match_id: msg for msg in last_msgs_result.scalars().all()}
+    else:
+        last_msgs_map = {}
+    
     response_matches = []
     for m in matches:
         if m.user1_id == current_user_id:
@@ -35,9 +65,8 @@ async def get_matches(
             
         partner_data = None
         if partner:
-            from backend.services.chat.state import state_manager
-            is_online = await state_manager.is_user_online(str(partner.id))
-            redis_last_seen = await state_manager.get_last_seen(str(partner.id))
+            is_online = online_map.get(str(partner.id), False)
+            redis_last_seen = last_seen_map.get(str(partner.id))
             last_seen = redis_last_seen or (partner.last_seen.isoformat() if getattr(partner, 'last_seen', None) else None)
             
             partner_data = {
@@ -54,8 +83,8 @@ async def get_matches(
                  "city": getattr(partner, 'city', None),
             }
 
-        # Получаем последнее сообщение для матча
-        last_msg = await get_last_message(db, m.id)
+        # Получаем последнее сообщение из batch-запроса
+        last_msg = last_msgs_map.get(m.id)
         last_message_data = None
         if last_msg:
             # Формируем превью текста для нетекстовых сообщений

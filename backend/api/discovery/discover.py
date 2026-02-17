@@ -95,7 +95,8 @@ async def discover_profiles(
     )
 
     # AI Personalization: Add compatibility score and common interests
-    user_profile = await crud.get_user_profile(db, current_user)
+    # PERF: Переиспользуем user из первого вызова вместо повторного запроса к БД
+    user_profile = user
     if user_profile:
         current_interests = set(user_profile.interests)
         for profile in res.get("profiles", []):
