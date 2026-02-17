@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import {
     Heart, MessageCircle, Flag, DollarSign,
     Shield, User, Edit, Activity, RefreshCw,
+    Star, ThumbsDown, ArrowRight, ArrowLeft,
+    Eye, EyeOff, Image, Mic, Video,
 } from 'lucide-react';
 import { httpClient } from '@/lib/http-client';
 
@@ -30,9 +32,22 @@ interface DisplayEvent {
 
 const mapEvent = (raw: RawTimelineEvent): DisplayEvent => {
     const actionMap: Record<string, { icon: string; title: string; color: string }> = {
-        sent_message: { icon: 'message', title: 'Отправил сообщение', color: '#3b82f6' },
+        // Messages
+        sent_message: { icon: 'message_out', title: 'Отправил сообщение', color: '#3b82f6' },
+        received_message: { icon: 'message_in', title: 'Получил сообщение', color: '#06b6d4' },
+        // Swipes
+        liked: { icon: 'heart', title: 'Поставил лайк', color: '#ec4899' },
+        superliked: { icon: 'star', title: 'Поставил суперлайк', color: '#eab308' },
+        disliked: { icon: 'thumbsdown', title: 'Пропустил', color: '#64748b' },
+        received_like: { icon: 'heart_in', title: 'Получил лайк', color: '#f472b6' },
+        received_superlike: { icon: 'star_in', title: 'Получил суперлайк', color: '#facc15' },
+        received_dislike: { icon: 'thumbsdown', title: 'Был пропущен', color: '#94a3b8' },
+        // Match
+        new_match: { icon: 'match', title: '💘 Новый матч!', color: '#10b981' },
+        // Reports
         filed_report: { icon: 'flag', title: 'Подал жалобу', color: '#f97316' },
-        was_reported: { icon: 'flag', title: 'Получил жалобу', color: '#ef4444' },
+        was_reported: { icon: 'flag_red', title: 'Получил жалобу', color: '#ef4444' },
+        // Admin actions
         user_verify: { icon: 'shield', title: 'Верифицирован', color: '#10b981' },
         user_unverify: { icon: 'shield', title: 'Верификация снята', color: '#f97316' },
         user_suspend: { icon: 'user', title: 'Приостановлен', color: '#f97316' },
@@ -49,19 +64,37 @@ const mapEvent = (raw: RawTimelineEvent): DisplayEvent => {
 
     const mapped = actionMap[raw.action] || { icon: 'activity', title: raw.action, color: '#64748b' };
     let description = '';
-    if (raw.details) {
-        if (raw.type === 'message') {
-            description = `Чат: ${raw.details.chat_id || '—'}`;
+    const d = raw.details;
+
+    if (d) {
+        if (raw.action === 'sent_message') {
+            const to = d.receiver_name || '—';
+            const preview = d.preview || '';
+            description = `→ ${to}: ${preview}`;
+            if (d.is_read === false) description += ' (не прочитано)';
+        } else if (raw.action === 'received_message') {
+            const from = d.sender_name || '—';
+            const preview = d.preview || '';
+            description = `← ${from}: ${preview}`;
+            if (d.is_read === false) description += ' (не прочитано)';
+        } else if (raw.action === 'liked' || raw.action === 'superliked' || raw.action === 'disliked') {
+            description = `→ ${d.target_name || '—'}`;
+        } else if (raw.action === 'received_like' || raw.action === 'received_superlike' || raw.action === 'received_dislike') {
+            description = `← от ${d.from_name || '—'}`;
+        } else if (raw.action === 'new_match') {
+            description = `с ${d.other_name || '—'}`;
         } else if (raw.type === 'report') {
-            description = `Причина: ${raw.details.reason || '—'}, статус: ${raw.details.status || '—'}`;
-        } else if (raw.details.reason) {
-            description = String(raw.details.reason);
-        } else if (raw.details.amount) {
-            description = `${raw.details.amount} звёзд`;
+            const who = d.other_name || '—';
+            const dir = raw.action === 'filed_report' ? `на ${who}` : `от ${who}`;
+            description = `${dir} • ${d.reason || '—'} (${d.status || '—'})`;
+        } else if (d.reason) {
+            description = String(d.reason);
+        } else if (d.amount) {
+            description = `${d.amount} звёзд`;
         } else {
-            const keys = Object.keys(raw.details);
+            const keys = Object.keys(d);
             if (keys.length > 0) {
-                description = keys.map(k => `${k}: ${raw.details![k]}`).join(', ');
+                description = keys.map(k => `${k}: ${d[k]}`).join(', ');
             }
         }
     }
@@ -74,8 +107,16 @@ const getIcon = (iconName: string, color: string) => {
     const props = { size, style: { color } };
     switch (iconName) {
         case 'heart': return <Heart {...props} />;
+        case 'heart_in': return <Heart {...props} fill={color} />;
+        case 'star': return <Star {...props} />;
+        case 'star_in': return <Star {...props} fill={color} />;
+        case 'thumbsdown': return <ThumbsDown {...props} />;
+        case 'match': return <Heart {...props} fill={color} />;
+        case 'message_out': return <ArrowRight {...props} />;
+        case 'message_in': return <ArrowLeft {...props} />;
         case 'message': return <MessageCircle {...props} />;
         case 'flag': return <Flag {...props} />;
+        case 'flag_red': return <Flag {...props} fill={color} />;
         case 'dollar': return <DollarSign {...props} />;
         case 'shield': return <Shield {...props} />;
         case 'user': return <User {...props} />;
@@ -90,12 +131,14 @@ const formatTime = (ts: string | null) => {
     const now = new Date();
     const diff = now.getTime() - d.getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}м назад`;
+    const timeStr = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    if (mins < 60) return `${mins}м назад, ${timeStr}`;
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}ч назад`;
+    if (hours < 24) return `${hours}ч назад, ${timeStr}`;
     const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}д назад`;
-    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+    const dateStr = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    if (days < 7) return `${days}д назад, ${dateStr} ${timeStr}`;
+    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }) + ` ${timeStr}`;
 };
 
 export default function ActivityTimeline({ userId }: ActivityTimelineProps) {

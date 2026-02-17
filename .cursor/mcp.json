@@ -1,8 +1,11 @@
 {
   "mcpServers": {
-    "cursor-ide-browser": {
+    "playwright": {
       "command": "npx",
-      "args": ["-y", "@anthropic-ai/mcp-server-puppeteer"]
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
     }
   }
 }

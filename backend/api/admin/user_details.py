@@ -14,7 +14,7 @@ import uuid as uuid_module
 
 from backend.database import get_db
 from backend.models.user import User, UserPhoto
-from backend.models.interaction import Report, Match
+from backend.models.interaction import Report, Match, Swipe
 from backend.models.monetization import UserSubscription, RevenueTransaction
 from backend.models.chat import Message
 from backend.models.social import Conversation
@@ -75,33 +75,183 @@ async def get_user_timeline(
         events = []
 
         # Audit logs related to this user
-        result = await db.execute(
-            select(AuditLog).where(
-                AuditLog.target_resource.like(f"%{user_id}%")
-            ).order_by(desc(AuditLog.created_at)).limit(limit)
-        )
-        for log in result.scalars().all():
-            events.append({
-                "type": "admin_action",
-                "action": log.action,
-                "details": log.changes,
-                "timestamp": log.created_at.isoformat()
-            })
-
-        # Recent messages
         try:
             result = await db.execute(
-                select(Message).where(Message.sender_id == uid).order_by(desc(Message.created_at)).limit(20)
+                select(AuditLog).where(
+                    AuditLog.target_resource.like(f"%{user_id}%")
+                ).order_by(desc(AuditLog.created_at)).limit(limit)
             )
-            for msg in result.scalars().all():
+            for log in result.scalars().all():
+                events.append({
+                    "type": "admin_action",
+                    "action": log.action,
+                    "details": log.changes if isinstance(log.changes, dict) else {},
+                    "timestamp": log.created_at.isoformat()
+                })
+        except Exception as e:
+            print(f"[TIMELINE] audit_logs query failed: {e}")
+
+        # Recent messages with recipient details
+        try:
+            result = await db.execute(
+                select(Message, User.name).outerjoin(
+                    User, Message.receiver_id == User.id
+                ).where(Message.sender_id == uid)
+                .order_by(desc(Message.created_at)).limit(20)
+            )
+            for msg, receiver_name in result.all():
+                # Determine message content preview
+                msg_type = getattr(msg, 'type', 'text') or 'text'
+                if msg_type == 'text':
+                    preview = (msg.text or '')[:80]
+                    if msg.text and len(msg.text) > 80:
+                        preview += '…'
+                elif msg_type == 'photo':
+                    preview = '📷 Фото'
+                elif msg_type == 'voice':
+                    dur = f" ({int(msg.duration)}с)" if msg.duration else ""
+                    preview = f'🎤 Голосовое{dur}'
+                elif msg_type == 'video':
+                    preview = '🎥 Видео'
+                elif msg_type == 'gif':
+                    preview = '🎞 GIF'
+                elif msg_type == 'sticker':
+                    preview = '😀 Стикер'
+                else:
+                    preview = msg.text[:60] if msg.text else f'[{msg_type}]'
+
                 events.append({
                     "type": "message",
                     "action": "sent_message",
-                    "details": {"chat_id": str(msg.match_id)},
+                    "details": {
+                        "receiver_name": receiver_name or "Удалённый",
+                        "receiver_id": str(msg.receiver_id),
+                        "message_type": msg_type,
+                        "preview": preview,
+                        "is_read": msg.is_read,
+                    },
                     "timestamp": msg.created_at.isoformat()
                 })
         except Exception as e:
             print(f"[TIMELINE] messages query failed: {e}")
+
+        # Received messages
+        try:
+            result = await db.execute(
+                select(Message, User.name).outerjoin(
+                    User, Message.sender_id == User.id
+                ).where(Message.receiver_id == uid)
+                .order_by(desc(Message.created_at)).limit(20)
+            )
+            for msg, sender_name in result.all():
+                msg_type = getattr(msg, 'type', 'text') or 'text'
+                if msg_type == 'text':
+                    preview = (msg.text or '')[:80]
+                    if msg.text and len(msg.text) > 80:
+                        preview += '…'
+                elif msg_type == 'photo':
+                    preview = '📷 Фото'
+                elif msg_type == 'voice':
+                    dur = f" ({int(msg.duration)}с)" if msg.duration else ""
+                    preview = f'🎤 Голосовое{dur}'
+                else:
+                    preview = msg.text[:60] if msg.text else f'[{msg_type}]'
+
+                events.append({
+                    "type": "message",
+                    "action": "received_message",
+                    "details": {
+                        "sender_name": sender_name or "Удалённый",
+                        "sender_id": str(msg.sender_id),
+                        "message_type": msg_type,
+                        "preview": preview,
+                        "is_read": msg.is_read,
+                    },
+                    "timestamp": msg.created_at.isoformat()
+                })
+        except Exception as e:
+            print(f"[TIMELINE] received messages query failed: {e}")
+
+        # Swipes (likes/dislikes/superlikes)
+        try:
+            result = await db.execute(
+                select(Swipe, User.name).outerjoin(
+                    User, Swipe.to_user_id == User.id
+                ).where(Swipe.from_user_id == uid)
+                .order_by(desc(Swipe.timestamp)).limit(20)
+            )
+            for swipe, target_name in result.all():
+                action_labels = {
+                    'like': ('liked', '❤️ Лайк'),
+                    'superlike': ('superliked', '⭐ Суперлайк'),
+                    'dislike': ('disliked', '👎 Дизлайк'),
+                }
+                action_key, label = action_labels.get(swipe.action, ('swipe', swipe.action))
+                events.append({
+                    "type": "swipe",
+                    "action": action_key,
+                    "details": {
+                        "target_name": target_name or "Удалённый",
+                        "target_id": str(swipe.to_user_id),
+                        "swipe_type": swipe.action,
+                        "label": label,
+                    },
+                    "timestamp": swipe.timestamp.isoformat()
+                })
+        except Exception as e:
+            print(f"[TIMELINE] swipes query failed: {e}")
+
+        # Received swipes
+        try:
+            result = await db.execute(
+                select(Swipe, User.name).outerjoin(
+                    User, Swipe.from_user_id == User.id
+                ).where(Swipe.to_user_id == uid)
+                .order_by(desc(Swipe.timestamp)).limit(20)
+            )
+            for swipe, from_name in result.all():
+                action_labels = {
+                    'like': ('received_like', '❤️ Лайк получен'),
+                    'superlike': ('received_superlike', '⭐ Суперлайк получен'),
+                    'dislike': ('received_dislike', '👎 Дизлайк получен'),
+                }
+                action_key, label = action_labels.get(swipe.action, ('received_swipe', swipe.action))
+                events.append({
+                    "type": "swipe",
+                    "action": action_key,
+                    "details": {
+                        "from_name": from_name or "Удалённый",
+                        "from_id": str(swipe.from_user_id),
+                        "swipe_type": swipe.action,
+                        "label": label,
+                    },
+                    "timestamp": swipe.timestamp.isoformat()
+                })
+        except Exception as e:
+            print(f"[TIMELINE] received swipes query failed: {e}")
+
+        # Matches
+        try:
+            result = await db.execute(
+                select(Match).where(
+                    or_(Match.user1_id == uid, Match.user2_id == uid)
+                ).order_by(desc(Match.created_at)).limit(20)
+            )
+            for m in result.scalars().all():
+                other_id = m.user2_id if m.user1_id == uid else m.user1_id
+                name_result = await db.execute(select(User.name).where(User.id == other_id))
+                other_name = name_result.scalar() or "Удалённый"
+                events.append({
+                    "type": "match",
+                    "action": "new_match",
+                    "details": {
+                        "other_name": other_name,
+                        "other_id": str(other_id),
+                    },
+                    "timestamp": m.created_at.isoformat()
+                })
+        except Exception as e:
+            print(f"[TIMELINE] matches query failed: {e}")
 
         # Reports
         try:
@@ -111,11 +261,19 @@ async def get_user_timeline(
                 ).order_by(desc(Report.created_at)).limit(20)
             )
             for report in result.scalars().all():
-                is_reporter = str(report.reporter_id) == user_id
+                is_reporter = report.reporter_id == uid
+                other_id = report.reported_id if is_reporter else report.reporter_id
+                name_result = await db.execute(select(User.name).where(User.id == other_id))
+                other_name = name_result.scalar() or "Удалённый"
                 events.append({
                     "type": "report",
                     "action": "filed_report" if is_reporter else "was_reported",
-                    "details": {"reason": report.reason, "status": report.status},
+                    "details": {
+                        "reason": report.reason,
+                        "status": report.status,
+                        "other_name": other_name,
+                        "other_id": str(other_id),
+                    },
                     "timestamp": report.created_at.isoformat()
                 })
         except Exception as e:
