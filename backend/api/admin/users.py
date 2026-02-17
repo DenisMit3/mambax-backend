@@ -4,7 +4,7 @@ Admin User Management: list, create, delete, actions, bulk, fraud, segments.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, desc, and_, or_, select
+from sqlalchemy import func, desc, and_, or_, select, delete
 from sqlalchemy.orm import selectinload
 from typing import Optional, List
 from datetime import datetime
@@ -672,6 +672,10 @@ async def perform_user_action(
         user.status = UserStatus.SUSPENDED
     elif action == "ban":
         user.status = UserStatus.BANNED
+        # Удалить старую запись бана (unique constraint на user_id)
+        await db.execute(
+            delete(BannedUser).where(BannedUser.user_id == uid)
+        )
         ban = BannedUser(
             user_id=uid,
             reason=reason or "Действие администратора",
