@@ -91,45 +91,62 @@ async def get_user_timeline(
         except Exception as e:
             print(f"[TIMELINE] audit_logs query failed: {e}")
 
-        # Recent messages with recipient details
+        # Helper to build message details dict
+        def _msg_details(msg, other_name: str, other_id, is_sent: bool) -> dict:
+            msg_type = getattr(msg, 'type', 'text') or 'text'
+            d: Dict[str, Any] = {
+                "message_type": msg_type,
+                "is_read": msg.is_read,
+                "match_id": str(msg.match_id),
+            }
+            if is_sent:
+                d["receiver_name"] = other_name or "Удалённый"
+                d["receiver_id"] = str(other_id)
+            else:
+                d["sender_name"] = other_name or "Удалённый"
+                d["sender_id"] = str(other_id)
+
+            if msg_type == 'text':
+                d["text"] = msg.text or ''
+                d["preview"] = (msg.text or '')[:80] + ('…' if msg.text and len(msg.text) > 80 else '')
+            elif msg_type == 'photo':
+                d["preview"] = '📷 Фото'
+                d["photo_url"] = msg.photo_url
+                if msg.text:
+                    d["text"] = msg.text  # caption
+            elif msg_type == 'voice':
+                dur = f" ({int(msg.duration)}с)" if msg.duration else ""
+                d["preview"] = f'🎤 Голосовое{dur}'
+                d["audio_url"] = msg.audio_url
+                d["duration"] = msg.duration
+            elif msg_type == 'video':
+                d["preview"] = '🎥 Видео'
+                if msg.photo_url:
+                    d["photo_url"] = msg.photo_url  # thumbnail
+            elif msg_type == 'gif':
+                d["preview"] = '🎞 GIF'
+                d["photo_url"] = msg.photo_url
+            elif msg_type == 'sticker':
+                d["preview"] = '😀 Стикер'
+                d["photo_url"] = msg.photo_url
+            else:
+                d["preview"] = msg.text[:60] if msg.text else f'[{msg_type}]'
+                d["text"] = msg.text or ''
+            return d
+
+        # Recent sent messages
         try:
             result = await db.execute(
                 select(Message, User.name).outerjoin(
                     User, Message.receiver_id == User.id
                 ).where(Message.sender_id == uid)
-                .order_by(desc(Message.created_at)).limit(20)
+                .order_by(desc(Message.created_at)).limit(30)
             )
             for msg, receiver_name in result.all():
-                # Determine message content preview
-                msg_type = getattr(msg, 'type', 'text') or 'text'
-                if msg_type == 'text':
-                    preview = (msg.text or '')[:80]
-                    if msg.text and len(msg.text) > 80:
-                        preview += '…'
-                elif msg_type == 'photo':
-                    preview = '📷 Фото'
-                elif msg_type == 'voice':
-                    dur = f" ({int(msg.duration)}с)" if msg.duration else ""
-                    preview = f'🎤 Голосовое{dur}'
-                elif msg_type == 'video':
-                    preview = '🎥 Видео'
-                elif msg_type == 'gif':
-                    preview = '🎞 GIF'
-                elif msg_type == 'sticker':
-                    preview = '😀 Стикер'
-                else:
-                    preview = msg.text[:60] if msg.text else f'[{msg_type}]'
-
                 events.append({
                     "type": "message",
                     "action": "sent_message",
-                    "details": {
-                        "receiver_name": receiver_name or "Удалённый",
-                        "receiver_id": str(msg.receiver_id),
-                        "message_type": msg_type,
-                        "preview": preview,
-                        "is_read": msg.is_read,
-                    },
+                    "details": _msg_details(msg, receiver_name, msg.receiver_id, is_sent=True),
                     "timestamp": msg.created_at.isoformat()
                 })
         except Exception as e:
@@ -141,32 +158,13 @@ async def get_user_timeline(
                 select(Message, User.name).outerjoin(
                     User, Message.sender_id == User.id
                 ).where(Message.receiver_id == uid)
-                .order_by(desc(Message.created_at)).limit(20)
+                .order_by(desc(Message.created_at)).limit(30)
             )
             for msg, sender_name in result.all():
-                msg_type = getattr(msg, 'type', 'text') or 'text'
-                if msg_type == 'text':
-                    preview = (msg.text or '')[:80]
-                    if msg.text and len(msg.text) > 80:
-                        preview += '…'
-                elif msg_type == 'photo':
-                    preview = '📷 Фото'
-                elif msg_type == 'voice':
-                    dur = f" ({int(msg.duration)}с)" if msg.duration else ""
-                    preview = f'🎤 Голосовое{dur}'
-                else:
-                    preview = msg.text[:60] if msg.text else f'[{msg_type}]'
-
                 events.append({
                     "type": "message",
                     "action": "received_message",
-                    "details": {
-                        "sender_name": sender_name or "Удалённый",
-                        "sender_id": str(msg.sender_id),
-                        "message_type": msg_type,
-                        "preview": preview,
-                        "is_read": msg.is_read,
-                    },
+                    "details": _msg_details(msg, sender_name, msg.sender_id, is_sent=False),
                     "timestamp": msg.created_at.isoformat()
                 })
         except Exception as e:
