@@ -316,6 +316,28 @@ app.include_router(photos_router)  # /api/photos/{id} — serves images from DB
 if not settings.is_production:
     app.include_router(dev_router)
 
+# Debug: check photos in DB
+@app.get("/debug/photos")
+async def debug_photos():
+    from backend.database import get_db
+    from backend.models.user import UserPhoto, User
+    from sqlalchemy import select, func
+    async for db in get_db():
+        total_photos = await db.scalar(select(func.count()).select_from(UserPhoto))
+        total_users = await db.scalar(select(func.count()).select_from(User))
+        photos_sample = (await db.execute(
+            select(UserPhoto.user_id, UserPhoto.url).limit(10)
+        )).all()
+        users_with_photos = await db.scalar(
+            select(func.count(func.distinct(UserPhoto.user_id)))
+        )
+        return {
+            "total_users": total_users,
+            "total_photos": total_photos,
+            "users_with_photos": users_with_photos,
+            "sample": [{"user_id": str(r.user_id), "url": r.url} for r in photos_sample]
+        }
+
 # Simple test endpoint
 @app.get("/ping")
 async def ping():
