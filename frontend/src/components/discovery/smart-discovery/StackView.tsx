@@ -63,6 +63,7 @@ export function StackView({
                             sizes="100vw"
                             className="object-cover"
                             priority={false}
+                            unoptimized
                         />
                     </motion.div>
                 )}

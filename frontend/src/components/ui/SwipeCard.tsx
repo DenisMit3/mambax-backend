@@ -4,7 +4,6 @@
 import { motion, useMotionValue, useTransform, useAnimation, PanInfo } from "framer-motion";
 import { Gift, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import Image from "next/image";
 
 interface SwipeCardProps {
     name: string;
@@ -71,14 +70,11 @@ export function SwipeCard({
         >
             {/* Background Image */}
             <div className="relative w-full h-full">
-                <Image
+                <img
                     src={image}
                     alt={name}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 400px"
-                    className="object-cover pointer-events-none"
-                    priority={isHero}
-                    loading={isHero ? undefined : "lazy"}
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                    loading={isHero ? "eager" : "lazy"}
                 />
 
                 {/* Gradient Overlay */}

@@ -108,6 +108,7 @@ export function LikedUsersGrid({ likedUsers, isPremium, onInstantMatch, onUpgrad
                                 fill
                                 className="object-cover rounded-2xl"
                                 sizes="(max-width: 768px) 50vw, 33vw"
+                                unoptimized
                             />
                             <div className="absolute bottom-4 left-4 right-4 z-10">
                                 <p className="text-white font-semibold text-sm mb-1">

@@ -71,6 +71,7 @@ export function NewMatchesList({ matches, onMatchClick }: NewMatchesListProps) {
                                 fill
                                 className="object-cover rounded-2xl"
                                 sizes="(max-width: 768px) 33vw, 120px"
+                                unoptimized
                             />
                             <div className="absolute bottom-2 left-2 right-2 z-10">
                                 <p className="text-white text-xs font-semibold truncate">
