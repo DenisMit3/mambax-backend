@@ -120,7 +120,7 @@ class User(Base):
         nullable=False,
     )
     gender: Mapped[Gender] = mapped_column(
-        SQLAlchemyEnum(Gender, values_callable=lambda x: [e.value for e in x]),
+        SQLAlchemyEnum(Gender, values_callable=lambda x: [e.value for e in x], native_enum=False, length=20),
         nullable=False,
     )
     bio: Mapped[Optional[str]] = mapped_column(
@@ -254,17 +254,17 @@ class User(Base):
     
     # Admin & Status fields
     status: Mapped[UserStatus] = mapped_column(
-        SQLAlchemyEnum(UserStatus, values_callable=lambda x: [e.value for e in x]),
+        SQLAlchemyEnum(UserStatus, values_callable=lambda x: [e.value for e in x], native_enum=False, length=20),
         default=UserStatus.ACTIVE,
         nullable=False,
     )
     subscription_tier: Mapped[SubscriptionTier] = mapped_column(
-        SQLAlchemyEnum(SubscriptionTier, values_callable=lambda x: [e.value for e in x]),
+        SQLAlchemyEnum(SubscriptionTier, values_callable=lambda x: [e.value for e in x], native_enum=False, length=20),
         default=SubscriptionTier.FREE,
         nullable=False,
     )
     role: Mapped[UserRole] = mapped_column(
-        SQLAlchemyEnum(UserRole, values_callable=lambda x: [e.value for e in x]),
+        SQLAlchemyEnum(UserRole, values_callable=lambda x: [e.value for e in x], native_enum=False, length=20),
         default=UserRole.USER,
         nullable=False,
     )
