@@ -9,14 +9,6 @@ from backend.services.swipe_limits import (
     DAILY_SUPERLIKE_LIMIT
 )
 
-from backend.services.verification import (
-    start_verification,
-    submit_verification,
-    get_verification_status,
-    VerificationStatus,
-    GestureType
-)
-
 from backend.services.fraud_detection import fraud_service
 from backend.services.marketing import marketing_service
 from backend.services.nsfw_detection import nsfw_service
@@ -31,12 +23,6 @@ __all__ = [
     "record_swipe",
     "DAILY_SWIPE_LIMIT",
     "DAILY_SUPERLIKE_LIMIT",
-    # Verification
-    "start_verification",
-    "submit_verification",
-    "get_verification_status",
-    "VerificationStatus",
-    "GestureType",
     # Admin services
     "fraud_service",
     "marketing_service",

@@ -22,6 +22,34 @@ router = APIRouter()
 
 from backend.models.user_management import VerificationRequest
 
+
+@router.get("/me/verification-status")
+async def get_verification_status(
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Return current user's verification status."""
+    if current_user.is_verified:
+        return {"status": "approved", "rejection_reason": None, "submitted_at": None}
+
+    result = await db.execute(
+        select(VerificationRequest)
+        .where(VerificationRequest.user_id == current_user.id)
+        .order_by(VerificationRequest.created_at.desc())
+        .limit(1)
+    )
+    req = result.scalars().first()
+
+    if not req:
+        return {"status": "none", "rejection_reason": None, "submitted_at": None}
+
+    return {
+        "status": req.status,  # pending | rejected
+        "rejection_reason": req.rejection_reason,
+        "submitted_at": req.created_at.isoformat() if req.created_at else None,
+    }
+
+
 @router.post("/me/verification-photo", response_model=UserResponse)
 async def upload_verification_photo(
     file: UploadFile = File(...),

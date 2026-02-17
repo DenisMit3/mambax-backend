@@ -1,94 +1,39 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { authService } from "@/services/api"; // We'll use getBaseUrl logic if exposed, or just fetch
-import { ArrowLeft, Camera, Check, X, ShieldCheck, AlertCircle } from "lucide-react";
+import { verificationApi, type VerificationStatus } from "@/services/api/verification";
+import { ArrowLeft, Camera, ShieldCheck, Clock, XCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { Toast } from '@/components/ui/Toast';
+import { Toast } from "@/components/ui/Toast";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-
-// Helper to get API URL since it's not exported from api.ts
-// Ideally we should export it or add methods to authService.
-// We will use relative path if proxy is set up or assume same host if not.
-// But api.ts logic is complex. We'll use authService.getMe() to get base URL implicitly? No.
-// We will assume the same API_URL as api.ts.
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api_proxy";
 
 export default function VerificationPage() {
     const { isAuthed, isChecking } = useRequireAuth();
-    interface VerificationStatus {
-        is_verified: boolean;
-        active_session?: VerificationSession;
-    }
-
-    interface VerificationSession {
-        session_id: string;
-        gesture_emoji: string;
-        gesture_name: string;
-        instruction: string;
-    }
-
-    interface VerificationResult {
-        is_verified: boolean;
-        confidence?: number;
-    }
-
     const [status, setStatus] = useState<VerificationStatus | null>(null);
     const [loading, setLoading] = useState(true);
-    const [session, setSession] = useState<VerificationSession | null>(null);
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
-    const [result, setResult] = useState<VerificationResult | null>(null);
-    const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
+    const [submitted, setSubmitted] = useState(false);
+    const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+    const fileRef = useRef<HTMLInputElement>(null);
 
-    const checkStatus = async () => {
+    const loadStatus = async () => {
         try {
-            const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
-            const res = await fetch(`${API_URL}/verification/status`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setStatus(data);
-                if (data.active_session) {
-                    setSession(data.active_session);
-                }
-            }
-        } catch (e) {
-            console.error("Status check failed", e);
+            const data = await verificationApi.getStatus();
+            setStatus(data);
+        } catch {
+            console.error("Failed to load verification status");
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        if (isAuthed) checkStatus();
+        if (isAuthed) loadStatus();
     }, [isAuthed]);
 
-    const startVerification = async () => {
-        setLoading(true);
-        try {
-            const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
-            const res = await fetch(`${API_URL}/verification/start`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setSession(data);
-            } else {
-                setToast({message: data.detail || "Не удалось начать", type: 'error'});
-            }
-        } catch (e) {
-            setToast({message: "Ошибка запуска верификации", type: 'error'});
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Очистка Object URL при размонтировании
     useEffect(() => {
         return () => {
             if (preview) URL.revokeObjectURL(preview);
@@ -97,180 +42,178 @@ export default function VerificationPage() {
     }, []);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            // Освобождаем старый Object URL перед созданием нового
+        if (e.target.files?.[0]) {
             if (preview) URL.revokeObjectURL(preview);
-            setFile(e.target.files[0]);
-            setPreview(URL.createObjectURL(e.target.files[0]));
+            const f = e.target.files[0];
+            setFile(f);
+            setPreview(URL.createObjectURL(f));
         }
     };
 
-    const submitVerification = async () => {
-        if (!file || !session) return;
+    const handleSubmit = async () => {
+        if (!file) return;
         setUploading(true);
         try {
-            // 1. Upload Photo
-            // reuse authService logic if possible, or implement simple upload
-            const formData = new FormData();
-            formData.append("file", file);
-            const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
-
-            // Use existing upload endpoint
-            const upRes = await fetch(`${API_URL}/users/me/photo`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${token}` },
-                body: formData
-            });
-
-            if (!upRes.ok) throw new Error("Upload failed");
-            const upData = await upRes.json();
-            const photoUrl = upData.photos[upData.photos.length - 1];
-
-            // 2. Submit Verification
-            const subRes = await fetch(`${API_URL}/verification/submit`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    session_id: session.session_id,
-                    selfie_url: photoUrl
-                })
-            });
-
-            const subData = await subRes.json();
-            if (subRes.ok) {
-                setResult(subData);
-                checkStatus();
-            } else {
-                setToast({message: subData.detail || "Верификация не пройдена", type: 'error'});
-            }
-
-        } catch (e) {
-            setToast({message: "Ошибка отправки", type: 'error'});
+            await verificationApi.uploadPhoto(file);
+            setSubmitted(true);
+            setFile(null);
+            if (preview) URL.revokeObjectURL(preview);
+            setPreview(null);
+            setToast({ message: "Фото отправлено на проверку", type: "success" });
+        } catch {
+            setToast({ message: "Ошибка отправки фото", type: "error" });
         } finally {
             setUploading(false);
         }
     };
 
-    if (loading && !status) return <div style={{ display: 'flex', height: '100dvh', alignItems: 'center', justifyContent: 'center' }}>Загрузка...</div>;
-
-    return (
-        <div style={{ minHeight: '100dvh', background: '#fff', display: 'flex', flexDirection: 'column' }}>
-            {/* Header */}
-            <div style={{ height: '56px', display: 'flex', alignItems: 'center', padding: '0 16px', borderBottom: '1px solid #eee' }}>
-                <Link href="/profile">
-                    <ArrowLeft color="#333" />
-                </Link>
-                <div style={{ marginLeft: '16px', fontWeight: 600 }}>Верификация</div>
+    if (isChecking || loading) {
+        return (
+            <div className="flex items-center justify-center h-dvh bg-black">
+                <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
+        );
+    }
 
-            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-
-                {status?.is_verified ? (
-                    <div style={{ textAlign: 'center', marginTop: '40px' }}>
-                        <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                            <ShieldCheck size={40} color="#4CAF50" />
-                        </div>
-                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>Вы верифицированы!</h2>
-                        <p style={{ color: '#666', marginTop: '8px' }}>Ваш профиль получил синий значок.</p>
-                        <Link href="/profile" style={{ display: 'inline-block', marginTop: '32px', padding: '12px 32px', background: '#000', color: 'white', borderRadius: '12px', textDecoration: 'none' }}>
-                            Перейти в профиль
-                        </Link>
+    // --- Approved ---
+    if (status?.status === "approved") {
+        return (
+            <div className="min-h-dvh bg-black flex flex-col">
+                <Header />
+                <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+                    <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-4">
+                        <CheckCircle2 className="w-10 h-10 text-emerald-400" />
                     </div>
-                ) : result?.is_verified ? (
-                    <div style={{ textAlign: 'center', marginTop: '40px' }}>
-                        <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                            <Check size={40} color="#4CAF50" />
-                        </div>
-                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>Успешно!</h2>
-                        <p style={{ color: '#666', marginTop: '8px' }}>Верификация пройдена.</p>
-                        <Link href="/profile" style={{ display: 'inline-block', marginTop: '32px', padding: '12px 32px', background: '#000', color: 'white', borderRadius: '12px', textDecoration: 'none' }}>
-                            Готово
-                        </Link>
+                    <h2 className="text-2xl font-bold text-white">Вы верифицированы</h2>
+                    <p className="text-slate-400 mt-2 text-sm">Ваш профиль отмечен синим значком.</p>
+                    <Link href="/profile" className="mt-8 px-8 py-3 bg-white text-black font-semibold rounded-xl">
+                        В профиль
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
+    // --- Pending (or just submitted) ---
+    if (status?.status === "pending" || submitted) {
+        return (
+            <div className="min-h-dvh bg-black flex flex-col">
+                <Header />
+                <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+                    <div className="w-20 h-20 rounded-full bg-amber-500/20 flex items-center justify-center mb-4">
+                        <Clock className="w-10 h-10 text-amber-400" />
                     </div>
-                ) : session ? (
-                    <div style={{ width: '100%', maxWidth: '400px' }}>
-                        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                            <div style={{ fontSize: '64px', marginBottom: '16px' }}>{session.gesture_emoji}</div>
-                            <h3 style={{ fontSize: '20px', fontWeight: 700 }}>{session.gesture_name}</h3>
-                            <p style={{ color: '#666', marginTop: '8px' }}>{session.instruction}</p>
-                        </div>
+                    <h2 className="text-2xl font-bold text-white">Фото на проверке</h2>
+                    <p className="text-slate-400 mt-2 text-sm max-w-xs">
+                        Мы проверим ваше селфи в ближайшее время. Обычно это занимает до 24 часов.
+                    </p>
+                    <Link href="/" className="mt-8 px-8 py-3 bg-white/10 text-white font-semibold rounded-xl">
+                        На главную
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
-                        <div style={{
-                            aspectRatio: '3/4', background: '#f5f5f5', borderRadius: '20px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            overflow: 'hidden', position: 'relative', border: '2px dashed #ccc', marginBottom: '24px'
-                        }}>
-                            {preview ? (
-                                <Image src={preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Selfie preview" fill unoptimized />
-                            ) : (
-                                <div style={{ color: '#999', flexDirection: 'column', display: 'flex', alignItems: 'center' }}>
-                                    <Camera size={48} />
-                                    <span style={{ marginTop: '8px' }}>Сделайте селфи</span>
-                                </div>
-                            )}
+    // --- Rejected ---
+    const isRejected = status?.status === "rejected";
 
-                            <input
-                                type="file"
-                                accept="image/*"
-                                capture="user"
-                                onChange={handleFileChange}
-                                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                            />
-                        </div>
-
-                        {preview ? (
-                            <div style={{ display: 'flex', gap: '12px' }}>
-                                <button
-                                    onClick={() => { setPreview(null); setFile(null); }}
-                                    style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', background: 'white', fontWeight: 600 }}
-                                >
-                                    Переснять
-                                </button>
-                                <button
-                                    onClick={submitVerification}
-                                    disabled={uploading}
-                                    style={{ flex: 1, padding: '14px', borderRadius: '12px', background: '#000', color: 'white', fontWeight: 600, opacity: uploading ? 0.7 : 1 }}
-                                >
-                                    {uploading ? 'Проверка...' : 'Отправить'}
-                                </button>
+    // --- None / Rejected → upload form ---
+    return (
+        <div className="min-h-dvh bg-black flex flex-col">
+            <Header />
+            <div className="flex-1 flex flex-col items-center px-6 pt-8">
+                {isRejected && (
+                    <div className="w-full max-w-sm mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20">
+                        <div className="flex items-start gap-3">
+                            <XCircle className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="text-red-300 font-semibold text-sm">Верификация отклонена</p>
+                                {status?.rejection_reason && (
+                                    <p className="text-red-300/70 text-xs mt-1">{status.rejection_reason}</p>
+                                )}
+                                <p className="text-slate-400 text-xs mt-2">Попробуйте загрузить другое фото.</p>
                             </div>
-                        ) : (
-                            <div style={{ textAlign: 'center', color: '#666', fontSize: '14px' }}>
-                                Нажмите на область фото для камеры
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <div style={{ textAlign: 'center', marginTop: '40px', maxWidth: '320px' }}>
-                        <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#F5F5F7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                            <ShieldCheck size={40} color="#333" />
                         </div>
-                        <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>Пройти верификацию</h2>
-                        <p style={{ color: '#666', marginTop: '8px', lineHeight: '1.5' }}>
-                            Покажите другим, что вы настоящий. Верифицированные профили получают на 30% больше матчей и синий значок.
+                    </div>
+                )}
+
+                {!isRejected && (
+                    <div className="text-center mb-8">
+                        <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center mx-auto mb-4">
+                            <ShieldCheck className="w-8 h-8 text-cyan-400" />
+                        </div>
+                        <h2 className="text-xl font-bold text-white">Пройдите верификацию</h2>
+                        <p className="text-slate-400 mt-2 text-sm max-w-xs mx-auto">
+                            Верифицированные профили получают больше лайков и синий значок.
                         </p>
+                    </div>
+                )}
 
-                        <div style={{ marginTop: '32px', textAlign: 'left', background: '#f9f9f9', padding: '16px', borderRadius: '16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
-                                <div style={{ minWidth: '24px', height: '24px', background: 'black', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', marginRight: '12px' }}>1</div>
-                                <span style={{ fontSize: '14px' }}>Повторите жест на экране</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                                <div style={{ minWidth: '24px', height: '24px', background: 'black', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', marginRight: '12px' }}>2</div>
-                                <span style={{ fontSize: '14px' }}>Сделайте чёткое селфи</span>
-                            </div>
+                {/* Photo area */}
+                <div
+                    onClick={() => fileRef.current?.click()}
+                    className="w-full max-w-sm aspect-[3/4] rounded-2xl border-2 border-dashed border-white/10 bg-white/5 flex items-center justify-center overflow-hidden relative cursor-pointer hover:border-white/20 transition"
+                >
+                    {preview ? (
+                        <Image src={preview} alt="Селфи" fill className="object-cover" unoptimized />
+                    ) : (
+                        <div className="flex flex-col items-center text-slate-500">
+                            <Camera className="w-12 h-12 mb-2" />
+                            <span className="text-sm">Нажмите, чтобы сделать селфи</span>
                         </div>
+                    )}
+                    <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        capture="user"
+                        onChange={handleFileChange}
+                        className="hidden"
+                    />
+                </div>
 
+                {/* Actions */}
+                {preview && (
+                    <div className="flex gap-3 w-full max-w-sm mt-4">
                         <button
-                            onClick={startVerification}
-                            style={{ width: '100%', marginTop: '32px', padding: '16px', background: '#000', color: 'white', borderRadius: '16px', fontWeight: 600, fontSize: '16px' }}
+                            onClick={() => {
+                                if (preview) URL.revokeObjectURL(preview);
+                                setPreview(null);
+                                setFile(null);
+                            }}
+                            className="flex-1 py-3.5 rounded-xl border border-white/10 text-white font-semibold text-sm"
                         >
-                            Я готов(а)
+                            Переснять
+                        </button>
+                        <button
+                            onClick={handleSubmit}
+                            disabled={uploading}
+                            className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold text-sm disabled:opacity-50"
+                        >
+                            {uploading ? "Отправка..." : "Отправить"}
                         </button>
                     </div>
                 )}
+
+                {!preview && (
+                    <p className="text-slate-600 text-xs mt-4 text-center">
+                        Сделайте чёткое фото лица при хорошем освещении
+                    </p>
+                )}
             </div>
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+        </div>
+    );
+}
+
+function Header() {
+    return (
+        <div className="h-14 flex items-center px-4 border-b border-white/5">
+            <Link href="/profile">
+                <ArrowLeft className="w-6 h-6 text-white" />
+            </Link>
+            <span className="ml-4 font-semibold text-white">Верификация</span>
         </div>
     );
 }

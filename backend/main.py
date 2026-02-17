@@ -275,7 +275,7 @@ from backend.api.chat import router as chat_router
 from backend.api.users import router as users_router
 from backend.api.traycer import router as traycer_router
 from backend.api.bot_webhook import router as bot_webhook_router
-from backend.api.verification import router as verification_router
+# verification_router removed — gesture-flow deleted, verification now via /users/me/verification-*
 from backend.api import stripe_webhook
 from backend.api.security import router as security_router
 from backend.api.ux_features import router as ux_features_router
@@ -298,7 +298,7 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(traycer_router)
 app.include_router(bot_webhook_router, prefix="/api")
-app.include_router(verification_router, prefix="/api")
+# verification_router removed
 app.include_router(stripe_webhook.router, prefix="/api/v1", tags=["Payments"])
 app.include_router(security_router, prefix="/api")
 app.include_router(ux_features_router, prefix="/api")

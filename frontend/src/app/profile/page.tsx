@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { Star, Plus, Settings, Edit3, Shield, Zap, ChevronRight, LogOut, Rocket, Eye, Gift as GiftIcon, Hash, MessageCircle, Users, Bell, HelpCircle } from "lucide-react";
+import { Star, Plus, Settings, Edit3, Shield, Zap, ChevronRight, LogOut, Rocket, Eye, Gift as GiftIcon, Hash, MessageCircle, Users, Bell, HelpCircle, CheckCircle2, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { authService } from "@/services/api";
+import { verificationApi, type VerificationStatus } from "@/services/api/verification";
 import { httpClient } from "@/lib/http-client";
 import { wsService } from "@/services/websocket";
 import { ProfileMasterEditor } from "@/components/profile/ProfileMasterEditor";
@@ -37,11 +38,18 @@ export default function ProfilePage() {
     const [showBoost, setShowBoost] = useState(false);
     const [showDailyRewards, setShowDailyRewards] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    const [verificationStatus, setVerificationStatus] = useState<VerificationStatus | null>(null);
     const router = useRouter();
     const { isAuthed, isChecking } = useRequireAuth();
 
     useEffect(() => {
         if (isAuthed) loadProfile();
+    }, [isAuthed]);
+
+    useEffect(() => {
+        if (isAuthed) {
+            verificationApi.getStatus().then(setVerificationStatus).catch(() => {});
+        }
     }, [isAuthed]);
 
     const loadProfile = async () => {
@@ -182,14 +190,28 @@ export default function ProfilePage() {
 
                 {/* Menu Grid */}
                 <div className="grid grid-cols-2 gap-3 mb-6">
-                    <button
-                        onClick={() => router.push('/verification')}
-                        className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition text-left group"
-                    >
-                        <Shield className="w-6 h-6 text-cyan-400 mb-3 group-hover:scale-110 transition" />
-                        <div className="text-white font-bold text-sm">Безопасность</div>
-                        <div className="text-slate-500 text-xs">Верификация</div>
-                    </button>
+                    {verificationStatus?.status === 'approved' ? (
+                        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-left">
+                            <CheckCircle2 className="w-6 h-6 text-emerald-400 mb-3" />
+                            <div className="text-emerald-300 font-bold text-sm">Верифицирован</div>
+                            <div className="text-emerald-400/60 text-xs">Профиль подтверждён</div>
+                        </div>
+                    ) : verificationStatus?.status === 'pending' ? (
+                        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-left">
+                            <Clock className="w-6 h-6 text-amber-400 mb-3" />
+                            <div className="text-amber-300 font-bold text-sm">На проверке</div>
+                            <div className="text-amber-400/60 text-xs">Ожидайте результат</div>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => router.push('/verification')}
+                            className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition text-left group"
+                        >
+                            <Shield className="w-6 h-6 text-cyan-400 mb-3 group-hover:scale-110 transition" />
+                            <div className="text-white font-bold text-sm">Верификация</div>
+                            <div className="text-slate-500 text-xs">Подтвердить профиль</div>
+                        </button>
+                    )}
 
                     <button
                         onClick={() => setShowBoost(true)}

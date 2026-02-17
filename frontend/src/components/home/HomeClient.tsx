@@ -12,6 +12,7 @@ import { useGeolocation } from '@/hooks/useGeolocation';
 import { MatchModal } from '@/components/discovery/MatchModal';
 import { FALLBACK_AVATAR } from '@/lib/constants';
 import { Toast } from '@/components/ui/Toast';
+import { ShieldCheck, X } from 'lucide-react';
 // Photo URL prefix — uses Next.js proxy to avoid exposing backend URL
 const PHOTO_BASE = '/api_proxy';
 
@@ -31,6 +32,30 @@ const SmartDiscoveryEngine = dynamic(() => import('@/components/discovery/SmartD
     ssr: false // Discovery is highly client-dependent (geo, etc)
 });
 
+function VerificationBanner({ onDismiss }: { onDismiss: () => void }) {
+    const router = useRouter();
+    return (
+        <div className="absolute top-2 left-3 right-3 z-50">
+            <div className="bg-cyan-500/10 border border-cyan-500/20 backdrop-blur-xl rounded-2xl p-4 flex items-start gap-3">
+                <ShieldCheck className="w-5 h-5 text-cyan-400 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-semibold">Пройдите верификацию</p>
+                    <p className="text-slate-400 text-xs mt-0.5">Верифицированные профили получают больше лайков</p>
+                    <button
+                        onClick={() => router.push('/verification')}
+                        className="mt-2 px-4 py-1.5 bg-cyan-500 text-white text-xs font-bold rounded-lg active:scale-95 transition"
+                    >
+                        Пройти
+                    </button>
+                </div>
+                <button onClick={onDismiss} className="text-slate-500 hover:text-white transition p-1">
+                    <X className="w-4 h-4" />
+                </button>
+            </div>
+        </div>
+    );
+}
+
 export function HomeClient() {
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -43,6 +68,7 @@ export function HomeClient() {
     const [boostActive, setBoostActive] = useState(false);
     const [matchData, setMatchData] = useState<{ isOpen: boolean; user?: UserProfile; partner?: UserProfile } | null>(null);
     const [toast, setToast] = useState<{message: string; type: 'success' | 'error'} | null>(null);
+    const [showVerificationBanner, setShowVerificationBanner] = useState(false);
 
     // Filters state - ideally persist this in URL or LocalStorage
     const [filters, setFilters] = useState({
@@ -119,6 +145,18 @@ export function HomeClient() {
             }
         }
     }, [me, router]);
+
+    // Verification banner: show if not verified and not dismissed within 24h
+    useEffect(() => {
+        if (me && me.is_verified === false) {
+            const dismissed = localStorage.getItem('verification_banner_dismissed');
+            if (dismissed) {
+                const ts = parseInt(dismissed, 10);
+                if (Date.now() - ts < 24 * 60 * 60 * 1000) return;
+            }
+            setShowVerificationBanner(true);
+        }
+    }, [me]);
 
     // 1. Fetch Feed
     const { data: profiles, isLoading, error, refetch } = useQuery({
@@ -307,6 +345,12 @@ export function HomeClient() {
 
     return (
         <>
+            {showVerificationBanner && (
+                <VerificationBanner onDismiss={() => {
+                    setShowVerificationBanner(false);
+                    localStorage.setItem('verification_banner_dismissed', Date.now().toString());
+                }} />
+            )}
             <SmartDiscoveryEngine
                 users={profiles}
                 filters={filters}

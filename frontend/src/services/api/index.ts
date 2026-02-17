@@ -13,6 +13,7 @@ import { monetizationApi } from "./monetization";
 import { notificationsApi } from "./notifications";
 import { settingsApi } from "./settings";
 import { socialApi } from "./social";
+import { verificationApi } from "./verification";
 
 /**
  * Unified authService object — full backward compatibility.
@@ -35,7 +36,9 @@ export const authService = {
     ...settingsApi,
     // Social (referrals, rewards, events, stories, feedback, help, analytics, onboarding, interests, prompts, safety)
     ...socialApi,
+    // Verification
+    ...verificationApi,
 };
 
 // Named sub-API exports for granular imports
-export { authApi, chatApi, discoveryApi, giftsApi, monetizationApi, notificationsApi, settingsApi, socialApi };
+export { authApi, chatApi, discoveryApi, giftsApi, monetizationApi, notificationsApi, settingsApi, socialApi, verificationApi };
