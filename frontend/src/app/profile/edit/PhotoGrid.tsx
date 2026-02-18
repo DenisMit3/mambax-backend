@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { X, Camera, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Camera, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 
 interface PhotoGridProps {
     photos: string[];
@@ -13,80 +13,78 @@ interface PhotoGridProps {
 
 export function PhotoGrid({ photos, onRemove, onMoveLeft, onMoveRight, onUpload }: PhotoGridProps) {
     return (
-        <section style={{ padding: '20px 16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+        <div>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Camera className="w-3.5 h-3.5" /> Фото ({photos.length}/9)
+            </h3>
+            <div className="grid grid-cols-3 gap-2.5">
                 {photos.map((url, i) => (
-                    <div key={url || `slot-${i}`} style={{
-                        position: 'relative', aspectRatio: '2/3', borderRadius: '12px',
-                        overflow: 'hidden', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'
-                    }}>
-                        <img src={url} alt={`Фото ${i + 1}`}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        <button onClick={() => onRemove(i)} style={{
-                            position: 'absolute', top: '6px', right: '6px',
-                            background: 'rgba(255, 255, 255, 0.9)', width: '24px', height: '24px',
-                            borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)', border: 'none', cursor: 'pointer',
-                        }}>
-                            <X size={14} color="#000" />
-                        </button>
-                        <div style={{
-                            position: 'absolute', top: '6px', left: '6px',
-                            background: 'rgba(0,0,0,0.6)', color: '#fff', width: '22px', height: '22px',
-                            borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '11px', fontWeight: 700,
-                        }}>
+                    <div
+                        key={url || `slot-${i}`}
+                        className={`relative rounded-2xl overflow-hidden border border-white/10 ${i === 0 ? 'col-span-2 row-span-2' : ''}`}
+                        style={{ aspectRatio: i === 0 ? '1' : '2/3' }}
+                    >
+                        <img
+                            src={url}
+                            alt={`Фото ${i + 1}`}
+                            className="w-full h-full object-cover"
+                        />
+                        {/* Photo number */}
+                        <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-[10px] font-bold text-white">
                             {i + 1}
                         </div>
+                        {/* Delete button */}
+                        <button
+                            onClick={() => onRemove(i)}
+                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-red-500/80 transition active:scale-90"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                        {/* Move buttons */}
                         {photos.length > 1 && (
-                            <div style={{
-                                position: 'absolute', bottom: '6px', left: '50%',
-                                transform: 'translateX(-50%)', display: 'flex', gap: '4px',
-                            }}>
-                                <button onClick={(e) => { e.stopPropagation(); onMoveLeft(i); }}
-                                    disabled={i === 0} aria-label="Переместить влево"
-                                    style={{
-                                        width: '28px', height: '28px', borderRadius: '50%',
-                                        background: i === 0 ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.6)',
-                                        border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.4 : 1,
-                                    }}>
-                                    <ChevronLeft size={16} color="#fff" />
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onMoveLeft(i); }}
+                                    disabled={i === 0}
+                                    aria-label="Переместить влево"
+                                    className="w-7 h-7 rounded-full bg-black/60 flex items-center justify-center disabled:opacity-30 active:scale-90"
+                                >
+                                    <ChevronLeft className="w-3.5 h-3.5 text-white" />
                                 </button>
-                                <button onClick={(e) => { e.stopPropagation(); onMoveRight(i); }}
-                                    disabled={i === photos.length - 1} aria-label="Переместить вправо"
-                                    style={{
-                                        width: '28px', height: '28px', borderRadius: '50%',
-                                        background: i === photos.length - 1 ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.6)',
-                                        border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: i === photos.length - 1 ? 'default' : 'pointer',
-                                        opacity: i === photos.length - 1 ? 0.4 : 1,
-                                    }}>
-                                    <ChevronRight size={16} color="#fff" />
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onMoveRight(i); }}
+                                    disabled={i === photos.length - 1}
+                                    aria-label="Переместить вправо"
+                                    className="w-7 h-7 rounded-full bg-black/60 flex items-center justify-center disabled:opacity-30 active:scale-90"
+                                >
+                                    <ChevronRight className="w-3.5 h-3.5 text-white" />
                                 </button>
                             </div>
                         )}
                     </div>
                 ))}
-                <div style={{
-                    aspectRatio: '2/3', borderRadius: '12px', background: 'var(--surface-hover)',
-                    border: '2px dashed var(--border)', display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative'
-                }}>
-                    <div style={{
-                        width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px'
-                    }}>
-                        <Camera size={20} color="white" />
+                {/* Add photo button */}
+                {photos.length < 9 && (
+                    <div
+                        className={`relative rounded-2xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 hover:border-[#ff4b91]/40 hover:bg-white/[0.03] transition cursor-pointer ${photos.length === 0 ? 'col-span-2 row-span-2' : ''}`}
+                        style={{ aspectRatio: photos.length === 0 ? '1' : '2/3' }}
+                    >
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#ff4b91]/20 to-[#ff9e4a]/20 flex items-center justify-center">
+                            <Plus className="w-5 h-5 text-[#ff4b91]" />
+                        </div>
+                        <span className="text-[11px] text-slate-500 font-medium">Добавить</span>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={onUpload}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
                     </div>
-                    <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>Добавить фото</span>
-                    <input type="file" accept="image/*" onChange={onUpload}
-                        style={{ position: 'absolute', opacity: 0, inset: 0, cursor: 'pointer' }} />
-                </div>
+                )}
             </div>
-            <p style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-secondary)', textAlign: 'center' }}>
-                Используйте стрелки для изменения порядка фото
+            <p className="mt-2 text-[11px] text-slate-600 text-center">
+                Первое фото - главное. Используйте стрелки для изменения порядка.
             </p>
-        </section>
+        </div>
     );
 }

@@ -6,7 +6,6 @@ import { Camera, Plus, Trash2, X, ChevronLeft, ChevronRight, Sparkles, User, Bri
 
 import { useTelegram } from '@/lib/telegram';
 import { authService } from '@/services/api';
-import { GlassCard } from '@/components/ui/GlassCard';
 
 const PHOTO_BASE = '/api_proxy';
 
@@ -288,7 +287,7 @@ export const ProfileMasterEditor = ({ initialData, onSave, onCancel }: ProfileMa
             </div>
 
             {/* Basic Info */}
-            <GlassCard className="p-5" hover={false}>
+            <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] backdrop-blur-sm p-5">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <User className="w-3.5 h-3.5" /> Основное
                 </h3>
@@ -331,10 +330,10 @@ export const ProfileMasterEditor = ({ initialData, onSave, onCancel }: ProfileMa
                         <div className="text-right text-[10px] text-slate-600 mt-1">{bio.length}/500</div>
                     </div>
                 </div>
-            </GlassCard>
+            </div>
 
             {/* Details */}
-            <GlassCard className="p-5" hover={false}>
+            <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] backdrop-blur-sm p-5">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Sparkles className="w-3.5 h-3.5" /> Подробности
                 </h3>
@@ -356,10 +355,10 @@ export const ProfileMasterEditor = ({ initialData, onSave, onCancel }: ProfileMa
                         />
                     </div>
                 </div>
-            </GlassCard>
+            </div>
 
             {/* Lifestyle */}
-            <GlassCard className="p-5" hover={false}>
+            <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] backdrop-blur-sm p-5">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Heart className="w-3.5 h-3.5" /> Стиль жизни
                 </h3>
@@ -376,10 +375,10 @@ export const ProfileMasterEditor = ({ initialData, onSave, onCancel }: ProfileMa
                     <InputField label="Язык любви" value={loveLanguage} onChange={setLoveLanguage} placeholder="Прикосновения, слова..." icon={<Heart className="w-3.5 h-3.5" />} />
                     <InputField label="Питомцы" value={pets} onChange={setPets} placeholder="Кот, собака..." icon={<PawPrint className="w-3.5 h-3.5" />} />
                 </div>
-            </GlassCard>
+            </div>
 
             {/* Dating Preferences */}
-            <GlassCard className="p-5" hover={false}>
+            <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] backdrop-blur-sm p-5">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Target className="w-3.5 h-3.5" /> Цели знакомства
                 </h3>
@@ -389,10 +388,10 @@ export const ProfileMasterEditor = ({ initialData, onSave, onCancel }: ProfileMa
                     <InputField label="Идеальное свидание" value={(initialData?.ideal_date as string) || ''} onChange={() => {}} placeholder="Опишите..." icon={<Calendar className="w-3.5 h-3.5" />} />
                     <InputField label="Кого ищу" value={lookingFor} onChange={setLookingFor} placeholder="Опишите..." icon={<Heart className="w-3.5 h-3.5" />} />
                 </div>
-            </GlassCard>
+            </div>
 
             {/* Interests */}
-            <GlassCard className="p-5" hover={false}>
+            <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] backdrop-blur-sm p-5">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Sparkles className="w-3.5 h-3.5" /> Интересы
                 </h3>
@@ -444,7 +443,7 @@ export const ProfileMasterEditor = ({ initialData, onSave, onCancel }: ProfileMa
                         </button>
                     )}
                 </div>
-            </GlassCard>
+            </div>
         </div>
     );
 };
