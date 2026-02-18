@@ -302,24 +302,38 @@ export function useOnboardingFlow() {
             if (d.intent) profileData.intent = d.intent;
             if (d.looking_for) profileData.looking_for = d.looking_for;
 
-            // Сначала загружаем фото, чтобы они были на сервере
-            // до обновления профиля (иначе is_complete не станет true)
-            const uploadPromises = userData.photos.map((photoData, i) => {
-                return authService.uploadPhoto(photoData.file).catch(e => {
+            // 1. Загружаем фото последовательно, чтобы гарантировать сохранение
+            for (let i = 0; i < userData.photos.length; i++) {
+                try {
+                    await authService.uploadPhoto(userData.photos[i].file);
+                } catch (e) {
                     console.error(`Photo upload ${i} failed:`, e);
-                    return null;
-                });
-            });
-            await Promise.allSettled(uploadPromises);
+                }
+            }
 
-            // Теперь обновляем профиль - бэкенд увидит фото и выставит is_complete = true
+            // 2. Обновляем профиль - бэкенд увидит фото и выставит is_complete = true
             await authService.updateProfile(profileData);
 
-            // Инвалидируем кэш профиля, чтобы HomeClient не перекинул обратно на onboarding
-            await queryClient.invalidateQueries({ queryKey: ['user', 'me'] });
+            // 3. Проверяем что is_complete стал true
+            const me = await authService.getMe();
+            
+            // 4. Обновляем кэш напрямую свежими данными (не invalidate, а setQueryData)
+            queryClient.setQueryData(['user', 'me'], me);
 
-            hapticFeedback.notificationOccurred('success');
-            router.push('/');
+            if (me.is_complete === true) {
+                hapticFeedback.notificationOccurred('success');
+                sessionStorage.setItem('onboarding_completed', 'true');
+                router.push('/');
+            } else {
+                // Если бэкенд не выставил is_complete, пробуем ещё раз обновить профиль
+                console.warn('[Onboarding] is_complete still false after save, retrying...');
+                await authService.updateProfile(profileData);
+                const me2 = await authService.getMe();
+                queryClient.setQueryData(['user', 'me'], me2);
+                hapticFeedback.notificationOccurred('success');
+                sessionStorage.setItem('onboarding_completed', 'true');
+                router.push('/');
+            }
         } catch (e: unknown) {
             console.error("Critical Profile Error:", e);
             const err = e as Error & { status?: number; response?: { status?: number }; data?: { detail?: string } };

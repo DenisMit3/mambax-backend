@@ -123,7 +123,7 @@ export function HomeClient() {
         queryKey: ['user', 'me'],
         queryFn: authService.getMe,
         retry: false,
-        staleTime: 1000 * 60 * 5,
+        staleTime: 1000 * 30, // 30s - shorter to pick up is_complete changes faster
         enabled: isAuthed // Only fetch if authenticated
     });
 
@@ -139,8 +139,13 @@ export function HomeClient() {
 
     useEffect(() => {
         if (me) {
-            // Trust backend's is_complete flag — it's set during onboarding completion
             if (me.is_complete !== true) {
+                // Guard: don't redirect back if we just came from onboarding (cache might be stale)
+                const justCompleted = sessionStorage.getItem('onboarding_completed');
+                if (justCompleted) {
+                    sessionStorage.removeItem('onboarding_completed');
+                    return;
+                }
                 router.replace('/onboarding');
             }
         }
