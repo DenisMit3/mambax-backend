@@ -305,22 +305,27 @@ export function useOnboardingFlow() {
             // 1. Загружаем фото последовательно, чтобы гарантировать сохранение
             for (let i = 0; i < userData.photos.length; i++) {
                 try {
+                    console.log(`[Onboarding] Uploading photo ${i + 1}/${userData.photos.length}...`);
                     await authService.uploadPhoto(userData.photos[i].file);
+                    console.log(`[Onboarding] Photo ${i + 1} uploaded OK`);
                 } catch (e) {
-                    console.error(`Photo upload ${i} failed:`, e);
+                    console.error(`[Onboarding] Photo upload ${i} failed:`, e);
                 }
             }
 
             // 2. Обновляем профиль - бэкенд увидит фото и выставит is_complete = true
+            console.log('[Onboarding] Saving profile:', JSON.stringify(profileData));
             await authService.updateProfile(profileData);
 
             // 3. Проверяем что is_complete стал true
             const me = await authService.getMe();
+            console.log('[Onboarding] getMe response:', JSON.stringify({ is_complete: me.is_complete, name: me.name, age: me.age, gender: me.gender, photos: me.photos }));
             
             // 4. Обновляем кэш напрямую свежими данными (не invalidate, а setQueryData)
             queryClient.setQueryData(['user', 'me'], me);
 
             if (me.is_complete === true) {
+                console.log('[Onboarding] SUCCESS - is_complete=true, redirecting to /');
                 hapticFeedback.notificationOccurred('success');
                 sessionStorage.setItem('onboarding_completed', 'true');
                 router.push('/');
@@ -329,6 +334,7 @@ export function useOnboardingFlow() {
                 console.warn('[Onboarding] is_complete still false after save, retrying...');
                 await authService.updateProfile(profileData);
                 const me2 = await authService.getMe();
+                console.log('[Onboarding] Retry getMe:', JSON.stringify({ is_complete: me2.is_complete, name: me2.name, age: me2.age, gender: me2.gender, photos: me2.photos }));
                 queryClient.setQueryData(['user', 'me'], me2);
                 hapticFeedback.notificationOccurred('success');
                 sessionStorage.setItem('onboarding_completed', 'true');

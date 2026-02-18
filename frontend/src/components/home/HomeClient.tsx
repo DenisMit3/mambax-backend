@@ -139,13 +139,16 @@ export function HomeClient() {
 
     useEffect(() => {
         if (me) {
+            console.log('[Home] me data:', JSON.stringify({ is_complete: me.is_complete, name: me.name, age: me.age, gender: me.gender, photos: me.photos?.length }));
             if (me.is_complete !== true) {
                 // Guard: don't redirect back if we just came from onboarding (cache might be stale)
                 const justCompleted = sessionStorage.getItem('onboarding_completed');
                 if (justCompleted) {
+                    console.log('[Home] Skipping redirect - onboarding_completed flag set');
                     sessionStorage.removeItem('onboarding_completed');
                     return;
                 }
+                console.warn('[Home] is_complete !== true, redirecting to /onboarding');
                 router.replace('/onboarding');
             }
         }
