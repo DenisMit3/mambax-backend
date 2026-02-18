@@ -10,7 +10,7 @@ export const verificationApi = {
     getStatus: (): Promise<VerificationStatus> =>
         httpClient.get("/users/me/verification-status"),
 
-    uploadPhoto: (file: File) => {
+    uploadVerificationPhoto: (file: File) => {
         const formData = new FormData();
         formData.append("file", file);
         return httpClient.post("/users/me/verification-photo", formData);

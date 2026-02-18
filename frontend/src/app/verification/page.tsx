@@ -54,7 +54,7 @@ export default function VerificationPage() {
         if (!file) return;
         setUploading(true);
         try {
-            await verificationApi.uploadPhoto(file);
+            await verificationApi.uploadVerificationPhoto(file);
             setSubmitted(true);
             setFile(null);
             if (preview) URL.revokeObjectURL(preview);
