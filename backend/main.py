@@ -208,6 +208,7 @@ async def rate_limit_middleware(request: Request, call_next):
             request.url.path == "/ping" or
             request.url.path.startswith("/debug") or
             request.url.path.startswith("/api/photos") or
+            request.url.path.startswith("/api/client-logs") or
             request.url.path == "/docs" or
             request.url.path == "/openapi.json" or
             request.url.path == "/redoc" or
@@ -288,6 +289,7 @@ from backend.api.system import router as system_router
 from backend.api.advanced import router as advanced_router
 from backend.api.missing_endpoints import router as missing_router
 from backend.api.photos import router as photos_router
+from backend.api.client_logs import router as client_logs_router
 
 
 app.include_router(health_router, tags=["Health"])
@@ -313,6 +315,7 @@ app.include_router(system_router)
 app.include_router(advanced_router)
 app.include_router(missing_router, prefix="/api")
 app.include_router(photos_router)  # /api/photos/{id} — serves images from DB
+app.include_router(client_logs_router)  # /api/client-logs — frontend log collection
 
 # Debug/Dev routes only in non-production
 if not settings.is_production:

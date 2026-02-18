@@ -4,7 +4,7 @@
  */
 
 const API_BASE = '/api_proxy'; // Use relative path with proxy prefix
-const LOG_ENDPOINT = `${API_BASE}/debug/logs`;
+const LOG_ENDPOINT = `${API_BASE}/api/client-logs`;
 
 type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
 
