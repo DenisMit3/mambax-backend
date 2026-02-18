@@ -20,18 +20,19 @@ import { BoostModal } from "@/components/ui/BoostModal";
 import { DailyRewards } from "@/components/rewards/DailyRewards";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { FALLBACK_AVATAR } from "@/lib/constants";
+
+const PHOTO_BASE = '/api_proxy';
+
+function resolvePhotoUrl(url: string | undefined): string {
+    if (!url) return FALLBACK_AVATAR;
+    if (url.startsWith('/api/photos/')) return url;
+    if (url.startsWith('/static/') || url.startsWith('/uploads/')) return `${PHOTO_BASE}${url}`;
+    if (url.startsWith('http') || url.startsWith('data:')) return url;
+    return url;
+}
 
 export default function ProfilePage() {
-    interface UserProfile {
-        name: string;
-        age: number;
-        photos?: string[];
-        stars_balance?: number;
-        subscription_tier?: string;
-        achievements?: unknown[];
-        [key: string]: unknown;
-    }
-
     const [showTopUp, setShowTopUp] = useState(false);
     const [showBoost, setShowBoost] = useState(false);
     const [showDailyRewards, setShowDailyRewards] = useState(false);
@@ -40,6 +41,23 @@ export default function ProfilePage() {
     const router = useRouter();
     const { isAuthed, isChecking } = useRequireAuth();
     const queryClient = useQueryClient();
+
+    interface UserProfile {
+        name: string;
+        age: number;
+        photos?: string[];
+        stars_balance?: number;
+        subscription_tier?: string;
+        achievements?: unknown[];
+        bio?: string;
+        city?: string;
+        work?: string;
+        education?: string;
+        interests?: string[];
+        gender?: string;
+        height?: number;
+        [key: string]: unknown;
+    }
 
     const { data: profile = null, isLoading: loading, error: profileError, refetch: refetchProfile } = useQuery<UserProfile | null>({
         queryKey: ['user', 'me'],
@@ -86,9 +104,14 @@ export default function ProfilePage() {
                 </div>
                 <ProfileMasterEditor
                     initialData={profile}
-                    onSave={() => {
-                        loadProfile();
-                        setIsEditing(false);
+                    onSave={async (data) => {
+                        try {
+                            await authService.updateProfile(data as Parameters<typeof authService.updateProfile>[0]);
+                            loadProfile();
+                            setIsEditing(false);
+                        } catch (e) {
+                            console.error('Failed to update profile', e);
+                        }
                     }}
                 />
             </div>
@@ -118,19 +141,13 @@ export default function ProfilePage() {
                     <div className="relative mb-4 group">
                         <div className="absolute -inset-1 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 opacity-60 blur-lg group-hover:opacity-80 transition duration-500"></div>
                         <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-white/10 bg-black">
-                            {profile?.photos?.[0] ? (
-                                <Image
-                                    src={profile.photos[0]}
-                                    alt="Avatar"
-                                    fill
-                                    sizes="128px"
-                                    className="object-cover"
-                                />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-slate-500">
-                                    Нет фото
-                                </div>
-                            )}
+                            <Image
+                                src={resolvePhotoUrl(profile?.photos?.[0])}
+                                alt="Avatar"
+                                fill
+                                sizes="128px"
+                                className="object-cover"
+                            />
                         </div>
                         {/* Edit Badge */}
                         <button
@@ -149,6 +166,48 @@ export default function ProfilePage() {
                         {' • '}
                         {(profile?.city as string) || 'Не указан'}
                     </p>
+
+                    {/* Extended Profile Info */}
+                    <div className="mt-3 flex flex-wrap justify-center gap-2">
+                        {(profile?.work || profile?.job) && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/5 text-xs text-slate-400">
+                                💼 {(profile?.work || profile?.job) as string}
+                            </span>
+                        )}
+                        {profile?.education && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/5 text-xs text-slate-400">
+                                🎓 {profile.education}
+                            </span>
+                        )}
+                        {profile?.height && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/5 text-xs text-slate-400">
+                                📏 {profile.height} см
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Bio */}
+                    {profile?.bio && (
+                        <p className="mt-3 text-sm text-slate-400 text-center max-w-xs leading-relaxed">
+                            {profile.bio}
+                        </p>
+                    )}
+
+                    {/* Interests */}
+                    {profile?.interests && (profile.interests as string[]).length > 0 && (
+                        <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                            {(profile.interests as string[]).slice(0, 6).map((interest: string) => (
+                                <span key={interest} className="px-2.5 py-1 rounded-full bg-gradient-to-r from-pink-500/10 to-purple-500/10 border border-pink-500/20 text-xs text-pink-300">
+                                    {interest}
+                                </span>
+                            ))}
+                            {(profile.interests as string[]).length > 6 && (
+                                <span className="px-2.5 py-1 rounded-full bg-white/5 text-xs text-slate-500">
+                                    +{(profile.interests as string[]).length - 6}
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Stars Wallet Card */}

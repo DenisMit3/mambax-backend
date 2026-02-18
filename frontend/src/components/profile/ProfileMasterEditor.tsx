@@ -115,6 +115,10 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
     };
 
     const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+    const [city, setCity] = useState('');
+    const [job, setJob] = useState('');
+    const [education, setEducation] = useState('');
+    const [height, setHeight] = useState<number | ''>('');
 
     useEffect(() => {
         if (initialData) {
@@ -127,6 +131,10 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
                 setPhotos(newPhotos);
             }
             setSelectedInterests((initialData.interests || []) as string[]);
+            setCity((initialData.city as string) || '');
+            setJob((initialData.job as string) || (initialData.work as string) || '');
+            setEducation((initialData.education as string) || '');
+            setHeight((initialData.height as number) || '');
         }
     }, [initialData]);
 
@@ -136,6 +144,10 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
                 bio,
                 photos: photos.filter(p => p.url).map(p => p.url!),
                 interests: selectedInterests,
+                city,
+                job,
+                education,
+                height: height || undefined,
                 is_incognito: incognito,
                 hide_age: hideAge,
                 hide_distance: hideDistance
@@ -251,6 +263,58 @@ export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditor
                     onChange={(e) => setBio(e.target.value)}
                     placeholder="Расскажи о себе..."
                 />
+            </GlassCard>
+
+            {/* Profile Details Section */}
+            <GlassCard className="p-6">
+                <h3 className="text-white text-sm font-black uppercase tracking-widest mb-4 flex items-center space-x-2">
+                    <MapPinOff className="w-4 h-4 text-primary-red opacity-60" />
+                    <span>Данные профиля</span>
+                </h3>
+                <div className="space-y-3">
+                    <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Город</label>
+                        <input
+                            type="text"
+                            className="w-full bg-white/[0.02] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-primary-red/30 transition-all placeholder:text-gray-700"
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                            placeholder="Ваш город"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Работа</label>
+                        <input
+                            type="text"
+                            className="w-full bg-white/[0.02] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-primary-red/30 transition-all placeholder:text-gray-700"
+                            value={job}
+                            onChange={(e) => setJob(e.target.value)}
+                            placeholder="Кем работаете"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Образование</label>
+                        <input
+                            type="text"
+                            className="w-full bg-white/[0.02] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-primary-red/30 transition-all placeholder:text-gray-700"
+                            value={education}
+                            onChange={(e) => setEducation(e.target.value)}
+                            placeholder="Где учились"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Рост (см)</label>
+                        <input
+                            type="number"
+                            className="w-full bg-white/[0.02] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-primary-red/30 transition-all placeholder:text-gray-700"
+                            value={height}
+                            onChange={(e) => setHeight(e.target.value ? Number(e.target.value) : '')}
+                            placeholder="170"
+                            min={100}
+                            max={250}
+                        />
+                    </div>
+                </div>
             </GlassCard>
 
             {/* Interests Section */}

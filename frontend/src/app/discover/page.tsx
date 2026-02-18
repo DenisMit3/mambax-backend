@@ -201,7 +201,7 @@ export default function DiscoverPage() {
             </div>
 
             {/* Bottom Controls */}
-            <div className="fixed bottom-28 left-0 right-0 z-50 flex justify-center items-center gap-6 px-6 pointer-events-auto">
+            <div className="fixed bottom-24 left-0 right-0 z-50 flex justify-center items-center gap-3 sm:gap-5 px-4 pointer-events-auto pb-[env(safe-area-inset-bottom)]">
                 {/* Chat with this person */}
                 <button
                     onClick={async () => {
@@ -214,25 +214,25 @@ export default function DiscoverPage() {
                             }
                         }
                     }}
-                    className="w-12 h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-blue-400 shadow-lg active:scale-90 transition-transform hover:bg-slate-800"
+                    className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-blue-400 shadow-lg active:scale-90 transition-transform hover:bg-slate-800 flex-shrink-0"
                 >
-                    <MessageCircle size={20} strokeWidth={2.5} />
+                    <MessageCircle size={18} strokeWidth={2.5} className="sm:w-5 sm:h-5" />
                 </button>
 
                 {/* Nope */}
                 <button
                     onClick={() => handleSwipe("left")}
-                    className="w-16 h-16 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-rose-500 shadow-xl active:scale-90 transition-transform"
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-rose-500 shadow-xl active:scale-90 transition-transform flex-shrink-0"
                 >
-                    <X size={32} strokeWidth={3} />
+                    <X size={28} strokeWidth={3} className="sm:w-8 sm:h-8" />
                 </button>
 
                 {/* Like */}
                 <button
                     onClick={() => handleSwipe("right")}
-                    className="w-16 h-16 rounded-full bg-gradient-to-br from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center text-white shadow-[0_10px_30px_rgba(244,63,94,0.3)] active:scale-90 transition-transform"
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center text-white shadow-[0_10px_30px_rgba(244,63,94,0.3)] active:scale-90 transition-transform flex-shrink-0"
                 >
-                    <Heart size={32} fill="white" strokeWidth={0} />
+                    <Heart size={28} fill="white" strokeWidth={0} className="sm:w-8 sm:h-8" />
                 </button>
 
                 {/* Boost */}
@@ -247,9 +247,9 @@ export default function DiscoverPage() {
                             }
                         }
                     }}
-                    className="w-12 h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-purple-500 shadow-lg active:scale-90 transition-transform"
+                    className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-purple-500 shadow-lg active:scale-90 transition-transform flex-shrink-0"
                 >
-                    <Star size={20} fill="currentColor" strokeWidth={0} />
+                    <Star size={18} fill="currentColor" strokeWidth={0} className="sm:w-5 sm:h-5" />
                 </button>
             </div>
 
