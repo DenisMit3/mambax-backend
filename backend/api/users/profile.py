@@ -86,6 +86,10 @@ async def read_users_me(current_user = Depends(get_current_user)):
         verification_selfie=current_user.verification_selfie,
         ux_preferences=current_user.ux_preferences,
         achievements=getattr(current_user, "achievements", None) or [],
+        city=getattr(current_user, "city", None),
+        job=getattr(current_user, "job", None),
+        education=getattr(current_user, "education", None),
+        height=getattr(current_user, "height", None),
     )
 
 
@@ -129,6 +133,10 @@ async def update_user_me(
         is_complete=updated_user.is_complete,
         verification_selfie=updated_user.verification_selfie,
         ux_preferences=updated_user.ux_preferences,
+        city=getattr(updated_user, "city", None),
+        job=getattr(updated_user, "job", None),
+        education=getattr(updated_user, "education", None),
+        height=getattr(updated_user, "height", None),
     )
 
 

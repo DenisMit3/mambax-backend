@@ -357,6 +357,16 @@ async def update_profile(db: AsyncSession, user_id: str, update_data: UserCreate
         # So we probably just replace the dict. 
         user.ux_preferences = new_prefs
 
+    # Update extended profile fields
+    if hasattr(update_data, 'city') and update_data.city is not None:
+        user.city = update_data.city
+    if hasattr(update_data, 'job') and update_data.job is not None:
+        user.job = update_data.job
+    if hasattr(update_data, 'education') and update_data.education is not None:
+        user.education = update_data.education
+    if hasattr(update_data, 'height') and update_data.height is not None:
+        user.height = update_data.height
+
     await db.commit()
     await db.refresh(user)
     return user

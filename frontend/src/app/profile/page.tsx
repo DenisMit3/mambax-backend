@@ -52,6 +52,7 @@ export default function ProfilePage() {
         bio?: string;
         city?: string;
         work?: string;
+        job?: string;
         education?: string;
         interests?: string[];
         gender?: string;
@@ -141,13 +142,19 @@ export default function ProfilePage() {
                     <div className="relative mb-4 group">
                         <div className="absolute -inset-1 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 opacity-60 blur-lg group-hover:opacity-80 transition duration-500"></div>
                         <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-white/10 bg-black">
-                            <Image
-                                src={resolvePhotoUrl(profile?.photos?.[0])}
-                                alt="Avatar"
-                                fill
-                                sizes="128px"
-                                className="object-cover"
-                            />
+                            {profile?.photos?.[0] ? (
+                                <Image
+                                    src={resolvePhotoUrl(profile.photos[0])}
+                                    alt="Avatar"
+                                    fill
+                                    sizes="128px"
+                                    className="object-cover"
+                                />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-500">
+                                    Нет фото
+                                </div>
+                            )}
                         </div>
                         {/* Edit Badge */}
                         <button

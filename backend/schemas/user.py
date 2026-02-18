@@ -54,6 +54,10 @@ class UserUpdate(BaseModel):
     location: Optional[Location] = None
     is_vip: Optional[bool] = None
     ux_preferences: Optional[UXPreferences] = None
+    city: Optional[str] = None
+    job: Optional[str] = None
+    education: Optional[str] = None
+    height: Optional[int] = None
 
 
 class UserInDB(UserBase):
@@ -79,6 +83,10 @@ class UserResponse(UserBase):
     ux_preferences: Optional[UXPreferences] = None
     onboarding_completed_steps: Optional[dict] = None
     achievements: Optional[list] = None  # [{"badge": "...", "earned_at": "...", "level": 1}]
+    city: Optional[str] = None
+    job: Optional[str] = None
+    education: Optional[str] = None
+    height: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -98,3 +106,7 @@ class ProfileUpdate(BaseModel):
     bio: Optional[str] = None
     photos: Optional[list[str]] = None
     interests: Optional[list[str]] = None
+    city: Optional[str] = None
+    job: Optional[str] = None
+    education: Optional[str] = None
+    height: Optional[int] = None
