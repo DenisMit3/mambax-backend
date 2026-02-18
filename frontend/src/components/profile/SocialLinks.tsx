@@ -68,7 +68,7 @@ export function SocialLinks({ links, editable = false, onUpdate }: SocialLinksPr
                     {PLATFORMS.map(platform => {
                         const Icon = platform.icon;
                         return (
-                            <div key={platform.key} className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-white/5">
+                            <div key={platform.key} className="flex items-center gap-2 p-2.5 rounded-xl bg-[#0f0f11] border border-white/5">
                                 <Icon size={16} className={platform.color} />
                                 <input
                                     type="text"

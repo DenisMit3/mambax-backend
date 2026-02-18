@@ -36,7 +36,7 @@ export function GridView({ users, onSelectUser }: GridViewProps) {
                             <h3 className="font-bold text-sm leading-tight">{user.name}, {user.age}</h3>
                             <div className="flex items-center gap-1 mt-0.5">
                                 <div className="relative">
-                                    <div className={`w-2 h-2 rounded-full ${user.is_online ? 'bg-green-500' : 'bg-gray-500'}`} />
+                                    <div className={`w-2 h-2 rounded-full ${user.is_online ? 'bg-green-500' : 'bg-slate-500'}`} />
                                     {user.is_online && (
                                         <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-75" />
                                     )}

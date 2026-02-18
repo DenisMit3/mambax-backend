@@ -143,7 +143,7 @@ export const MatchModal = ({
                         <div className="w-full space-y-4">
                             <motion.button
                                 onClick={onStartChat}
-                                className="w-full py-4 bg-white text-black font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-3 hover:bg-gray-200 active:scale-95 transition-all"
+                                className="w-full py-4 bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] text-white font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all"
                                 initial={{ y: 20, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
                                 transition={{ delay: 0.8 }}

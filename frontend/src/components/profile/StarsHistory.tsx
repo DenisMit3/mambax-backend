@@ -55,11 +55,11 @@ export function StarsHistory({ balance }: StarsHistoryProps) {
             {loading ? (
                 <div className="space-y-2">
                     {[1, 2, 3].map(i => (
-                        <div key={i} className="h-14 rounded-xl bg-slate-950 animate-pulse" />
+                        <div key={i} className="h-14 rounded-xl bg-[#0f0f11] animate-pulse" />
                     ))}
                 </div>
             ) : transactions.length === 0 ? (
-                <div className="p-6 rounded-2xl bg-slate-950 border border-white/5 text-center">
+                <div className="p-6 rounded-2xl bg-[#0f0f11] border border-white/5 text-center">
                     <Star size={24} className="text-slate-600 mx-auto mb-2" />
                     <p className="text-xs text-slate-500">Нет транзакций</p>
                 </div>
@@ -76,7 +76,7 @@ export function StarsHistory({ balance }: StarsHistoryProps) {
                                     initial={{ opacity: 0, y: 6 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: i * 0.03 }}
-                                    className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-white/5"
+                                    className="flex items-center gap-3 p-3 rounded-xl bg-[#0f0f11] border border-white/5"
                                 >
                                     <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
                                         <Icon size={14} className={config.color} />

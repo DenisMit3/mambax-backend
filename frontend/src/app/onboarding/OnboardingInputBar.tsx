@@ -58,10 +58,10 @@ export default function OnboardingInputBar({
                             onFocus={(e) => {
                                 setTimeout(() => (e.target as HTMLInputElement).scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
                             }}
-                            className={`w-full border-none rounded-2xl px-5 py-3.5 text-[16px] text-white focus:ring-1 focus:ring-[#ff4b91] transition-all shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isTextInputAllowed ? 'bg-[#1c1c1e] placeholder-gray-500' : 'bg-[#151517] text-gray-600 placeholder-gray-700 cursor-not-allowed'}`}
+                            className={`w-full border-none rounded-2xl px-5 py-3.5 text-[16px] text-white focus:ring-1 focus:ring-[#ff4b91] transition-all shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isTextInputAllowed ? 'bg-[#1c1c1e] placeholder-gray-500' : 'bg-[#151517] text-slate-500 placeholder-gray-700 cursor-not-allowed'}`}
                         />
                     </div>
-                    <button type="submit" disabled={!isTextInputAllowed || !inputValue.trim() || isTyping} className={`p-3.5 rounded-full shadow-lg transition-all ${isTextInputAllowed && inputValue.trim() ? 'bg-[#ff4b91] text-white' : 'bg-white/5 text-gray-600 cursor-not-allowed'}`}>
+                    <button type="submit" disabled={!isTextInputAllowed || !inputValue.trim() || isTyping} className={`p-3.5 rounded-full shadow-lg transition-all ${isTextInputAllowed && inputValue.trim() ? 'bg-[#ff4b91] text-white' : 'bg-white/5 text-slate-500 cursor-not-allowed'}`}>
                         <Send className="w-5 h-5" />
                     </button>
                 </form>

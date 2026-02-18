@@ -30,19 +30,19 @@ export const ConversationPromptsModal = ({
                     onClick={onClose}
                 >
                     <motion.div
-                        className="w-full max-w-lg bg-gray-900 rounded-t-3xl p-6 border-t border-white/10"
+                        className="w-full max-w-lg bg-[#0f0f11] rounded-t-3xl p-6 border-t border-white/10"
                         initial={{ y: '100%' }}
                         animate={{ y: 0 }}
                         exit={{ y: '100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
+                        <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-4" />
                         <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
                             <Lightbulb className="w-5 h-5 text-amber-400" />
                             Возобновить разговор
                         </h3>
-                        <p className="text-sm text-gray-400 mb-4">
+                        <p className="text-sm text-slate-400 mb-4">
                             Разговор затих? Вот несколько идей, чтобы его оживить:
                         </p>
 
@@ -55,7 +55,7 @@ export const ConversationPromptsModal = ({
                                 {prompts.map((prompt, index) => (
                                     <motion.button
                                         key={prompt || index}
-                                        className="w-full p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-left text-white transition-colors"
+                                        className="w-full p-4 bg-white/10 hover:bg-white/15 rounded-xl text-left text-white transition-colors"
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: index * 0.1 }}
@@ -66,13 +66,13 @@ export const ConversationPromptsModal = ({
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-center text-gray-500 py-4">
+                            <p className="text-center text-slate-500 py-4">
                                 Не удалось загрузить подсказки
                             </p>
                         )}
 
                         <button
-                            className="w-full mt-4 py-3 text-gray-400 hover:text-white transition-colors"
+                            className="w-full mt-4 py-3 text-slate-400 hover:text-white transition-colors"
                             onClick={onClose}
                         >
                             Закрыть

@@ -181,7 +181,7 @@ export default function NotificationSettingsPage() {
                 {/* Push notifications section */}
                 <section>
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">Push-уведомления</p>
-                    <div className="rounded-2xl bg-slate-950 border border-white/5 px-4 divide-y divide-white/5">
+                    <div className="rounded-2xl bg-[#0f0f11] border border-white/5 px-4 divide-y divide-white/5">
                         <ToggleRow
                             icon={Heart}
                             label="Новый матч"
@@ -244,7 +244,7 @@ export default function NotificationSettingsPage() {
                 {/* Sound & Quiet Hours */}
                 <section>
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">Звук и режим</p>
-                    <div className="rounded-2xl bg-slate-950 border border-white/5 px-4 divide-y divide-white/5">
+                    <div className="rounded-2xl bg-[#0f0f11] border border-white/5 px-4 divide-y divide-white/5">
                         <ToggleRow
                             icon={soundEnabled ? Volume2 : VolumeX}
                             label="Звук уведомлений"
@@ -272,7 +272,7 @@ export default function NotificationSettingsPage() {
                                 exit={{ height: 0, opacity: 0 }}
                                 className="overflow-hidden"
                             >
-                                <div className="mt-2 p-4 rounded-2xl bg-slate-950 border border-white/5">
+                                <div className="mt-2 p-4 rounded-2xl bg-[#0f0f11] border border-white/5">
                                     <div className="flex items-center gap-2 mb-3">
                                         <Clock size={14} className="text-slate-400" />
                                         <span className="text-xs text-slate-400">Не беспокоить с</span>
@@ -304,7 +304,7 @@ export default function NotificationSettingsPage() {
                     <button
                         onClick={sendTestPush}
                         disabled={testSending}
-                        className="w-full p-4 rounded-2xl bg-slate-950 border border-white/5 flex items-center gap-3 hover:bg-white/[0.03] transition disabled:opacity-50"
+                        className="w-full p-4 rounded-2xl bg-[#0f0f11] border border-white/5 flex items-center gap-3 hover:bg-white/[0.03] transition disabled:opacity-50"
                     >
                         <div className="w-9 h-9 rounded-xl bg-purple-500/20 flex items-center justify-center">
                             <Send size={16} className="text-purple-400" />

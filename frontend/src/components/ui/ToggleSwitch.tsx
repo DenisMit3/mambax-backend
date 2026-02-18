@@ -15,12 +15,12 @@ export const ToggleSwitch = ({ label, checked, onChange, description }: ToggleSw
         <div className="flex items-center justify-between py-3">
             <div className="flex flex-col">
                 <span className="text-white font-medium">{label}</span>
-                {description && <span className="text-xs text-gray-400">{description}</span>}
+                {description && <span className="text-xs text-slate-400">{description}</span>}
             </div>
             <motion.button
                 className={cn(
                     "w-12 h-6 rounded-full relative transition-colors duration-300",
-                    checked ? "bg-green-500" : "bg-gray-600"
+                    checked ? "bg-green-500" : "bg-white/20"
                 )}
                 onClick={() => onChange(!checked)}
                 whileTap={{ scale: 0.95 }}

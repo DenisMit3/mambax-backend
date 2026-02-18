@@ -90,7 +90,7 @@ export default function SecuritySettingsPage() {
                 {/* 2FA Section */}
                 <section>
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-1 mb-2">Двухфакторная аутентификация</p>
-                    <div className="rounded-2xl bg-slate-950 border border-white/5 p-4">
+                    <div className="rounded-2xl bg-[#0f0f11] border border-white/5 p-4">
                         <div className="flex items-center gap-3 mb-3">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${twoFAEnabled ? 'bg-green-500/15' : 'bg-slate-700/30'}`}>
                                 {twoFAEnabled ? <Lock size={20} className="text-green-400" /> : <Unlock size={20} className="text-slate-400" />}
@@ -131,7 +131,7 @@ export default function SecuritySettingsPage() {
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-1 mb-2">
                         Устройства ({devices.length})
                     </p>
-                    <div className="rounded-2xl bg-slate-950 border border-white/5 overflow-hidden divide-y divide-white/5">
+                    <div className="rounded-2xl bg-[#0f0f11] border border-white/5 overflow-hidden divide-y divide-white/5">
                         {devices.length === 0 ? (
                             <div className="p-6 text-center">
                                 <Smartphone size={24} className="text-slate-600 mx-auto mb-2" />

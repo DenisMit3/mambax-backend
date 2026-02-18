@@ -114,7 +114,7 @@ export function GiftRevealAnimation({
     return (
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-xl">
+                <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#0f0f11]/90 backdrop-blur-xl">
                     <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
                     {/* Close Button */}

@@ -105,7 +105,7 @@ export default function VisibilitySettingsPage() {
             </div>
 
             <div className="px-4 pt-4">
-                <div className="rounded-2xl bg-slate-950 border border-white/5 overflow-hidden divide-y divide-white/5">
+                <div className="rounded-2xl bg-[#0f0f11] border border-white/5 overflow-hidden divide-y divide-white/5">
                     {items.map((item, i) => {
                         const Icon = item.icon;
                         const colors = item.color.split(' ');

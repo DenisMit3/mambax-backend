@@ -136,7 +136,7 @@ export default function PreferencesPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.05 }}
-                    className="rounded-2xl bg-slate-950 border border-white/5 p-5"
+                    className="rounded-2xl bg-[#0f0f11] border border-white/5 p-5"
                 >
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center">
@@ -167,7 +167,7 @@ export default function PreferencesPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="rounded-2xl bg-slate-950 border border-white/5 p-5"
+                    className="rounded-2xl bg-[#0f0f11] border border-white/5 p-5"
                 >
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-9 h-9 rounded-xl bg-pink-500/10 flex items-center justify-center">
@@ -204,7 +204,7 @@ export default function PreferencesPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.15 }}
-                    className="rounded-2xl bg-slate-950 border border-white/5 p-5"
+                    className="rounded-2xl bg-[#0f0f11] border border-white/5 p-5"
                 >
                     <div className="flex items-center gap-3 mb-4">
                         <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center">
@@ -237,7 +237,7 @@ export default function PreferencesPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="rounded-2xl bg-slate-950 border border-white/5 p-5"
+                    className="rounded-2xl bg-[#0f0f11] border border-white/5 p-5"
                 >
                     <div className="flex items-center gap-4">
                         <div className="w-9 h-9 rounded-xl bg-green-500/10 flex items-center justify-center shrink-0">
@@ -280,7 +280,7 @@ function DualRangeSlider({
             <div className="absolute top-1/2 -translate-y-1/2 w-full h-1.5 rounded-full bg-white/10" />
             {/* Активная полоска */}
             <div
-                className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500"
+                className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a]"
                 style={{ left: `${leftPct}%`, width: `${rightPct - leftPct}%` }}
             />
             {/* Ползунок min */}

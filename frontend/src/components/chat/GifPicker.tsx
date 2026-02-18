@@ -110,7 +110,7 @@ export function GifPicker({ isOpen, onClose, onSelectGif }: GifPickerProps) {
                     animate={{ y: 0 }}
                     exit={{ y: "100%" }}
                     transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                    className="absolute bottom-0 left-0 right-0 h-[70vh] bg-slate-950 border-t border-slate-800 rounded-t-3xl flex flex-col"
+                    className="absolute bottom-0 left-0 right-0 h-[70vh] bg-[#0f0f11] border-t border-slate-800 rounded-t-3xl flex flex-col"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Handle */}

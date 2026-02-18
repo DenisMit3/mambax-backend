@@ -16,7 +16,7 @@ export function ViewsChart({ data }: { data: AnalyticsData }) {
                         const height = (point.views / maxViews) * 100;
                         return (
                             <motion.div key={point.date || index}
-                                className="flex-1 bg-gradient-to-t from-purple-500 to-pink-500 rounded-t-lg min-h-[4px]"
+                                className="flex-1 bg-gradient-to-t from-[#ff4b91] to-[#ff9e4a] rounded-t-lg min-h-[4px]"
                                 style={{ height: `${height}%` }}
                                 initial={{ height: 0 }} animate={{ height: `${height}%` }}
                                 transition={{ delay: index * 0.1, duration: 0.5 }} />
@@ -98,7 +98,7 @@ export function Demographics({ data }: { data: AnalyticsData }) {
                                     <span className="text-gray-300">{group.range}</span>
                                     <div className="flex items-center space-x-3">
                                         <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
-                                            <motion.div className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+                                            <motion.div className="h-full bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a]"
                                                 initial={{ width: 0 }} animate={{ width: `${group.percentage}%` }}
                                                 transition={{ delay: index * 0.1, duration: 0.8 }} />
                                         </div>

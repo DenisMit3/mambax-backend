@@ -134,7 +134,7 @@ export default function SettingsPage() {
                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-1 mb-2">
                             {group.title}
                         </p>
-                        <div className="rounded-2xl bg-slate-950 border border-white/5 overflow-hidden divide-y divide-white/5">
+                        <div className="rounded-2xl bg-[#0f0f11] border border-white/5 overflow-hidden divide-y divide-white/5">
                             {group.items.map(item => {
                                 const Icon = item.icon;
                                 return (

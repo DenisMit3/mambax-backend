@@ -89,7 +89,7 @@ export default function DiscoverPage() {
     // Loading State with Skeleton
     if (isLoadingProfiles) {
         return (
-            <div className="relative h-full bg-slate-950 flex flex-col items-center justify-center p-4">
+            <div className="relative h-full bg-[#0f0f11] flex flex-col items-center justify-center p-4">
                 {/* Header Skeleton */}
                 <div className="absolute top-6 left-0 right-0 flex justify-center gap-3 px-6 z-50">
                     <Skeleton className="h-10 w-20 rounded-2xl bg-slate-800" />
@@ -117,7 +117,7 @@ export default function DiscoverPage() {
     // No More Profiles
     if (!profiles || currentIndex >= profiles.length) {
         return (
-            <div className="relative h-full flex flex-col items-center justify-center bg-slate-950 p-6 text-center">
+            <div className="relative h-full flex flex-col items-center justify-center bg-[#0f0f11] p-6 text-center">
                 <div className="w-24 h-24 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-6">
                     <Star size={40} className="text-slate-700" />
                 </div>
@@ -142,7 +142,7 @@ export default function DiscoverPage() {
     const currentProfile = profiles[currentIndex];
 
     return (
-        <div className="relative bg-slate-950 overflow-y-auto flex flex-col h-full">
+        <div className="relative bg-[#0f0f11] overflow-y-auto flex flex-col h-full">
             {/* Header / Stats */}
             <AnimatePresence>
                 {swipeStatus && (
@@ -230,7 +230,7 @@ export default function DiscoverPage() {
                 {/* Like */}
                 <button
                     onClick={() => handleSwipe("right")}
-                    className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center text-white shadow-[0_10px_30px_rgba(244,63,94,0.3)] active:scale-90 transition-transform"
+                    className="w-16 h-16 rounded-full bg-gradient-to-br from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center text-white shadow-[0_10px_30px_rgba(244,63,94,0.3)] active:scale-90 transition-transform"
                 >
                     <Heart size={32} fill="white" strokeWidth={0} />
                 </button>

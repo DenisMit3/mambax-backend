@@ -113,7 +113,7 @@ export default function IncognitoSettingsPage() {
                                 initial={{ opacity: 0, x: -12 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: i * 0.08 }}
-                                className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-950 border border-white/5"
+                                className="flex items-center gap-3 p-3.5 rounded-xl bg-[#0f0f11] border border-white/5"
                             >
                                 <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
                                     <Icon size={16} className="text-indigo-400" />

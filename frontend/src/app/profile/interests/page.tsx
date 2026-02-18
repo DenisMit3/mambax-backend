@@ -128,7 +128,7 @@ export default function InterestsPage() {
                         autoComplete="off"
                         autoCapitalize="off"
                         enterKeyHint="search"
-                        className="w-full bg-slate-950 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-slate-600 border border-white/5 focus:border-purple-500/50 focus:outline-none transition"
+                        className="w-full bg-[#0f0f11] rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-slate-600 border border-white/5 focus:border-purple-500/50 focus:outline-none transition"
                     />
                 </div>
             </div>
@@ -155,7 +155,7 @@ export default function InterestsPage() {
                                             px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors
                                             ${active
                                                 ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
-                                                : 'bg-slate-950 text-slate-400 border border-white/5 hover:border-purple-500/30'
+                                                : 'bg-[#0f0f11] text-slate-400 border border-white/5 hover:border-purple-500/30'
                                             }
                                         `}
                                     >
@@ -181,7 +181,7 @@ export default function InterestsPage() {
                     whileTap={{ scale: 0.97 }}
                     onClick={save}
                     disabled={saving || selected.size === 0}
-                    className="w-full py-3.5 rounded-2xl font-semibold text-white bg-gradient-to-r from-purple-600 to-pink-500 disabled:opacity-40 transition-opacity"
+                    className="w-full py-3.5 rounded-2xl font-semibold text-white bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] disabled:opacity-40 transition-opacity"
                 >
                     {saving ? 'Сохранение...' : 'Сохранить'}
                 </motion.button>

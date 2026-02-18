@@ -316,7 +316,7 @@ export function useOnboardingFlow() {
             await authService.updateProfile(profileData);
 
             // Инвалидируем кэш профиля, чтобы HomeClient не перекинул обратно на onboarding
-            await queryClient.invalidateQueries({ queryKey: ['me'] });
+            await queryClient.invalidateQueries({ queryKey: ['user', 'me'] });
 
             hapticFeedback.notificationOccurred('success');
             router.push('/');

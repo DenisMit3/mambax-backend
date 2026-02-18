@@ -115,7 +115,7 @@ export const VoiceRecorder = ({ onSend }: VoiceRecorderProps) => {
                         initial={{ opacity: 0, width: 0 }}
                         animate={{ opacity: 1, width: 'auto' }}
                         exit={{ opacity: 0, width: 0 }}
-                        className="absolute right-12 top-0 bottom-0 flex items-center bg-gray-900 rounded-full px-4 pr-10 border border-red-500/50"
+                        className="absolute right-12 top-0 bottom-0 flex items-center bg-[#0f0f11] rounded-full px-4 pr-10 border border-red-500/50"
                         style={{ height: '40px', top: '0px' }} // Align with button
                     >
                         <div className="flex items-center space-x-2 min-w-[150px]">
@@ -142,7 +142,7 @@ export const VoiceRecorder = ({ onSend }: VoiceRecorderProps) => {
             </AnimatePresence>
 
             <motion.button
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isRecording ? 'bg-red-500 text-white shadow-lg shadow-red-500/50' : 'bg-gray-800 text-gray-400 hover:text-white'
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isRecording ? 'bg-red-500 text-white shadow-lg shadow-red-500/50' : 'bg-white/10 text-slate-400 hover:text-white'
                     }`}
                 onPointerDown={startRecording}
                 onPointerUp={stopRecording}

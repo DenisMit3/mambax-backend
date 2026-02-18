@@ -35,7 +35,7 @@ export const MatchHub = ({
 
     const tabs = [
         { id: 'matches' as const, label: 'Матчи', icon: Heart, count: newMatchesCount, color: 'from-pink-500 to-red-500' },
-        { id: 'likes' as const, label: 'Лайки', icon: Eye, count: totalLikesCount, color: 'from-purple-500 to-pink-500' }
+        { id: 'likes' as const, label: 'Лайки', icon: Eye, count: totalLikesCount, color: 'from-[#ff4b91] to-[#ff9e4a]' }
     ];
 
     return (
@@ -64,7 +64,7 @@ export const MatchHub = ({
                 </div>
 
                 {/* Tab Selector */}
-                <div className="flex bg-gray-800/50 rounded-2xl p-1 backdrop-blur-xl">
+                <div className="flex bg-white/5 rounded-2xl p-1 backdrop-blur-xl">
                     {tabs.map((tab) => (
                         <motion.button
                             key={tab.id}

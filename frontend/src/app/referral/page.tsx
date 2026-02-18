@@ -258,7 +258,7 @@ export default function ReferralPage() {
 
       <div className="px-4 pt-6 space-y-5 max-w-lg mx-auto w-full overflow-hidden box-border">
         {/* Debug viewport info */}
-        <div className="text-[10px] text-gray-600 break-all">
+        <div className="text-[10px] text-slate-500 break-all">
           [VIEWPORT] w={typeof window !== "undefined" ? window.innerWidth : "?"} | tg_ver={webApp?.version || "no_tg"} | expanded={webApp?.isExpanded ? "Y" : "N"}
         </div>
         {/* Реферальный код */}
@@ -283,7 +283,7 @@ export default function ReferralPage() {
 
           <button
             onClick={shareLink}
-            className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 font-medium text-sm hover:opacity-90 transition-opacity active:scale-[0.98] box-border"
+            className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] font-medium text-sm hover:opacity-90 transition-opacity active:scale-[0.98] box-border"
           >
             <Share2 className="w-4 h-4" />
             Поделиться ссылкой
@@ -304,11 +304,11 @@ export default function ReferralPage() {
                 variants={fadeUp}
                 initial="hidden"
                 animate="visible"
-                className="bg-slate-950 rounded-2xl p-2.5 border border-white/5 text-center overflow-hidden"
+                className="bg-[#0f0f11] rounded-2xl p-2.5 border border-white/5 text-center overflow-hidden"
               >
                 <card.icon className={`w-4 h-4 mx-auto mb-1 ${card.color}`} />
                 <p className="text-lg font-bold truncate">{card.value}{card.suffix || ""}</p>
-                <p className="text-[10px] text-gray-500 mt-0.5 truncate">{card.label}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5 truncate">{card.label}</p>
               </motion.div>
             ))}
           </div>
@@ -321,14 +321,14 @@ export default function ReferralPage() {
             variants={fadeUp}
             initial="hidden"
             animate="visible"
-            className="bg-slate-950 rounded-2xl border border-white/5 overflow-hidden"
+            className="bg-[#0f0f11] rounded-2xl border border-white/5 overflow-hidden"
           >
             <button
               onClick={() => setShowInvited(!showInvited)}
               className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
             >
               <span>Приглашённые ({stats.total_referrals})</span>
-              {showInvited ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+              {showInvited ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
             </button>
             <AnimatePresence>
               {showInvited && (
@@ -340,19 +340,19 @@ export default function ReferralPage() {
                 >
                   <div className="px-4 pb-3 space-y-2">
                     {invited.length === 0 ? (
-                      <p className="text-xs text-gray-500 py-2">Загрузка...</p>
+                      <p className="text-xs text-slate-500 py-2">Загрузка...</p>
                     ) : (
                       invited.map((u, i) => (
                         <div key={i} className="flex items-center justify-between py-2 border-t border-white/5">
                           <div>
                             <p className="text-sm">{u.name}</p>
-                            {u.username && <p className="text-xs text-gray-500">@{u.username}</p>}
+                            {u.username && <p className="text-xs text-slate-500">@{u.username}</p>}
                           </div>
                           <div className="text-right">
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                               u.status === "converted" ? "bg-green-500/20 text-green-400" :
                               u.status === "pending" ? "bg-yellow-500/20 text-yellow-400" :
-                              "bg-gray-500/20 text-gray-400"
+                              "bg-gray-500/20 text-slate-400"
                             }`}>
                               {u.status === "converted" ? "Активен" : u.status === "pending" ? "Ожидание" : u.status}
                             </span>
@@ -374,7 +374,7 @@ export default function ReferralPage() {
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="bg-slate-950 rounded-2xl p-4 border border-white/5"
+          className="bg-[#0f0f11] rounded-2xl p-4 border border-white/5"
         >
           <p className="text-sm font-medium mb-3">Есть код друга?</p>
           <div className="flex gap-2 w-full overflow-hidden">
@@ -389,7 +389,7 @@ export default function ReferralPage() {
               enterKeyHint="send"
               spellCheck={false}
               maxLength={20}
-              className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 transition-colors box-border"
+              className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none focus:border-purple-500/50 transition-colors box-border"
             />
             <button
               onClick={applyCode}
@@ -412,10 +412,10 @@ export default function ReferralPage() {
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="bg-slate-950 rounded-2xl p-4 border border-white/5"
+          className="bg-[#0f0f11] rounded-2xl p-4 border border-white/5"
         >
           <p className="text-sm font-medium mb-3">Как это работает</p>
-          <ul className="space-y-3 text-sm text-gray-400">
+          <ul className="space-y-3 text-sm text-slate-400">
             {[
               "Поделись своим кодом с друзьями",
               "Друг регистрируется и вводит твой код",

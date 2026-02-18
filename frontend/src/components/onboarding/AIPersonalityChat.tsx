@@ -214,7 +214,7 @@ export const AIPersonalityChat = ({ onComplete }: AIPersonalityChatProps) => {
 
                             {message.isAI && (
                                 <motion.div
-                                    className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center order-1 mr-3 mt-auto"
+                                    className="w-8 h-8 rounded-full bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center order-1 mr-3 mt-auto"
                                     animate={{ rotate: [0, 360] }}
                                     transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
                                 >
@@ -234,7 +234,7 @@ export const AIPersonalityChat = ({ onComplete }: AIPersonalityChatProps) => {
                             exit={{ opacity: 0, y: -20 }}
                             className="flex justify-start"
                         >
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center mr-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center mr-3">
                                 <Sparkles className="w-4 h-4 text-white" />
                             </div>
                             <GlassCard className="p-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20" hover={false}>

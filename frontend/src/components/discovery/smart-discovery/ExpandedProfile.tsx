@@ -57,7 +57,7 @@ export function ExpandedProfile({ profile, onClose, onSwipe }: ExpandedProfilePr
                         <div className="absolute bottom-0 left-0 p-6 w-full">
                             <h1 className="text-4xl font-bold text-white mb-2 truncate">{profile.name}, {profile.age}</h1>
                             <div className="flex items-center space-x-2 text-white/80">
-                                <div className={`w-2 h-2 rounded-full ${profile.is_online ? 'bg-green-500' : 'bg-gray-500'}`} />
+                                <div className={`w-2 h-2 rounded-full ${profile.is_online ? 'bg-green-500' : 'bg-slate-500'}`} />
                                 <span>{profile.is_online ? 'Онлайн' : formatLastSeen(profile.last_seen)}</span>
                             </div>
                         </div>

@@ -51,7 +51,7 @@ const CATEGORIES = ["All", "Speed Dating", "Parties", "Outdoor", "Online"] as co
 type Category = (typeof CATEGORIES)[number];
 
 const categoryColor: Record<string, string> = {
-    "Speed Dating": "from-pink-500 to-rose-600",
+    "Speed Dating": "from-[#ff4b91] to-[#ff9e4a]",
     Parties: "from-purple-500 to-violet-600",
     Outdoor: "from-emerald-500 to-green-600",
     Online: "from-blue-500 to-cyan-600",
@@ -292,8 +292,8 @@ export default function EventsPage() {
                             }}
                             className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
                                 activeCategory === cat
-                                    ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25"
-                                    : "bg-slate-950 text-slate-400 hover:text-white"
+                                    ? "bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] text-white shadow-lg shadow-purple-500/25"
+                                    : "bg-[#0f0f11] text-slate-400 hover:text-white"
                             }`}
                         >
                             {cat === "All" ? "Все" : cat}
@@ -308,7 +308,7 @@ export default function EventsPage() {
                     /* Скелетоны загрузки */
                     <div className="space-y-4">
                         {[1, 2, 3].map((i) => (
-                            <div key={i} className="rounded-2xl bg-slate-950 overflow-hidden border border-white/5">
+                            <div key={i} className="rounded-2xl bg-[#0f0f11] overflow-hidden border border-white/5">
                                 <div className="h-40 bg-slate-900 animate-pulse" />
                                 <div className="p-4 space-y-3">
                                     <div className="h-5 w-3/4 bg-slate-800 rounded animate-pulse" />
@@ -335,7 +335,7 @@ export default function EventsPage() {
                         <p className="text-slate-400 text-sm max-w-xs mb-6">{error}</p>
                         <button
                             onClick={loadEvents}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 font-semibold text-sm active:scale-[0.97] transition-transform"
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] font-semibold text-sm active:scale-[0.97] transition-transform"
                         >
                             <RefreshCw className="w-4 h-4" />
                             Попробовать снова
@@ -348,7 +348,7 @@ export default function EventsPage() {
                         animate={{ opacity: 1, y: 0 }}
                         className="flex flex-col items-center justify-center py-20 text-center"
                     >
-                        <div className="w-16 h-16 rounded-full bg-slate-950 flex items-center justify-center mb-4">
+                        <div className="w-16 h-16 rounded-full bg-[#0f0f11] flex items-center justify-center mb-4">
                             <Calendar className="w-8 h-8 text-purple-400" />
                         </div>
                         <h2 className="text-xl font-bold mb-2">Событий пока нет</h2>
@@ -378,7 +378,7 @@ export default function EventsPage() {
                                     haptic.light();
                                     setSelectedEvent(event);
                                 }}
-                                className="rounded-2xl overflow-hidden bg-slate-950 border border-white/5 cursor-pointer active:border-purple-500/30 transition-colors"
+                                className="rounded-2xl overflow-hidden bg-[#0f0f11] border border-white/5 cursor-pointer active:border-purple-500/30 transition-colors"
                             >
                                 {/* Изображение */}
                                 <div className="relative h-40 overflow-hidden">
@@ -434,7 +434,7 @@ export default function EventsPage() {
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.3, type: "spring", stiffness: 260, damping: 20 }}
                 onClick={handleCreateEvent}
-                className="fixed bottom-24 right-4 z-40 w-14 h-14 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 shadow-lg shadow-purple-500/30 flex items-center justify-center active:scale-95 transition-transform"
+                className="fixed bottom-24 right-4 z-40 w-14 h-14 rounded-full bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] shadow-lg shadow-purple-500/30 flex items-center justify-center active:scale-95 transition-transform"
                 aria-label="Создать событие"
             >
                 <Plus className="w-6 h-6" />
@@ -456,7 +456,7 @@ export default function EventsPage() {
                             exit={{ y: "100%" }}
                             transition={{ type: "spring", damping: 25, stiffness: 300 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full max-w-lg bg-slate-950 rounded-t-3xl border-t border-white/10 overflow-hidden"
+                            className="w-full max-w-lg bg-[#0f0f11] rounded-t-3xl border-t border-white/10 overflow-hidden"
                         >
                             {/* Ручка */}
                             <div className="flex justify-center pt-3 pb-2">
@@ -492,7 +492,7 @@ export default function EventsPage() {
                                 <button
                                     disabled={registering}
                                     onClick={() => handleRegister(selectedEvent.id)}
-                                    className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 font-semibold text-sm active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    className="w-full py-3 rounded-xl bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] font-semibold text-sm active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
                                     {registering ? (
                                         <>

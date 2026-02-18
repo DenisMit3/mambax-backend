@@ -154,7 +154,7 @@ export const VIPComposer = ({
         <div className="flex items-end gap-2">
           <div className="flex-1 min-w-0 bg-[#212121] rounded-[22px] px-1 py-1 flex items-end border border-white/5 focus-within:border-primary-red/30 transition-all min-h-[36px]">
             <AnimatedButton variant="ghost" size="sm" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="w-11 h-11 hover:bg-white/5 rounded-full shrink-0 mb-0.5">
-              <Smile className="w-5 h-5 text-gray-400" />
+              <Smile className="w-5 h-5 text-slate-400" />
             </AnimatedButton>
             <textarea
               ref={textareaRef}
@@ -175,17 +175,17 @@ export const VIPComposer = ({
                     autoCapitalize="sentences"
                     enterKeyHint="send"
               rows={1}
-              className="flex-1 bg-transparent border-none outline-none text-white text-[16px] leading-[20px] px-2 py-2 min-w-0 resize-none overflow-y-hidden scrollbar-hide placeholder:text-gray-500"
+              className="flex-1 bg-transparent border-none outline-none text-white text-[16px] leading-[20px] px-2 py-2 min-w-0 resize-none overflow-y-hidden scrollbar-hide placeholder:text-slate-500"
             />
             <input type="file" ref={fileInputRef} className="hidden" onChange={handleImageUpload} accept="image/*" multiple />
             <AnimatedButton variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} className="w-9 h-9 hover:bg-white/5 rounded-full shrink-0 mb-0.5">
-              <ImageIcon className="w-5 h-5 text-gray-400" />
+              <ImageIcon className="w-5 h-5 text-slate-400" />
             </AnimatedButton>
             {onOpenGifPicker && (
               <button
                 type="button"
                 onClick={onOpenGifPicker}
-                className="w-9 h-9 flex items-center justify-center hover:bg-white/5 rounded-full shrink-0 mb-0.5 text-xs font-bold text-gray-400"
+                className="w-9 h-9 flex items-center justify-center hover:bg-white/5 rounded-full shrink-0 mb-0.5 text-xs font-bold text-slate-400"
                 title="GIF"
               >
                 GIF

@@ -84,7 +84,7 @@ export default function SuperlikePage() {
                 <div className="flex items-center gap-3 p-4">
                     <button
                         onClick={() => { haptic.light(); router.back(); }}
-                        className="w-10 h-10 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center"
+                        className="w-10 h-10 rounded-full bg-[#0f0f11] border border-slate-800 flex items-center justify-center"
                     >
                         <ArrowLeft size={20} className="text-slate-300" />
                     </button>
@@ -111,7 +111,7 @@ export default function SuperlikePage() {
             <div className="flex items-center gap-3 p-4">
                 <button
                     onClick={() => { haptic.light(); router.back(); }}
-                    className="w-10 h-10 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center"
+                    className="w-10 h-10 rounded-full bg-[#0f0f11] border border-slate-800 flex items-center justify-center"
                 >
                     <ArrowLeft size={20} className="text-slate-300" />
                 </button>
@@ -174,7 +174,7 @@ export default function SuperlikePage() {
 
             {/* Таймер сброса */}
             <motion.div
-                className="mx-5 p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center gap-3"
+                className="mx-5 p-4 rounded-2xl bg-[#0f0f11] border border-slate-800 flex items-center gap-3"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.4 }}
@@ -247,7 +247,7 @@ export default function SuperlikePage() {
                     ].map((item, i) => (
                         <motion.div
                             key={item.text}
-                            className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800/60"
+                            className="flex items-center gap-3 p-3 rounded-xl bg-[#0f0f11] border border-slate-800/60"
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.7 + i * 0.1 }}

@@ -45,14 +45,14 @@ export const AdvancedAnalyticsDashboard = ({ data, isPremium, onUpgradeToPremium
         return (
             <div className="flex flex-col items-center justify-center h-dvh bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
                 <motion.div className="text-center max-w-md" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                    <div className="w-24 h-24 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <div className="w-24 h-24 bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] rounded-full flex items-center justify-center mx-auto mb-6">
                         <TrendingUp className="w-12 h-12 text-white" />
                     </div>
                     <h2 className="text-2xl font-bold text-white mb-4">Продвинутая аналитика</h2>
                     <p className="text-gray-400 mb-8 leading-relaxed">
                         Получите детальную статистику по вашему профилю, узнайте кто вас лайкает и оптимизируйте свою стратегию знакомств
                     </p>
-                    <AnimatedButton onClick={onUpgradeToPremium} className="bg-gradient-to-r from-purple-500 to-pink-500 px-8 py-3">
+                    <AnimatedButton onClick={onUpgradeToPremium} className="bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] px-8 py-3">
                         <Award className="w-5 h-5 mr-2" /> Получить Premium
                     </AnimatedButton>
                 </motion.div>
@@ -72,7 +72,7 @@ export const AdvancedAnalyticsDashboard = ({ data, isPremium, onUpgradeToPremium
                 {(['week', 'month', 'year'] as const).map((period) => (
                     <AnimatedButton key={period} variant={selectedPeriod === period ? 'primary' : 'secondary'} size="sm"
                         onClick={() => handlePeriodChange(period)}
-                        className={selectedPeriod === period ? 'bg-gradient-to-r from-purple-500 to-pink-500' : ''}>
+                        className={selectedPeriod === period ? 'bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a]' : ''}>
                         {period === 'week' ? 'Неделя' : period === 'month' ? 'Месяц' : 'Год'}
                     </AnimatedButton>
                 ))}

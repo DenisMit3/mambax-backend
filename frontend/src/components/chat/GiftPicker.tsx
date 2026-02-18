@@ -105,23 +105,23 @@ export const GiftPicker = ({
                             mass: 0.8
                         }}
                     >
-                        <GlassCard className="rounded-t-3xl rounded-b-none border-b-0 backdrop-blur-xl bg-gray-900/90 max-h-[80vh] overflow-hidden">
+                        <GlassCard className="rounded-t-3xl rounded-b-none border-b-0 backdrop-blur-xl bg-[#0f0f11]/90 max-h-[80vh] overflow-hidden">
                             {/* Handle */}
                             <div className="flex justify-center pt-3 pb-2">
-                                <div className="w-12 h-1 bg-gray-600 rounded-full" />
+                                <div className="w-12 h-1 bg-white/20 rounded-full" />
                             </div>
 
                             {/* Header */}
                             <div className="flex items-center justify-between p-6 border-b border-white/10">
                                 <div>
                                     <h2 className="text-xl font-bold text-white">Подарки</h2>
-                                    <p className="text-sm text-gray-400">Выберите подарок для отправки</p>
+                                    <p className="text-sm text-slate-400">Выберите подарок для отправки</p>
                                 </div>
                                 <AnimatedButton
                                     variant="ghost"
                                     size="sm"
                                     onClick={onClose}
-                                    className="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700"
+                                    className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/15"
                                 >
                                     <X className="w-5 h-5" />
                                 </AnimatedButton>
@@ -139,7 +139,7 @@ export const GiftPicker = ({
                                                 key={key}
                                                 className={`flex items-center space-x-2 px-4 py-2 rounded-full font-semibold text-sm whitespace-nowrap transition-all duration-300 ${isActive
                                                     ? `bg-gradient-to-r ${category.color} text-white shadow-lg`
-                                                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+                                                    : 'bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white'
                                                     }`}
                                                 onClick={() => handleCategoryChange(key as keyof typeof CATEGORIES)}
                                                 whileHover={{ scale: 1.05 }}
@@ -204,7 +204,7 @@ export const GiftPicker = ({
                                                     {/* Gift Image */}
                                                     <div className="relative z-10 h-full flex flex-col">
                                                         <div className="flex-1 flex items-center justify-center mb-2">
-                                                            <div className="w-12 h-12 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center">
+                                                            <div className="w-12 h-12 bg-gradient-to-br from-white/15 to-white/10 rounded-xl flex items-center justify-center">
                                                                 <img
                                                                     src={gift.image || ''}
                                                                     alt={gift.name}
@@ -268,10 +268,10 @@ export const GiftPicker = ({
                                         initial={{ opacity: 0, y: 20 }}
                                         animate={{ opacity: 1, y: 0 }}
                                     >
-                                        <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <Star className="w-8 h-8 text-gray-600" />
+                                        <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Star className="w-8 h-8 text-slate-500" />
                                         </div>
-                                        <p className="text-gray-400 text-sm">
+                                        <p className="text-slate-400 text-sm">
                                             Подарки в этой категории скоро появятся
                                         </p>
                                     </motion.div>
@@ -279,10 +279,10 @@ export const GiftPicker = ({
                             </div>
 
                             {/* Footer Info */}
-                            <div className="p-4 border-t border-white/10 bg-gray-900/50">
-                                <div className="flex items-center justify-center space-x-4 text-xs text-gray-400">
+                            <div className="p-4 border-t border-white/10 bg-[#0f0f11]/50">
+                                <div className="flex items-center justify-center space-x-4 text-xs text-slate-400">
                                     <div className="flex items-center space-x-1">
-                                        <div className="w-2 h-2 bg-gray-500 rounded-full" />
+                                        <div className="w-2 h-2 bg-slate-500 rounded-full" />
                                         <span>Обычные</span>
                                     </div>
                                     <div className="flex items-center space-x-1">

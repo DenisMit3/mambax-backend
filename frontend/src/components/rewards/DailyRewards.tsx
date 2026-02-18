@@ -136,7 +136,7 @@ export function DailyRewards({ isOpen, onClose }: DailyRewardsProps) {
                             : { type: "spring", stiffness: 320, damping: 26 }
                         }
                         onClick={(e) => e.stopPropagation()}
-                        className="relative w-full max-w-[380px] rounded-3xl overflow-hidden bg-slate-950 border border-white/10 shadow-2xl"
+                        className="relative w-full max-w-[380px] rounded-3xl overflow-hidden bg-[#0f0f11] border border-white/10 shadow-2xl"
                     >
                         {/* Конфетти */}
                         {confetti.length > 0 && (
@@ -179,7 +179,7 @@ export function DailyRewards({ isOpen, onClose }: DailyRewardsProps) {
                         <div className="relative p-6 pb-4">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/25">
+                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center shadow-lg shadow-purple-500/25">
                                         <Gift size={20} className="text-white" />
                                     </div>
                                     <div>
@@ -293,7 +293,7 @@ export function DailyRewards({ isOpen, onClose }: DailyRewardsProps) {
 
                                                     {/* Затемнение для будущих */}
                                                     {isFuture && (
-                                                        <div className="absolute inset-0 rounded-xl bg-slate-950/30 pointer-events-none" />
+                                                        <div className="absolute inset-0 rounded-xl bg-[#0f0f11]/30 pointer-events-none" />
                                                     )}
                                                 </motion.div>
                                             );
@@ -337,7 +337,7 @@ export function DailyRewards({ isOpen, onClose }: DailyRewardsProps) {
                                             w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest
                                             transition-all flex items-center justify-center gap-2
                                             ${canClaim && !claimed
-                                                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40'
+                                                ? 'bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40'
                                                 : 'bg-white/5 text-slate-500 cursor-not-allowed'
                                             }
                                         `}

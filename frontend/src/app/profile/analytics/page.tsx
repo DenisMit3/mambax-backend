@@ -108,7 +108,7 @@ export default function ProfileAnalyticsPage() {
                 <motion.div
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="p-5 rounded-2xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 text-center"
+                    className="p-5 rounded-2xl bg-gradient-to-br from-[#ff4b91]/10 to-[#ff9e4a]/10 border border-[#ff4b91]/20 text-center"
                 >
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Рейтинг профиля</p>
                     <div className="flex items-center justify-center gap-2">
@@ -120,7 +120,7 @@ export default function ProfileAnalyticsPage() {
                             initial={{ width: 0 }}
                             animate={{ width: `${data.profile_score}%` }}
                             transition={{ duration: 1, ease: 'easeOut' }}
-                            className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"
+                            className="h-full bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] rounded-full"
                         />
                     </div>
                 </motion.div>
@@ -135,7 +135,7 @@ export default function ProfileAnalyticsPage() {
                                 initial={{ opacity: 0, y: 12 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.04 }}
-                                className="p-3.5 rounded-2xl bg-slate-950 border border-white/5"
+                                className="p-3.5 rounded-2xl bg-[#0f0f11] border border-white/5"
                             >
                                 <div className="flex items-center justify-between mb-2">
                                     <div className={`w-8 h-8 rounded-lg ${stat.bg} flex items-center justify-center`}>
@@ -155,7 +155,7 @@ export default function ProfileAnalyticsPage() {
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest px-1 mb-2">Инсайты</p>
                     <div className="space-y-2">
                         {data.top_viewers_age_range && (
-                            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-950 border border-white/5">
+                            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-[#0f0f11] border border-white/5">
                                 <Users size={16} className="text-purple-400 shrink-0" />
                                 <div>
                                     <p className="text-xs font-medium text-white">Основная аудитория</p>
@@ -164,7 +164,7 @@ export default function ProfileAnalyticsPage() {
                             </div>
                         )}
                         {data.peak_activity_hour && (
-                            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-950 border border-white/5">
+                            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-[#0f0f11] border border-white/5">
                                 <Zap size={16} className="text-amber-400 shrink-0" />
                                 <div>
                                     <p className="text-xs font-medium text-white">Пик активности</p>

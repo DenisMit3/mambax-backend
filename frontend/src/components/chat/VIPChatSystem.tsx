@@ -92,7 +92,7 @@ export const VIPChatSystem = ({
   };
 
   return (
-    <div className={`flex flex-col h-full min-h-0 bg-[#0F0F0F] font-sans ${isPremium ? 'text-white' : 'text-gray-900'}`}>
+    <div className={`flex flex-col h-full min-h-0 bg-[#0F0F0F] font-sans text-white`}>
 
       {/* Модальное окно выбора реакции */}
       <VIPReactionPicker

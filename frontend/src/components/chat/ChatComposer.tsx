@@ -84,7 +84,7 @@ export const ChatComposer = ({
                         autoCapitalize="sentences"
                         enterKeyHint="send"
                         rows={1}
-                        className="w-full bg-gray-800 text-[16px] text-white rounded-2xl px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
+                        className="w-full bg-white/10 text-[16px] text-white rounded-2xl px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
                     />
                     <button
                         onClick={() => setShowEmojiPicker(!showEmojiPicker)}
@@ -111,7 +111,7 @@ export const ChatComposer = ({
             <AnimatePresence>
                 {showEmojiPicker && (
                     <motion.div
-                        className="absolute bottom-16 right-4 bg-gray-800 rounded-2xl p-4 shadow-lg border border-gray-700"
+                        className="absolute bottom-16 right-4 bg-white/10 rounded-2xl p-4 shadow-lg border border-white/10"
                         initial={{ opacity: 0, scale: 0.8, y: 10 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.8, y: 10 }}

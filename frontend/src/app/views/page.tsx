@@ -213,7 +213,7 @@ export default function WhoViewedMePage() {
                 >
                     <button
                         onClick={() => { haptic.medium(); router.push("/settings/subscription"); }}
-                        className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-500 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                        className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
                     >
                         <Crown className="w-5 h-5 text-white" />
                         <span className="text-white font-semibold">Открыть с VIP</span>

@@ -127,7 +127,7 @@ export const GeoMapRadar = ({ users = [], loading = false }: GeoMapRadarProps) =
                             animate={{ scale: [1, 1.05, 1] }}
                             transition={{ duration: 2, repeat: Infinity }}
                         >
-                            <div className="w-full h-full rounded-full bg-gray-800 overflow-hidden">
+                            <div className="w-full h-full rounded-full bg-white/10 overflow-hidden">
                                 <MapPin className="w-full h-full p-3 text-primary-red" />
                             </div>
                         </motion.div>

@@ -74,7 +74,7 @@ const MessageItem = memo(function MessageItem({
                 <div
                     className={`relative p-3 rounded-2xl cursor-pointer ${isOwn
                         ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white'
-                        : 'bg-gray-800 text-white'
+                        : 'bg-white/10 text-white'
                     } ${msg.type === 'gift' ? 'p-6' : ''}`}
                     onClick={onTap}
                 >
@@ -144,17 +144,17 @@ const MessageItem = memo(function MessageItem({
 
                 {/* Timestamp and Read Status */}
                 <div className={`flex items-center mt-1 space-x-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-slate-500">
                         {formatTime(msg.timestamp)}
                     </span>
                     {isOwn && (
                         <span className="text-xs">
                             {msg.isPending ? (
-                                <span className="text-gray-500">...</span>
+                                <span className="text-slate-500">...</span>
                             ) : msg.isRead ? (
                                 <CheckCheck className="w-3.5 h-3.5 text-blue-400" />
                             ) : (
-                                <Check className="w-3.5 h-3.5 text-gray-500" />
+                                <Check className="w-3.5 h-3.5 text-slate-500" />
                             )}
                         </span>
                     )}

@@ -35,7 +35,7 @@ export function ActionButtons({
                 aria-label="Undo"
                 className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg ${undoEnabled
                     ? 'bg-gradient-to-r from-yellow-500 to-orange-500'
-                    : 'bg-gray-600 opacity-50'
+                    : 'bg-white/20 opacity-50'
                     }`}
                 whileHover={undoEnabled ? { scale: 1.1 } : {}}
                 whileTap={undoEnabled ? { scale: 0.9 } : {}}
@@ -48,7 +48,7 @@ export function ActionButtons({
             {/* Pass */}
             <motion.button
                 aria-label="Pass"
-                className="w-14 h-14 rounded-full bg-gradient-to-r from-gray-600 to-gray-700 flex items-center justify-center shadow-lg"
+                className="w-14 h-14 rounded-full bg-gradient-to-r from-white/20 to-white/15 flex items-center justify-center shadow-lg"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={onPass}
@@ -62,7 +62,7 @@ export function ActionButtons({
                 data-onboarding="superlike-button"
                 className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg ${superLikesLeft > 0
                     ? 'bg-gradient-to-r from-blue-500 to-purple-500'
-                    : 'bg-gray-600 opacity-50'
+                    : 'bg-white/20 opacity-50'
                     }`}
                 whileHover={superLikesLeft > 0 ? { scale: 1.1 } : {}}
                 whileTap={superLikesLeft > 0 ? { scale: 0.9 } : {}}

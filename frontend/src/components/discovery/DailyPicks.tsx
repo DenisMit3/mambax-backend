@@ -165,7 +165,7 @@ export function DailyPicks() {
                         />
 
                         {/* AI Badge */}
-                        <div className="absolute top-2 right-2 bg-gradient-to-r from-purple-500 to-pink-500 px-2 py-1 rounded-full flex items-center gap-1">
+                        <div className="absolute top-2 right-2 bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] px-2 py-1 rounded-full flex items-center gap-1">
                             <Sparkles size={10} className="text-white fill-white" />
                             <span className="text-[10px] font-black text-white">AI</span>
                         </div>

@@ -88,7 +88,7 @@ export function ProfileShareModal({ isOpen, onClose, profileId, profileName }: P
                         {/* Share button */}
                         <button
                             onClick={shareNative}
-                            className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition"
+                            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition"
                         >
                             <Share2 size={16} />
                             Поделиться

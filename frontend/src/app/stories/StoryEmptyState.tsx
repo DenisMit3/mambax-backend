@@ -24,7 +24,7 @@ export default function StoryEmptyState({
         transition={{ delay: 0.2 }}
         className="rounded-3xl bg-white/5 backdrop-blur-sm border border-white/5 p-6 text-center"
       >
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#ff4b91]/20 to-[#ff9e4a]/20 flex items-center justify-center mx-auto mb-4">
           {error ? (
             <ImageOff className="w-8 h-8 text-slate-500" />
           ) : (

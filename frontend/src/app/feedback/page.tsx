@@ -98,7 +98,7 @@ export default function FeedbackPage() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", delay: 0.2 }}
-              className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center"
+              className="w-20 h-20 rounded-full bg-gradient-to-br from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center"
             >
               <Check className="w-10 h-10 text-white" />
             </motion.div>
@@ -152,7 +152,7 @@ export default function FeedbackPage() {
                       className={`flex items-center gap-2.5 p-3 rounded-xl border transition-all text-left text-sm font-medium ${
                         selected
                           ? "border-purple-500/60 bg-purple-500/10 text-white"
-                          : "border-white/10 bg-slate-950 text-slate-400 hover:border-white/20"
+                          : "border-white/10 bg-[#0f0f11] text-slate-400 hover:border-white/20"
                       }`}
                     >
                       <Icon className={`w-4 h-4 shrink-0 ${selected ? ft.color : ""}`} />
@@ -204,7 +204,7 @@ export default function FeedbackPage() {
                     autoCapitalize="sentences"
                     enterKeyHint="send"
                 rows={5}
-                className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-purple-500/60 focus:ring-1 focus:ring-purple-500/30 resize-none transition-all"
+                className="w-full bg-[#0f0f11] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-purple-500/60 focus:ring-1 focus:ring-purple-500/30 resize-none transition-all"
               />
               <p className={`text-xs ${message.trim().length >= 10 ? "text-slate-500" : "text-slate-600"}`}>
                 {message.trim().length}/10 мин. символов
@@ -233,7 +233,7 @@ export default function FeedbackPage() {
               disabled={!isValid || loading}
               className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold transition-all ${
                 isValid && !loading
-                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:opacity-90"
+                  ? "bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] text-white hover:opacity-90"
                   : "bg-white/5 text-slate-600 cursor-not-allowed"
               }`}
             >

@@ -122,7 +122,7 @@ export function BuySwipesModal({
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
                     onClick={onClose}
-                    className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+                    className="absolute inset-0 bg-[#0f0f11]/80 backdrop-blur-md"
                     />
 
                     <motion.div

@@ -36,7 +36,7 @@ export const SwipeLimitModal = ({
                     onClick={onClose}
                 >
                     <motion.div
-                        className="w-full max-w-sm bg-gradient-to-br from-gray-900/90 to-gray-800/90 rounded-3xl p-6 mx-4 border border-white/10 shadow-2xl relative"
+                        className="w-full max-w-sm bg-gradient-to-br from-[#0f0f11]/90 to-white/10 rounded-3xl p-6 mx-4 border border-white/10 shadow-2xl relative"
                         initial={{ scale: 0.9, y: 20, opacity: 0 }}
                         animate={{ scale: 1, y: 0, opacity: 1 }}
                         exit={{ scale: 0.9, y: 20, opacity: 0 }}
@@ -46,7 +46,7 @@ export const SwipeLimitModal = ({
                         {/* Close Button */}
                         <button
                             onClick={onClose}
-                            className="absolute top-4 right-4 w-11 h-11 rounded-full bg-gray-700 flex items-center justify-center"
+                            className="absolute top-4 right-4 w-11 h-11 rounded-full bg-white/15 flex items-center justify-center"
                         >
                             <X className="w-5 h-5 text-white" />
                         </button>
@@ -64,7 +64,7 @@ export const SwipeLimitModal = ({
                         </h2>
 
                         {/* Description */}
-                        <p className="text-gray-400 text-center mb-6">
+                        <p className="text-slate-400 text-center mb-6">
                             Вы использовали все свайпы на сегодня. Обновление через{' '}
                             <span className="text-white font-semibold">{resetTime}</span>
                         </p>
@@ -74,7 +74,7 @@ export const SwipeLimitModal = ({
                             {/* VIP Option */}
                             <AnimatedButton
                                 variant="primary"
-                                className="w-full bg-gradient-to-r from-purple-600 to-pink-600"
+                                className="w-full bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a]"
                                 onClick={() => {
                                     haptic.success();
                                     onUpgradeToVIP();
@@ -99,7 +99,7 @@ export const SwipeLimitModal = ({
                             {/* Wait */}
                             <button
                                 onClick={onClose}
-                                className="w-full text-gray-400 text-sm py-3 min-h-[44px]"
+                                className="w-full text-slate-400 text-sm py-3 min-h-[44px]"
                             >
                                 Подожду до завтра
                             </button>

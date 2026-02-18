@@ -183,7 +183,7 @@ export default function SearchPage() {
                             onClick={() => handleFilterClick(tag)}
                             className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${activeFilter === tag
                                 ? 'bg-white text-black border-white'
-                                : 'bg-white/5 text-gray-400 border-white/5 hover:border-white/20'
+                                : 'bg-white/5 text-slate-400 border-white/5 hover:border-white/20'
                                 }`}
                         >
                             {tag}
@@ -203,7 +203,7 @@ export default function SearchPage() {
                                 <div className="w-[66px] h-[66px] rounded-full border-2 border-[#ff4b91] border-dashed flex items-center justify-center bg-white/5">
                                     <Search size={24} className="text-[#ff4b91]" />
                                 </div>
-                                <span className="text-[10px] text-gray-400 font-medium">Мой идеал</span>
+                                <span className="text-[10px] text-slate-400 font-medium">Мой идеал</span>
                             </div>
                             {allProfiles.slice(0, 5).map((u, i) => (
                                 <StoryCircle key={'story-' + u.id} user={u} index={i} />
@@ -247,7 +247,7 @@ export default function SearchPage() {
                                         <div className="flex items-end justify-between">
                                             <div>
                                                 <h3 className="text-white font-bold text-lg leading-none">{user.name}, {user.age}</h3>
-                                                <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
+                                                <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
                                                     <MapPin size={10} />
                                                     <span>{user.distance_km !== undefined ? `${user.distance_km.toFixed(0)} км` : 'Рядом'}</span>
                                                 </div>
@@ -273,7 +273,7 @@ export default function SearchPage() {
                     )}
 
                     {!loading && profiles.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                        <div className="flex flex-col items-center justify-center py-20 text-slate-500">
                             <Search size={48} className="mb-4 opacity-20" />
                             <p>Никого не найдено :(</p>
                             <button
@@ -307,53 +307,53 @@ export default function SearchPage() {
                             <div className="flex justify-between items-center mb-6">
                                 <h3 className="text-xl font-bold text-white">Фильтры</h3>
                                 <button onClick={() => setShowFilters(false)} className="p-2 bg-white/5 rounded-full">
-                                    <X size={20} className="text-gray-400" />
+                                    <X size={20} className="text-slate-400" />
                                 </button>
                             </div>
 
                             {/* Возраст — минимум */}
                             <div className="mb-5">
-                                <label className="text-sm text-gray-400 font-bold mb-2 block">
+                                <label className="text-sm text-slate-400 font-bold mb-2 block">
                                     Возраст: {ageMin} — {ageMax}
                                 </label>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-xs text-gray-500 w-6 text-right">{ageMin}</span>
+                                    <span className="text-xs text-slate-500 w-6 text-right">{ageMin}</span>
                                     <input
                                         type="range"
                                         min={18}
                                         max={ageMax - 1}
                                         value={ageMin}
                                         onChange={(e) => setAgeMin(Number(e.target.value))}
-                                        className="flex-1 h-1.5 rounded-full appearance-none bg-gray-700 accent-[#ff4b91] cursor-pointer"
+                                        className="flex-1 h-1.5 rounded-full appearance-none bg-white/15 accent-[#ff4b91] cursor-pointer"
                                     />
                                 </div>
                                 <div className="flex items-center gap-3 mt-2">
-                                    <span className="text-xs text-gray-500 w-6 text-right">{ageMax}</span>
+                                    <span className="text-xs text-slate-500 w-6 text-right">{ageMax}</span>
                                     <input
                                         type="range"
                                         min={ageMin + 1}
                                         max={80}
                                         value={ageMax}
                                         onChange={(e) => setAgeMax(Number(e.target.value))}
-                                        className="flex-1 h-1.5 rounded-full appearance-none bg-gray-700 accent-[#ff4b91] cursor-pointer"
+                                        className="flex-1 h-1.5 rounded-full appearance-none bg-white/15 accent-[#ff4b91] cursor-pointer"
                                     />
                                 </div>
                             </div>
 
                             {/* Расстояние */}
                             <div className="mb-8">
-                                <label className="text-sm text-gray-400 font-bold mb-2 block">
+                                <label className="text-sm text-slate-400 font-bold mb-2 block">
                                     Расстояние: до {distanceMax} км
                                 </label>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-xs text-gray-500 w-6 text-right">{distanceMax}</span>
+                                    <span className="text-xs text-slate-500 w-6 text-right">{distanceMax}</span>
                                     <input
                                         type="range"
                                         min={1}
                                         max={300}
                                         value={distanceMax}
                                         onChange={(e) => setDistanceMax(Number(e.target.value))}
-                                        className="flex-1 h-1.5 rounded-full appearance-none bg-gray-700 accent-blue-500 cursor-pointer"
+                                        className="flex-1 h-1.5 rounded-full appearance-none bg-white/15 accent-blue-500 cursor-pointer"
                                     />
                                 </div>
                             </div>
@@ -362,7 +362,7 @@ export default function SearchPage() {
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => { resetModalFilters(); }}
-                                    className="flex-1 py-4 rounded-xl text-gray-400 font-bold text-base border border-white/10 bg-transparent active:scale-95 transition"
+                                    className="flex-1 py-4 rounded-xl text-slate-400 font-bold text-base border border-white/10 bg-transparent active:scale-95 transition"
                                 >
                                     Сбросить
                                 </button>
@@ -405,8 +405,8 @@ export default function SearchPage() {
                                 </div>
                             ) : (
                                 <div className="pointer-events-auto px-3 py-1 bg-black/50 backdrop-blur-xl rounded-full border border-white/10 flex items-center gap-1">
-                                    <div className="w-2 h-2 rounded-full bg-gray-500" />
-                                    <span className="text-xs font-bold text-gray-400">Offline</span>
+                                    <div className="w-2 h-2 rounded-full bg-slate-500" />
+                                    <span className="text-xs font-bold text-slate-400">Offline</span>
                                 </div>
                             )}
                         </div>
@@ -425,7 +425,7 @@ export default function SearchPage() {
                             {/* Info */}
                             <div className="absolute bottom-32 left-0 right-0 p-6">
                                 <h2 className="text-4xl font-black text-white leading-none mb-2">{selectedUser.name}, {selectedUser.age}</h2>
-                                <p className="text-gray-300 line-clamp-2 text-sm leading-relaxed max-w-[90%]">
+                                <p className="text-slate-300 line-clamp-2 text-sm leading-relaxed max-w-[90%]">
                                     {selectedUser.bio || "Нет описания профиля."}
                                 </p>
 

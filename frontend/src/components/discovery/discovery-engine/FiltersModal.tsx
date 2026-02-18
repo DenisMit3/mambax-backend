@@ -26,7 +26,7 @@ export const FiltersModal = ({ filters, onFiltersChange, onClose, isPremium }: F
             onClick={onClose}
         >
             <motion.div
-                className="w-full max-w-md bg-gray-900 rounded-t-3xl p-6 max-h-[80vh] overflow-y-auto"
+                className="w-full max-w-md bg-[#0f0f11] rounded-t-3xl p-6 max-h-[80vh] overflow-y-auto"
                 initial={{ y: '100%' }}
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
@@ -37,7 +37,7 @@ export const FiltersModal = ({ filters, onFiltersChange, onClose, isPremium }: F
                     <h2 className="text-xl font-bold text-white">Фильтры поиска</h2>
                     <button
                         onClick={onClose}
-                        className="w-11 h-11 rounded-full bg-gray-700 flex items-center justify-center"
+                        className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center"
                     >
                         <X className="w-5 h-5 text-white" />
                     </button>

@@ -27,8 +27,8 @@ export default function StoryCarousel({
           disabled={creating}
           className="flex-shrink-0 flex flex-col items-center gap-1.5"
         >
-          <div className="relative w-[68px] h-[68px] rounded-full bg-gradient-to-br from-purple-600 to-pink-500 p-[2px]">
-            <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center">
+          <div className="relative w-[68px] h-[68px] rounded-full bg-gradient-to-br from-[#ff4b91] to-[#ff9e4a] p-[2px]">
+            <div className="w-full h-full rounded-full bg-[#0f0f11] flex items-center justify-center">
               {creating ? (
                 <Loader2 className="w-6 h-6 text-white animate-spin" />
               ) : (

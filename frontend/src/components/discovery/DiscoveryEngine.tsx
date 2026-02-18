@@ -29,7 +29,7 @@ export const DiscoveryEngine = ({
     const engine = useDiscoveryEngine(profiles, onSwipe, onFiltersChange, isPremium);
 
     return (
-        <div className="flex flex-col h-dvh bg-gradient-to-br from-gray-900 via-black to-gray-900">
+        <div className="flex flex-col h-dvh bg-gradient-to-br from-[#0f0f11] via-black to-[#0f0f11]">
             {/* Header */}
             <motion.div
                 className="flex items-center justify-between p-4 border-b border-white/10"
@@ -79,17 +79,17 @@ export const DiscoveryEngine = ({
             {/* Swipe Limit Progress */}
             {engine.swipeStatus && !engine.swipeStatus.is_vip && (
                 <motion.div
-                    className="px-4 py-2 bg-gray-800/50"
+                    className="px-4 py-2 bg-white/5"
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                 >
                     <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-gray-400">Свайпы сегодня</span>
+                        <span className="text-xs text-slate-400">Свайпы сегодня</span>
                         <span className="text-xs font-semibold text-white">
                             {engine.swipeStatus.remaining} / {engine.swipeStatus.total}
                         </span>
                     </div>
-                    <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-white/15 rounded-full overflow-hidden">
                         <motion.div
                             className="h-full bg-gradient-to-r from-orange-500 to-red-500"
                             initial={{ width: 0 }}
@@ -112,11 +112,11 @@ export const DiscoveryEngine = ({
                             animate={{ opacity: 1, scale: 1 }}
                         >
                             <GlassCard className="p-8 text-center">
-                                <div className="w-20 h-20 rounded-full bg-gradient-to-r from-gray-600 to-gray-700 flex items-center justify-center mx-auto mb-4">
-                                    <Heart className="w-10 h-10 text-gray-400" />
+                                <div className="w-20 h-20 rounded-full bg-gradient-to-r from-white/20 to-white/15 flex items-center justify-center mx-auto mb-4">
+                                    <Heart className="w-10 h-10 text-slate-400" />
                                 </div>
                                 <h3 className="text-xl font-bold text-white mb-2">Больше нет профилей</h3>
-                                <p className="text-gray-400 mb-4">Попробуйте расширить фильтры поиска или вернитесь позже</p>
+                                <p className="text-slate-400 mb-4">Попробуйте расширить фильтры поиска или вернитесь позже</p>
                                 <AnimatedButton onClick={() => engine.setShowFilters(true)} variant="primary">
                                     Настроить фильтры
                                 </AnimatedButton>

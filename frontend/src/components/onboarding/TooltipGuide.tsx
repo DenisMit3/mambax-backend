@@ -198,7 +198,7 @@ export const TooltipGuide = ({ currentPage }: TooltipGuideProps) => {
 
                 {/* Tooltip */}
                 <motion.div
-                    className="absolute bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 shadow-2xl border border-white/10 max-w-sm"
+                    className="absolute bg-gradient-to-br from-white/10 to-[#0f0f11] rounded-2xl p-6 shadow-2xl border border-white/10 max-w-sm"
                     style={{
                         left: targetRect.left,
                         top: currentStep.position === 'bottom' 
@@ -212,7 +212,7 @@ export const TooltipGuide = ({ currentPage }: TooltipGuideProps) => {
                 >
                     {/* Стрелка указатель */}
                     <div
-                        className="absolute w-4 h-4 bg-gray-800 rotate-45 border-l border-t border-white/10"
+                        className="absolute w-4 h-4 bg-white/10 rotate-45 border-l border-t border-white/10"
                         style={{
                             [currentStep.position === 'bottom' ? 'top' : 'bottom']: -8,
                             left: '50%',
@@ -226,19 +226,19 @@ export const TooltipGuide = ({ currentPage }: TooltipGuideProps) => {
                         </h3>
                         <button
                             onClick={handleSkip}
-                            className="text-gray-400 hover:text-white transition-colors"
+                            className="text-slate-400 hover:text-white transition-colors"
                         >
                             <X className="w-5 h-5" />
                         </button>
                     </div>
 
-                    <p className="text-gray-300 text-sm mb-4">
+                    <p className="text-slate-300 text-sm mb-4">
                         {currentStep.description}
                     </p>
 
                     {/* Прогресс */}
                     <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-slate-500">
                             Шаг {currentStepIndex + 1} из {ONBOARDING_STEPS.length}
                         </span>
 
@@ -246,7 +246,7 @@ export const TooltipGuide = ({ currentPage }: TooltipGuideProps) => {
                             {currentStepIndex > 0 && (
                                 <button
                                     onClick={() => setCurrentStepIndex(prev => prev - 1)}
-                                    className="px-3 py-1.5 rounded-lg bg-gray-700 text-white text-sm hover:bg-gray-600 transition-colors"
+                                    className="px-3 py-1.5 rounded-lg bg-white/15 text-white text-sm hover:bg-white/20 transition-colors"
                                 >
                                     <ChevronLeft className="w-4 h-4" />
                                 </button>
@@ -274,7 +274,7 @@ export const TooltipGuide = ({ currentPage }: TooltipGuideProps) => {
                                 className={`h-1 flex-1 rounded-full transition-all ${
                                     index <= currentStepIndex
                                         ? 'bg-gradient-to-r from-blue-500 to-purple-500'
-                                        : 'bg-gray-700'
+                                        : 'bg-white/15'
                                 }`}
                             />
                         ))}

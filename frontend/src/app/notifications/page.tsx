@@ -178,7 +178,7 @@ export default function NotificationsPage() {
                             className={`px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
                                 filter === tab.key
                                     ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                                    : 'bg-slate-950 text-slate-400 border border-white/5'
+                                    : 'bg-[#0f0f11] text-slate-400 border border-white/5'
                             }`}
                         >
                             {tab.label}
@@ -194,7 +194,7 @@ export default function NotificationsPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="flex flex-col items-center justify-center pt-32 px-6 text-center"
                 >
-                    <div className="w-16 h-16 rounded-2xl bg-slate-950 flex items-center justify-center mb-4">
+                    <div className="w-16 h-16 rounded-2xl bg-[#0f0f11] flex items-center justify-center mb-4">
                         <Bell className="w-8 h-8 text-slate-600" />
                     </div>
                     <p className="text-slate-400 text-sm">
@@ -217,8 +217,8 @@ export default function NotificationsPage() {
                                     onClick={() => handleTap(notif)}
                                     className={`w-full flex items-start gap-3 p-3.5 rounded-2xl mb-2 text-left transition-colors ${
                                         notif.is_read
-                                            ? 'bg-slate-950/50 border border-white/5'
-                                            : 'bg-slate-950 border border-purple-500/10'
+                                            ? 'bg-[#0f0f11]/50 border border-white/5'
+                                            : 'bg-[#0f0f11] border border-purple-500/10'
                                     }`}
                                 >
                                     <div className={`w-10 h-10 rounded-xl ${config.bg} flex items-center justify-center shrink-0`}>

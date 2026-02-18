@@ -151,7 +151,7 @@ export default function DeleteAccountPage() {
                                 className={`w-full flex items-center gap-3 p-3.5 rounded-xl border transition-colors text-left ${
                                     selectedReason === reason.value
                                         ? 'bg-red-500/10 border-red-500/30'
-                                        : 'bg-slate-950 border-white/5 hover:border-white/10'
+                                        : 'bg-[#0f0f11] border-white/5 hover:border-white/10'
                                 }`}
                             >
                                 <span className="text-lg">{reason.emoji}</span>
@@ -173,7 +173,7 @@ export default function DeleteAccountPage() {
                         maxLength={500}
                         rows={3}
                         placeholder="Расскажите, что мы можем улучшить..."
-                        className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 resize-none focus:outline-none focus:border-red-500/30 transition"
+                        className="w-full bg-[#0f0f11] border border-white/5 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 resize-none focus:outline-none focus:border-red-500/30 transition"
                     />
                 </section>
 

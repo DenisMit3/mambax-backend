@@ -160,7 +160,7 @@ export default function PaymentsPage() {
               className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 filter === tab.key
                   ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                  : 'bg-slate-950 text-slate-400 border border-white/5'
+                  : 'bg-[#0f0f11] text-slate-400 border border-white/5'
               }`}
             >
               {tab.label}
@@ -176,7 +176,7 @@ export default function PaymentsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col items-center justify-center pt-32 px-6 text-center"
         >
-          <div className="w-16 h-16 rounded-2xl bg-slate-950 flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-[#0f0f11] flex items-center justify-center mb-4">
             <CreditCard className="w-8 h-8 text-slate-600" />
           </div>
           <p className="text-slate-400 text-sm">Платежей пока нет</p>
@@ -204,7 +204,7 @@ export default function PaymentsPage() {
                       initial={{ opacity: 0, x: -16 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.04 }}
-                      className="flex items-center gap-3 p-3 rounded-2xl bg-slate-950 border border-white/5"
+                      className="flex items-center gap-3 p-3 rounded-2xl bg-[#0f0f11] border border-white/5"
                     >
                       {/* Иконка */}
                       <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">

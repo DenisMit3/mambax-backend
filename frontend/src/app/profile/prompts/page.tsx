@@ -112,7 +112,7 @@ export default function PromptsPage() {
             <div className="flex items-center gap-3 mb-6">
                 <button
                     onClick={() => { haptic.light(); router.back(); }}
-                    className="p-2 rounded-xl bg-slate-950 text-slate-400 hover:text-white transition"
+                    className="p-2 rounded-xl bg-[#0f0f11] text-slate-400 hover:text-white transition"
                 >
                     <ArrowLeft size={20} />
                 </button>
@@ -154,10 +154,10 @@ export default function PromptsPage() {
                                 exit={{ opacity: 0, y: -12 }}
                                 className={`rounded-2xl border transition-colors ${
                                     isExpanded
-                                        ? 'border-purple-500/40 bg-slate-950'
+                                        ? 'border-purple-500/40 bg-[#0f0f11]'
                                         : hasAnswer
-                                            ? 'border-slate-800 bg-slate-950/80'
-                                            : 'border-slate-800/50 bg-slate-950/40'
+                                            ? 'border-slate-800 bg-[#0f0f11]/80'
+                                            : 'border-slate-800/50 bg-[#0f0f11]/40'
                                 } ${!canAdd && !isExpanded ? 'opacity-40 pointer-events-none' : ''}`}
                             >
                                 {/* Заголовок карточки */}

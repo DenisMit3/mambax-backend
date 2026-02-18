@@ -69,7 +69,7 @@ export default function BlockedUsersPage() {
             <div className="px-4 pt-4">
                 {users.length === 0 ? (
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center pt-24 text-center">
-                        <div className="w-16 h-16 rounded-2xl bg-slate-950 flex items-center justify-center mb-4">
+                        <div className="w-16 h-16 rounded-2xl bg-[#0f0f11] flex items-center justify-center mb-4">
                             <UserX className="w-8 h-8 text-slate-600" />
                         </div>
                         <p className="text-sm text-slate-400">Нет заблокированных пользователей</p>
@@ -83,7 +83,7 @@ export default function BlockedUsersPage() {
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: 100, height: 0 }}
                                 transition={{ delay: i * 0.03 }}
-                                className="flex items-center gap-3 p-3 rounded-2xl bg-slate-950 border border-white/5 mb-2"
+                                className="flex items-center gap-3 p-3 rounded-2xl bg-[#0f0f11] border border-white/5 mb-2"
                             >
                                 <img
                                     src={user.photo_url || FALLBACK_AVATAR}

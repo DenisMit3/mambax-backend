@@ -108,7 +108,7 @@ export default function LanguagePage() {
                         autoComplete="off"
                         autoCapitalize="off"
                         enterKeyHint="search"
-                        className="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-950 border border-white/5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-purple-500/40 transition"
+                        className="w-full pl-11 pr-4 py-3 rounded-xl bg-[#0f0f11] border border-white/5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-purple-500/40 transition"
                     />
                 </motion.div>
             </div>
@@ -130,7 +130,7 @@ export default function LanguagePage() {
                                 className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${
                                     isActive
                                         ? 'bg-gradient-to-r from-purple-500/15 to-pink-500/10 border border-purple-500/30'
-                                        : 'bg-slate-950 border border-white/5 hover:bg-white/5'
+                                        : 'bg-[#0f0f11] border border-white/5 hover:bg-white/5'
                                 }`}
                             >
                                 <span className="text-2xl">{lang.flag}</span>

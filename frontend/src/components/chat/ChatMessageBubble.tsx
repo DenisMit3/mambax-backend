@@ -49,7 +49,7 @@ export const ChatMessageBubble = ({
                 <motion.div
                     className={`relative p-3 rounded-2xl ${isOwn
                         ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white'
-                        : 'bg-gray-800 text-white'
+                        : 'bg-white/10 text-white'
                         } ${msg.type === 'gift' ? 'p-6' : ''}`}
                     whileTap={{ scale: 0.98 }}
                     onTap={() => onTapMessage(msg.id)}
@@ -132,7 +132,7 @@ export const ChatMessageBubble = ({
                 <AnimatePresence>
                     {showReactions === msg.id && (
                         <motion.div
-                            className="absolute z-10 bg-gray-800 rounded-full p-2 shadow-lg border border-gray-700 mt-2"
+                            className="absolute z-10 bg-white/10 rounded-full p-2 shadow-lg border border-white/10 mt-2"
                             initial={{ opacity: 0, scale: 0.8, y: -10 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.8, y: -10 }}
