@@ -149,7 +149,7 @@ export default function DiscoverPage() {
                     <motion.div
                         initial={{ y: -20, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
-                        className="fixed top-6 left-0 right-0 z-50 flex justify-center gap-3 px-6"
+                        className="absolute top-6 left-0 right-0 z-40 flex justify-center gap-3 px-6"
                     >
                         {/* Swipes Left */}
                         <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-xl">
@@ -180,7 +180,7 @@ export default function DiscoverPage() {
             </div>
 
             {/* Main Swipe Area */}
-            <div className="flex-1 relative mb-16 px-4 py-2 min-h-[300px]">
+            <div className="flex-1 relative px-4 py-2 min-h-[300px] mb-[120px]">
                 <div className="relative w-full h-full max-w-md mx-auto">
                     <SwipeCard
                         key={currentProfile.id}
@@ -201,7 +201,7 @@ export default function DiscoverPage() {
             </div>
 
             {/* Bottom Controls */}
-            <div className="fixed bottom-24 left-0 right-0 z-50 flex justify-center items-center gap-3 sm:gap-5 px-4 pointer-events-auto pb-[env(safe-area-inset-bottom)]">
+            <div className="absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-40 flex justify-center items-center gap-3 sm:gap-5 px-4 pointer-events-auto">
                 {/* Chat with this person */}
                 <button
                     onClick={async () => {
