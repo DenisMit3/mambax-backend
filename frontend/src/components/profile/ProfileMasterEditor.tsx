@@ -1,18 +1,21 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
-import { Camera, Plus, Trash2, Shield, EyeOff, MapPinOff, Calendar, Sparkles, Wand2, Check, Volume2, Vibrate, MonitorOff } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { useState, useEffect, useRef } from 'react';
+import { Camera, Plus, Trash2, X, ChevronLeft, ChevronRight, Sparkles, User, Briefcase, GraduationCap, Ruler, MapPin, Heart, Cigarette, Wine, Star as StarIcon, Brain, PawPrint, Calendar, Target, Search } from 'lucide-react';
 
 import { useTelegram } from '@/lib/telegram';
-import { useUser } from '@/context/UserContext';
 import { authService } from '@/services/api';
-import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 
-interface PhotoSlot {
-    id: string;
-    url: string | null;
+const PHOTO_BASE = '/api_proxy';
+
+function resolvePhotoUrl(url: string | undefined): string {
+    if (!url) return '';
+    if (url.startsWith('/api/photos/')) return url;
+    if (url.startsWith('/static/') || url.startsWith('/uploads/')) return `${PHOTO_BASE}${url}`;
+    if (url.startsWith('http') || url.startsWith('data:')) return url;
+    return url;
 }
 
 interface ProfileFormData {
@@ -21,420 +24,471 @@ interface ProfileFormData {
     gender?: string;
     bio?: string;
     photos?: string[];
+    interests?: string[];
+    city?: string;
+    job?: string;
+    education?: string;
+    height?: number;
+    children?: string;
+    smoking?: string;
+    drinking?: string;
+    zodiac?: string;
+    personality_type?: string;
+    love_language?: string;
+    pets?: string;
+    ideal_date?: string;
+    intent?: string;
+    looking_for?: string;
     [key: string]: unknown;
 }
 
 interface ProfileMasterEditorProps {
     initialData?: ProfileFormData;
     onSave?: (data: ProfileFormData) => void;
+    onCancel?: () => void;
 }
 
-export const ProfileMasterEditor = ({ initialData, onSave }: ProfileMasterEditorProps) => {
+const INTEREST_OPTIONS = [
+    'Кино', 'Музыка', 'Спорт', 'Путешествия', 'Кофе', 'Игры', 'Фотография',
+    'Кулинария', 'Книги', 'Йога', 'Танцы', 'Искусство', 'Технологии', 'Природа',
+    'Животные', 'Мода', 'Фитнес', 'Вечеринки',
+];
+
+export const ProfileMasterEditor = ({ initialData, onSave, onCancel }: ProfileMasterEditorProps) => {
     const { hapticFeedback } = useTelegram();
-    const [photos, setPhotos] = useState<PhotoSlot[]>([
-        { id: '1', url: null },
-        { id: '2', url: null },
-        { id: '3', url: null },
-        { id: '4', url: null },
-        { id: '5', url: null },
-        { id: '6', url: null },
-    ]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [saving, setSaving] = useState(false);
 
+    // Form state
+    const [photos, setPhotos] = useState<string[]>([]);
+    const [name, setName] = useState('');
+    const [age, setAge] = useState<number | ''>('');
+    const [gender, setGender] = useState('male');
     const [bio, setBio] = useState('');
-    const [incognito, setIncognito] = useState(false);
-    const [hideAge, setHideAge] = useState(false);
-    const [hideDistance, setHideDistance] = useState(false);
-    const { user, updateUXPreferences } = useUser();
-    const [uxPrefs, setUxPrefs] = useState({
-        sounds_enabled: true,
-        haptic_enabled: true,
-        reduced_motion: false
-    });
-
-    useEffect(() => {
-        if (user?.ux_preferences) {
-            setUxPrefs(user.ux_preferences);
-        }
-    }, [user]);
-
-    // Load real incognito & visibility from API
-    useEffect(() => {
-        authService.getIncognitoStatus()
-            .then((data) => { if (data && typeof data === 'object' && 'enabled' in data) setIncognito((data as { enabled: boolean }).enabled); })
-            .catch((e) => console.warn('Operation failed:', e));
-        authService.getVisibilitySettings()
-            .then((data) => {
-                if (data && typeof data === 'object') {
-                    const vis = data as { show_age?: boolean; show_distance?: boolean };
-                    if (vis.show_age !== undefined) setHideAge(!vis.show_age);
-                    if (vis.show_distance !== undefined) setHideDistance(!vis.show_distance);
-                }
-            })
-            .catch((e) => console.warn('Operation failed:', e));
-    }, []);
-
-    const handleUXToggle = (key: keyof typeof uxPrefs) => {
-        const newVal = !uxPrefs[key];
-        setUxPrefs(prev => ({ ...prev, [key]: newVal }));
-        updateUXPreferences({ [key]: newVal });
-        hapticFeedback.selection();
-    };
-
-    const handleIncognitoToggle = async () => {
-        const newVal = !incognito;
-        setIncognito(newVal);
-        hapticFeedback.selection();
-        try {
-            if (newVal) await authService.enableIncognito();
-            else await authService.disableIncognito();
-        } catch {
-            setIncognito(!newVal);
-        }
-    };
-
-    const handleHideAgeToggle = async () => {
-        const newVal = !hideAge;
-        setHideAge(newVal);
-        hapticFeedback.selection();
-        try {
-            await authService.updateVisibilitySettings({ show_age: !newVal });
-        } catch {
-            setHideAge(!newVal);
-        }
-    };
-
-    const handleHideDistanceToggle = async () => {
-        const newVal = !hideDistance;
-        setHideDistance(newVal);
-        hapticFeedback.selection();
-        try {
-            await authService.updateVisibilitySettings({ show_distance: !newVal });
-        } catch {
-            setHideDistance(!newVal);
-        }
-    };
-
-    const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
     const [city, setCity] = useState('');
     const [job, setJob] = useState('');
     const [education, setEducation] = useState('');
     const [height, setHeight] = useState<number | ''>('');
+    const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+    const [customInterest, setCustomInterest] = useState('');
 
+    // Additional fields from onboarding
+    const [children, setChildren] = useState('');
+    const [smoking, setSmoking] = useState('');
+    const [drinking, setDrinking] = useState('');
+    const [zodiac, setZodiac] = useState('');
+    const [personalityType, setPersonalityType] = useState('');
+    const [loveLanguage, setLoveLanguage] = useState('');
+    const [pets, setPets] = useState('');
+    const [intent, setIntent] = useState('');
+    const [lookingFor, setLookingFor] = useState('');
+
+    // Load initial data
     useEffect(() => {
         if (initialData) {
+            setPhotos(initialData.photos || []);
+            setName(initialData.name || '');
+            setAge(initialData.age || '');
+            setGender(initialData.gender || 'male');
             setBio(initialData.bio || '');
-            if (initialData.photos) {
-                const newPhotos = [...photos];
-                initialData.photos.forEach((url: string, idx: number) => {
-                    if (idx < 6) newPhotos[idx].url = url;
-                });
-                setPhotos(newPhotos);
-            }
-            setSelectedInterests((initialData.interests || []) as string[]);
             setCity((initialData.city as string) || '');
             setJob((initialData.job as string) || (initialData.work as string) || '');
             setEducation((initialData.education as string) || '');
             setHeight((initialData.height as number) || '');
+            setSelectedInterests((initialData.interests || []) as string[]);
+            setChildren((initialData.children as string) || '');
+            setSmoking((initialData.smoking as string) || '');
+            setDrinking((initialData.drinking as string) || '');
+            setZodiac((initialData.zodiac as string) || '');
+            setPersonalityType((initialData.personality_type as string) || '');
+            setLoveLanguage((initialData.love_language as string) || '');
+            setPets((initialData.pets as string) || '');
+            setIntent((initialData.intent as string) || '');
+            setLookingFor((initialData.looking_for as string) || '');
         }
     }, [initialData]);
 
-    const handleSave = () => {
-        if (onSave) {
-            onSave({
-                bio,
-                photos: photos.filter(p => p.url).map(p => p.url!),
-                interests: selectedInterests,
-                city,
-                job,
-                education,
-                height: height || undefined,
-                is_incognito: incognito,
-                hide_age: hideAge,
-                hide_distance: hideDistance
-            });
-            hapticFeedback.notificationOccurred('success');
+    // Photo upload
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        setUploadingPhoto(true);
+        try {
+            const res = await authService.uploadPhoto(file);
+            if (res.url) {
+                setPhotos(prev => [...prev, res.url]);
+                hapticFeedback.notificationOccurred('success');
+            }
+        } catch (err) {
+            console.error('[ProfileEditor] Photo upload failed:', err);
+            hapticFeedback.notificationOccurred('error');
+        } finally {
+            setUploadingPhoto(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
+    };
+
+    const removePhoto = (index: number) => {
+        hapticFeedback.impactOccurred('medium');
+        setPhotos(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const movePhoto = (index: number, direction: -1 | 1) => {
+        const newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= photos.length) return;
+        hapticFeedback.selection();
+        setPhotos(prev => {
+            const next = [...prev];
+            [next[index], next[newIndex]] = [next[newIndex], next[index]];
+            return next;
+        });
     };
 
     const toggleInterest = (interest: string) => {
         hapticFeedback.selection();
-        if (selectedInterests.includes(interest)) {
-            setSelectedInterests(selectedInterests.filter(i => i !== interest));
-        } else {
-            setSelectedInterests([...selectedInterests, interest]);
+        setSelectedInterests(prev =>
+            prev.includes(interest) ? prev.filter(i => i !== interest) : [...prev, interest]
+        );
+    };
+
+    const addCustomInterest = () => {
+        const trimmed = customInterest.trim();
+        if (!trimmed || selectedInterests.includes(trimmed)) return;
+        hapticFeedback.selection();
+        setSelectedInterests(prev => [...prev, trimmed]);
+        setCustomInterest('');
+    };
+
+    const handleSave = async () => {
+        if (!onSave) return;
+        setSaving(true);
+        hapticFeedback.impactOccurred('medium');
+        try {
+            await onSave({
+                name, age: age || undefined, gender, bio, photos,
+                interests: selectedInterests,
+                city, job, education, height: height || undefined,
+                children, smoking, drinking, zodiac,
+                personality_type: personalityType,
+                love_language: loveLanguage,
+                pets, intent, looking_for: lookingFor,
+            });
+        } finally {
+            setSaving(false);
         }
     };
 
     return (
-        <div className="p-6 md:p-8 space-y-8 pb-32">
+        <div className="space-y-6 pb-32">
+            {/* Hidden file input */}
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                className="hidden"
+            />
+
             {/* Header */}
-            <motion.div
-                className="flex items-center justify-between"
-                initial={{ y: -20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-            >
-                <div>
-                    <h1 className="text-4xl font-black text-white mb-2 uppercase tracking-tighter bg-gradient-to-r from-white to-white/40 bg-clip-text text-transparent italic">
-                        Профиль
-                    </h1>
-                    <p className="text-primary-red text-[11px] font-mono uppercase tracking-[0.4em] font-bold">
-                        Настройки Neural Interface
-                    </p>
-                </div>
-                <AnimatedButton
-                    variant="primary"
-                    className="w-12 h-12 rounded-full flex items-center justify-center p-0"
-                    onClick={handleSave}
-                >
-                    <Check className="w-5 h-5 text-white" />
-                </AnimatedButton>
-            </motion.div>
-
-            {/* Photo Grid 3x2 */}
-            <div className="grid grid-cols-3 gap-4 md:gap-6">
-                {photos.map((slot, index) => (
-                    <motion.div
-                        key={slot.id}
-                        className={`aspect-[3/4] relative rounded-[2.5rem] overflow-hidden cursor-pointer group border border-white/10 shadow-lg transition-transform hover:scale-[1.02] active:scale-95 ${index === 0 ? 'col-span-2 row-span-2' : ''
-                            }`}
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: index * 0.05 }}
-                    >
-                        {slot.url ? (
-                            <>
-                                <img src={slot.url} className="w-full h-full object-cover" />
-                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-[2px]">
-                                    <button
-                                        className="bg-primary-red w-12 h-12 rounded-full flex items-center justify-center shadow-lg shadow-primary-red/40 transform -translate-y-4 group-hover:translate-y-0 transition-transform duration-300"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            hapticFeedback.impactOccurred('medium');
-                                            const newPhotos = [...photos];
-                                            newPhotos[index].url = null;
-                                            setPhotos(newPhotos);
-                                        }}
-                                    >
-                                        <Trash2 className="w-5 h-5 text-white" />
-                                    </button>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="w-full h-full bg-white/[0.03] border-2 border-dashed border-white/10 flex items-center justify-center hover:bg-white/[0.08] hover:border-white/20 transition-all">
-                                <Plus className="w-8 h-8 text-white/20 group-hover:text-white/40" />
-                            </div>
-                        )}
-                        {/* Glass edge highlight */}
-                        <div className="absolute inset-0 border border-white/10 rounded-[2.5rem] pointer-events-none" />
-                    </motion.div>
-                ))}
-            </div>
-
-            {/* Bio Section */}
-            <GlassCard className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-white text-sm font-black uppercase tracking-widest flex items-center space-x-2">
-                        <Sparkles className="w-4 h-4 text-primary-red" />
-                        <span>Обо мне</span>
-                    </h3>
+            <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-black text-white">Редактировать</h1>
+                <div className="flex items-center gap-3">
+                    {onCancel && (
+                        <button
+                            onClick={onCancel}
+                            className="text-sm text-slate-400 hover:text-white transition"
+                        >
+                            Отмена
+                        </button>
+                    )}
                     <button
-                        className="text-[10px] font-mono text-primary-red uppercase tracking-widest flex items-center space-x-1 hover:opacity-70 transition-opacity disabled:opacity-30"
-                        onClick={() => {
-                            if (!bio.trim()) {
-                                hapticFeedback.notificationOccurred('warning');
-                                return;
-                            }
-                            hapticFeedback.impactOccurred('medium');
-                            // Simple AI-like optimization: add emojis and improve structure
-                            const optimized = `✨ ${bio.trim()}${bio.includes('!') ? '' : ' 💫'}`;
-                            setBio(optimized);
-                            hapticFeedback.notificationOccurred('success');
-                        }}
-                        disabled={!bio.trim()}
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] text-white font-bold text-sm shadow-lg active:scale-95 transition disabled:opacity-50"
                     >
-                        <Wand2 className="w-3.5 h-3.5" />
-                        <span>Улучшить</span>
+                        {saving ? 'Сохранение...' : 'Сохранить'}
                     </button>
                 </div>
-                <textarea
-                    className="w-full bg-white/[0.02] rounded-2xl p-4 text-white text-sm outline-none border border-white/5 focus:border-primary-red/30 transition-all placeholder:text-gray-700"
-                    rows={4}
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    placeholder="Расскажи о себе..."
-                />
-            </GlassCard>
+            </div>
 
-            {/* Profile Details Section */}
-            <GlassCard className="p-6">
-                <h3 className="text-white text-sm font-black uppercase tracking-widest mb-4 flex items-center space-x-2">
-                    <MapPinOff className="w-4 h-4 text-primary-red opacity-60" />
-                    <span>Данные профиля</span>
+            {/* Photo Grid */}
+            <div>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Camera className="w-3.5 h-3.5" /> Фото ({photos.length}/9)
+                </h3>
+                <div className="grid grid-cols-3 gap-2.5">
+                    {photos.map((url, index) => (
+                        <motion.div
+                            key={`photo-${index}`}
+                            className={`relative rounded-2xl overflow-hidden border border-white/10 ${index === 0 ? 'col-span-2 row-span-2' : ''}`}
+                            style={{ aspectRatio: index === 0 ? '1' : '2/3' }}
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ delay: index * 0.03 }}
+                        >
+                            <img
+                                src={resolvePhotoUrl(url)}
+                                alt={`Фото ${index + 1}`}
+                                className="w-full h-full object-cover"
+                            />
+                            {/* Photo number */}
+                            <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-[10px] font-bold text-white">
+                                {index + 1}
+                            </div>
+                            {/* Delete button */}
+                            <button
+                                onClick={() => removePhoto(index)}
+                                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-red-500/80 transition active:scale-90"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                            {/* Move buttons */}
+                            {photos.length > 1 && (
+                                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                                    <button
+                                        onClick={() => movePhoto(index, -1)}
+                                        disabled={index === 0}
+                                        className="w-7 h-7 rounded-full bg-black/60 flex items-center justify-center disabled:opacity-30 active:scale-90"
+                                    >
+                                        <ChevronLeft className="w-3.5 h-3.5 text-white" />
+                                    </button>
+                                    <button
+                                        onClick={() => movePhoto(index, 1)}
+                                        disabled={index === photos.length - 1}
+                                        className="w-7 h-7 rounded-full bg-black/60 flex items-center justify-center disabled:opacity-30 active:scale-90"
+                                    >
+                                        <ChevronRight className="w-3.5 h-3.5 text-white" />
+                                    </button>
+                                </div>
+                            )}
+                        </motion.div>
+                    ))}
+                    {/* Add photo button */}
+                    {photos.length < 9 && (
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingPhoto}
+                            className={`rounded-2xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 hover:border-[#ff4b91]/40 hover:bg-white/[0.03] transition active:scale-95 ${photos.length === 0 ? 'col-span-2 row-span-2' : ''}`}
+                            style={{ aspectRatio: photos.length === 0 ? '1' : '2/3' }}
+                        >
+                            {uploadingPhoto ? (
+                                <div className="w-6 h-6 rounded-full border-2 border-[#ff4b91] border-t-transparent animate-spin" />
+                            ) : (
+                                <>
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#ff4b91]/20 to-[#ff9e4a]/20 flex items-center justify-center">
+                                        <Plus className="w-5 h-5 text-[#ff4b91]" />
+                                    </div>
+                                    <span className="text-[11px] text-slate-500 font-medium">Добавить</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Basic Info */}
+            <GlassCard className="p-5" hover={false}>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <User className="w-3.5 h-3.5" /> Основное
                 </h3>
                 <div className="space-y-3">
-                    <div>
-                        <label className="text-xs text-slate-500 mb-1 block">Город</label>
-                        <input
-                            type="text"
-                            className="w-full bg-white/[0.02] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-primary-red/30 transition-all placeholder:text-gray-700"
-                            value={city}
-                            onChange={(e) => setCity(e.target.value)}
-                            placeholder="Ваш город"
-                        />
+                    <InputField label="Имя" value={name} onChange={setName} placeholder="Ваше имя" />
+                    <div className="flex gap-3">
+                        <div className="flex-1">
+                            <label className="text-[11px] text-slate-500 mb-1 block">Возраст</label>
+                            <input
+                                type="number"
+                                className="w-full bg-white/[0.03] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-[#ff4b91]/30 transition placeholder:text-slate-700"
+                                value={age}
+                                onChange={(e) => setAge(e.target.value ? Number(e.target.value) : '')}
+                                placeholder="25"
+                                min={18} max={99}
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <label className="text-[11px] text-slate-500 mb-1 block">Пол</label>
+                            <select
+                                className="w-full bg-white/[0.03] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-[#ff4b91]/30 transition appearance-none"
+                                value={gender}
+                                onChange={(e) => setGender(e.target.value)}
+                            >
+                                <option value="male" className="bg-[#1a1a1e]">Мужской</option>
+                                <option value="female" className="bg-[#1a1a1e]">Женский</option>
+                            </select>
+                        </div>
                     </div>
                     <div>
-                        <label className="text-xs text-slate-500 mb-1 block">Работа</label>
-                        <input
-                            type="text"
-                            className="w-full bg-white/[0.02] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-primary-red/30 transition-all placeholder:text-gray-700"
-                            value={job}
-                            onChange={(e) => setJob(e.target.value)}
-                            placeholder="Кем работаете"
+                        <label className="text-[11px] text-slate-500 mb-1 block">О себе</label>
+                        <textarea
+                            className="w-full bg-white/[0.03] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-[#ff4b91]/30 transition placeholder:text-slate-700 resize-none"
+                            rows={3}
+                            value={bio}
+                            onChange={(e) => setBio(e.target.value)}
+                            placeholder="Расскажите о себе..."
+                            maxLength={500}
                         />
+                        <div className="text-right text-[10px] text-slate-600 mt-1">{bio.length}/500</div>
                     </div>
+                </div>
+            </GlassCard>
+
+            {/* Details */}
+            <GlassCard className="p-5" hover={false}>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5" /> Подробности
+                </h3>
+                <div className="space-y-3">
+                    <InputField label="Город" value={city} onChange={setCity} placeholder="Москва" icon={<MapPin className="w-3.5 h-3.5" />} />
+                    <InputField label="Работа" value={job} onChange={setJob} placeholder="Кем работаете" icon={<Briefcase className="w-3.5 h-3.5" />} />
+                    <InputField label="Образование" value={education} onChange={setEducation} placeholder="Где учились" icon={<GraduationCap className="w-3.5 h-3.5" />} />
                     <div>
-                        <label className="text-xs text-slate-500 mb-1 block">Образование</label>
-                        <input
-                            type="text"
-                            className="w-full bg-white/[0.02] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-primary-red/30 transition-all placeholder:text-gray-700"
-                            value={education}
-                            onChange={(e) => setEducation(e.target.value)}
-                            placeholder="Где учились"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs text-slate-500 mb-1 block">Рост (см)</label>
+                        <label className="text-[11px] text-slate-500 mb-1 block flex items-center gap-1">
+                            <Ruler className="w-3.5 h-3.5" /> Рост (см)
+                        </label>
                         <input
                             type="number"
-                            className="w-full bg-white/[0.02] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-primary-red/30 transition-all placeholder:text-gray-700"
+                            className="w-full bg-white/[0.03] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-[#ff4b91]/30 transition placeholder:text-slate-700"
                             value={height}
                             onChange={(e) => setHeight(e.target.value ? Number(e.target.value) : '')}
                             placeholder="170"
-                            min={100}
-                            max={250}
+                            min={100} max={250}
                         />
                     </div>
                 </div>
             </GlassCard>
 
-            {/* Interests Section */}
-            <GlassCard className="p-6">
-                <h3 className="text-white text-sm font-black uppercase tracking-widest mb-4 flex items-center space-x-2">
-                    <Calendar className="w-4 h-4 text-primary-red opacity-60" />
-                    <span>Интересы</span>
+            {/* Lifestyle */}
+            <GlassCard className="p-5" hover={false}>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Heart className="w-3.5 h-3.5" /> Стиль жизни
                 </h3>
-                <div className="flex flex-wrap gap-2">
-                    {['Кино', 'Музыка', 'Спорт', 'Техно', 'NFT', 'Космос', 'Кофе', 'Игры', 'Вечеринки', 'Еда'].map((interest) => (
+                <div className="space-y-3">
+                    <SelectField label="Дети" value={children} onChange={setChildren} icon={<User className="w-3.5 h-3.5" />}
+                        options={['', 'Нет и не планирую', 'Хочу в будущем', 'Есть дети']} />
+                    <SelectField label="Курение" value={smoking} onChange={setSmoking} icon={<Cigarette className="w-3.5 h-3.5" />}
+                        options={['', 'Не курю', 'Иногда', 'Курю']} />
+                    <SelectField label="Алкоголь" value={drinking} onChange={setDrinking} icon={<Wine className="w-3.5 h-3.5" />}
+                        options={['', 'Не пью', 'По праздникам', 'Иногда', 'Регулярно']} />
+                    <SelectField label="Знак зодиака" value={zodiac} onChange={setZodiac} icon={<StarIcon className="w-3.5 h-3.5" />}
+                        options={['', 'Овен', 'Телец', 'Близнецы', 'Рак', 'Лев', 'Дева', 'Весы', 'Скорпион', 'Стрелец', 'Козерог', 'Водолей', 'Рыбы']} />
+                    <InputField label="Тип личности" value={personalityType} onChange={setPersonalityType} placeholder="INTJ, ENFP..." icon={<Brain className="w-3.5 h-3.5" />} />
+                    <InputField label="Язык любви" value={loveLanguage} onChange={setLoveLanguage} placeholder="Прикосновения, слова..." icon={<Heart className="w-3.5 h-3.5" />} />
+                    <InputField label="Питомцы" value={pets} onChange={setPets} placeholder="Кот, собака..." icon={<PawPrint className="w-3.5 h-3.5" />} />
+                </div>
+            </GlassCard>
+
+            {/* Dating Preferences */}
+            <GlassCard className="p-5" hover={false}>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Target className="w-3.5 h-3.5" /> Цели знакомства
+                </h3>
+                <div className="space-y-3">
+                    <SelectField label="Ищу" value={intent} onChange={setIntent} icon={<Search className="w-3.5 h-3.5" />}
+                        options={['', 'Серьезные отношения', 'Дружба', 'Общение', 'Свидания', 'Не определился']} />
+                    <InputField label="Идеальное свидание" value={(initialData?.ideal_date as string) || ''} onChange={() => {}} placeholder="Опишите..." icon={<Calendar className="w-3.5 h-3.5" />} />
+                    <InputField label="Кого ищу" value={lookingFor} onChange={setLookingFor} placeholder="Опишите..." icon={<Heart className="w-3.5 h-3.5" />} />
+                </div>
+            </GlassCard>
+
+            {/* Interests */}
+            <GlassCard className="p-5" hover={false}>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5" /> Интересы
+                </h3>
+                <div className="flex flex-wrap gap-2 mb-3">
+                    {INTEREST_OPTIONS.map((interest) => (
                         <button
                             key={interest}
-                            className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${selectedInterests.includes(interest)
-                                ? 'bg-primary-red text-white shadow-[0_5px_15px_rgba(255,59,48,0.3)]'
-                                : 'bg-white/5 text-gray-500 hover:bg-white/10 hover:text-gray-400'
-                                }`}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95 ${
+                                selectedInterests.includes(interest)
+                                    ? 'bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] text-white shadow-lg shadow-[#ff4b91]/20'
+                                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                            }`}
                             onClick={() => toggleInterest(interest)}
                         >
                             {interest}
                         </button>
                     ))}
                 </div>
+                {/* Custom interests */}
+                {selectedInterests.filter(i => !INTEREST_OPTIONS.includes(i)).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                        {selectedInterests.filter(i => !INTEREST_OPTIONS.includes(i)).map((interest) => (
+                            <span
+                                key={interest}
+                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-[#ff4b91] to-[#ff9e4a] text-white flex items-center gap-1"
+                            >
+                                {interest}
+                                <X className="w-3 h-3 cursor-pointer" onClick={() => toggleInterest(interest)} />
+                            </span>
+                        ))}
+                    </div>
+                )}
+                {/* Add custom interest */}
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        className="flex-1 bg-white/[0.03] rounded-xl p-2.5 text-white text-sm outline-none border border-white/5 focus:border-[#ff4b91]/30 transition placeholder:text-slate-700"
+                        value={customInterest}
+                        onChange={(e) => setCustomInterest(e.target.value)}
+                        placeholder="+ Свой интерес"
+                        onKeyDown={(e) => e.key === 'Enter' && addCustomInterest()}
+                    />
+                    {customInterest && (
+                        <button
+                            onClick={addCustomInterest}
+                            className="px-4 rounded-xl bg-[#ff4b91]/20 text-[#ff4b91] font-bold text-sm active:scale-95 transition"
+                        >
+                            +
+                        </button>
+                    )}
+                </div>
             </GlassCard>
-
-            {/* VIP Settings */}
-            <div className="space-y-6">
-                <h3 className="text-white text-sm font-black uppercase tracking-widest mb-4 flex items-center space-x-2">
-                    <Shield className="w-5 h-5 text-primary-red opacity-80" />
-                    <span>Приватность</span>
-                </h3>
-
-                <SettingsToggle
-                    icon={EyeOff}
-                    title="Режим Инкогнито"
-                    desc="Видим только тем, кого лайкнул"
-                    active={incognito}
-                    onToggle={handleIncognitoToggle}
-                />
-
-                <SettingsToggle
-                    icon={Calendar}
-                    title="Скрыть возраст"
-                    desc="Не показывать возраст в анкете"
-                    active={hideAge}
-                    onToggle={handleHideAgeToggle}
-                />
-
-                <SettingsToggle
-                    icon={MapPinOff}
-                    title="Скрыть расстояние"
-                    desc="Не показывать дистанцию"
-                    active={hideDistance}
-                    onToggle={handleHideDistanceToggle}
-                />
-            </div>
-
-            {/* UX Settings */}
-            <div className="space-y-6">
-                <h3 className="text-white text-sm font-black uppercase tracking-widest mb-4 flex items-center space-x-2">
-                    <Sparkles className="w-5 h-5 text-primary-red opacity-80" />
-                    <span>Интерфейс</span>
-                </h3>
-
-                <SettingsToggle
-                    icon={Volume2}
-                    title="Звуки"
-                    desc="Звуковые эффекты в приложении"
-                    active={uxPrefs.sounds_enabled}
-                    onToggle={() => handleUXToggle('sounds_enabled')}
-                />
-
-                <SettingsToggle
-                    icon={Vibrate}
-                    title="Вибрация"
-                    desc="Тактильный отклик при действиях"
-                    active={uxPrefs.haptic_enabled}
-                    onToggle={() => handleUXToggle('haptic_enabled')}
-                />
-
-                <SettingsToggle
-                    icon={MonitorOff} // Or a better icon for motion
-                    title="Меньше анимаций"
-                    desc="Отключить сложные переходы"
-                    active={uxPrefs.reduced_motion}
-                    onToggle={() => handleUXToggle('reduced_motion')}
-                />
-            </div>
         </div>
     );
 };
 
-interface SettingsToggleProps {
-    icon: React.ComponentType<{ className?: string }>;
-    title: string;
-    desc: string;
-    active: boolean;
-    onToggle: () => void;
-}
-
-const SettingsToggle = ({ icon: Icon, title, desc, active, onToggle }: SettingsToggleProps) => (
-    <GlassCard
-        className="p-4 flex items-center justify-between cursor-pointer group hover:bg-white/[0.05] transition-colors"
-        onClick={onToggle}
-    >
-        <div className="flex items-center space-x-4">
-            <div className={`p-3 rounded-2xl bg-white/5 ${active ? 'text-primary-red' : 'text-gray-600'}`}>
-                <Icon className="w-5 h-5" />
-            </div>
-            <div>
-                <h4 className="text-white font-bold text-sm tracking-tight">{title}</h4>
-                <p className="text-gray-600 text-[9px] uppercase tracking-tighter leading-tight">{desc}</p>
-            </div>
-        </div>
-
-        <div className={`w-10 h-5 rounded-full p-1 transition-all duration-300 relative ${active ? 'bg-primary-red' : 'bg-white/10'}`}>
-            <motion.div
-                className="w-3 h-3 bg-white rounded-full shadow-lg"
-                animate={{ x: active ? 20 : 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+// Reusable input field
+function InputField({ label, value, onChange, placeholder, icon }: {
+    label: string; value: string; onChange: (v: string) => void; placeholder?: string; icon?: React.ReactNode;
+}) {
+    return (
+        <div>
+            <label className="text-[11px] text-slate-500 mb-1 block flex items-center gap-1">
+                {icon} {label}
+            </label>
+            <input
+                type="text"
+                className="w-full bg-white/[0.03] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-[#ff4b91]/30 transition placeholder:text-slate-700"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
             />
         </div>
-    </GlassCard>
-);
+    );
+}
+
+// Reusable select field
+function SelectField({ label, value, onChange, options, icon }: {
+    label: string; value: string; onChange: (v: string) => void; options: string[]; icon?: React.ReactNode;
+}) {
+    return (
+        <div>
+            <label className="text-[11px] text-slate-500 mb-1 block flex items-center gap-1">
+                {icon} {label}
+            </label>
+            <select
+                className="w-full bg-white/[0.03] rounded-xl p-3 text-white text-sm outline-none border border-white/5 focus:border-[#ff4b91]/30 transition appearance-none"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+            >
+                {options.map((opt) => (
+                    <option key={opt} value={opt} className="bg-[#1a1a1e]">
+                        {opt || 'Не указано'}
+                    </option>
+                ))}
+            </select>
+        </div>
+    );
+}

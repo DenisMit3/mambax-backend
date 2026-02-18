@@ -94,21 +94,13 @@ export default function ProfilePage() {
     if (isEditing) {
         return (
             <div className="h-full overflow-y-auto scrollbar-hide bg-transparent px-4 pt-6 pb-20">
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-white">Редактор</h2>
-                    <button
-                        onClick={() => setIsEditing(false)}
-                        className="text-sm font-medium text-slate-400 hover:text-white transition"
-                    >
-                        Закрыть
-                    </button>
-                </div>
                 <ProfileMasterEditor
                     initialData={profile}
+                    onCancel={() => setIsEditing(false)}
                     onSave={async (data) => {
                         try {
                             await authService.updateProfile(data as Parameters<typeof authService.updateProfile>[0]);
-                            loadProfile();
+                            queryClient.invalidateQueries({ queryKey: ['user', 'me'] });
                             setIsEditing(false);
                         } catch (e) {
                             console.error('Failed to update profile', e);
