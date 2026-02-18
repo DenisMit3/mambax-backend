@@ -78,7 +78,7 @@ export default function WhoViewedMePage() {
     // Скелетон загрузки
     if (isChecking || loading) {
         return (
-            <div className="min-h-screen bg-black">
+            <div className="min-h-dvh bg-black">
                 <header className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-slate-800/50 px-4 py-3 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-slate-800 animate-pulse" />
                     <div className="h-5 w-40 rounded bg-slate-800 animate-pulse" />
@@ -97,7 +97,7 @@ export default function WhoViewedMePage() {
     }
 
     return (
-        <div className="min-h-screen bg-black pb-24">
+        <div className="min-h-dvh bg-black pb-24">
             {/* Шапка */}
             <header className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-slate-800/50 px-4 py-3">
                 <div className="flex items-center justify-between">

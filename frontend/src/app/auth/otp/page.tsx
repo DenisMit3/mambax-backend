@@ -71,7 +71,7 @@ function OtpContent() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        <div className="min-h-dvh bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
             {/* Background Effects */}
             <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-purple-900/10 to-transparent pointer-events-none" />
             <div className="absolute right-0 top-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -145,7 +145,7 @@ function OtpContent() {
 
 export default function OtpPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">Загрузка нейросети...</div>}>
+        <Suspense fallback={<div className="min-h-dvh bg-slate-950 flex items-center justify-center text-white">Загрузка нейросети...</div>}>
             <OtpContent />
         </Suspense>
     );

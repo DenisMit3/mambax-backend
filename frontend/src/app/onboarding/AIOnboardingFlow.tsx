@@ -42,7 +42,7 @@ export default function AIOnboardingFlow() {
 
     return (
         <div className="fixed inset-0 bg-[#0f0f11] flex items-center justify-center z-[100] font-sans text-white">
-            <div className="w-full h-full sm:h-[90vh] sm:max-w-[420px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-[#1c1c1e] sm:shadow-2xl relative flex flex-col overflow-hidden">
+            <div className="w-full h-full sm:h-[90dvh] sm:max-w-[420px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-[#1c1c1e] sm:shadow-2xl relative flex flex-col overflow-hidden">
 
                 {/* Загрузка */}
                 {isInitializing && (

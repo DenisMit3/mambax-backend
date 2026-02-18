@@ -123,7 +123,7 @@ export default function PaymentsPage() {
   // Лоадер
   if (isChecking || loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-black">
+      <div className="flex items-center justify-center h-dvh bg-black">
         <motion.div
           className="w-10 h-10 border-2 border-purple-500 rounded-full border-t-transparent"
           animate={{ rotate: 360 }}
@@ -138,7 +138,7 @@ export default function PaymentsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white pb-24">
+    <div className="min-h-dvh bg-black text-white pb-24">
       {/* Хедер */}
       <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-lg border-b border-white/5">
         <div className="flex items-center gap-3 px-4 py-3">

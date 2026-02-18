@@ -43,7 +43,7 @@ export const AdvancedAnalyticsDashboard = ({ data, isPremium, onUpgradeToPremium
 
     if (!isPremium) {
         return (
-            <div className="flex flex-col items-center justify-center h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
+            <div className="flex flex-col items-center justify-center h-dvh bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
                 <motion.div className="text-center max-w-md" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                     <div className="w-24 h-24 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6">
                         <TrendingUp className="w-12 h-12 text-white" />
@@ -61,7 +61,7 @@ export const AdvancedAnalyticsDashboard = ({ data, isPremium, onUpgradeToPremium
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
+        <div className="min-h-dvh bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
             <motion.div className="mb-8" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
                 <h1 className="text-3xl font-bold text-white mb-2">Аналитика</h1>
                 <p className="text-gray-400">Детальная статистика вашего профиля</p>

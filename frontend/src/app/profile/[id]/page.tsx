@@ -176,7 +176,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
             <div style={{
                 position: 'relative',
                 height: '65vh',
-                minHeight: '400px',
+                minHeight: 'min(400px, 55dvh)',
                 overflow: 'hidden'
             }}>
                 <img
@@ -210,7 +210,10 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                                     background: idx === currentPhotoIndex ? 'white' : 'rgba(255, 255, 255, 0.5)',
                                     border: 'none',
                                     cursor: 'pointer',
-                                    transition: 'all 0.3s ease'
+                                    transition: 'all 0.3s ease',
+                                    padding: '18px 0',
+                                    backgroundClip: 'content-box',
+                                    boxSizing: 'content-box'
                                 }}
                             />
                         ))}

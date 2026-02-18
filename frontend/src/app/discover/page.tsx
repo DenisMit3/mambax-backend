@@ -80,7 +80,7 @@ export default function DiscoverPage() {
     // Проверка авторизации — первым делом
     if (isChecking) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center">
+            <div className="min-h-dvh bg-black flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
         );
@@ -180,7 +180,7 @@ export default function DiscoverPage() {
             </div>
 
             {/* Main Swipe Area */}
-            <div className="flex-1 relative mb-24 px-4 py-2">
+            <div className="flex-1 relative mb-16 px-4 py-2 min-h-[300px]">
                 <div className="relative w-full h-full max-w-md mx-auto">
                     <SwipeCard
                         key={currentProfile.id}

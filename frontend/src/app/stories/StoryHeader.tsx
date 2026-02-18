@@ -27,7 +27,7 @@ export function StoryHeader({ creating }: StoryHeaderProps) {
 
 export function StorySkeleton() {
   return (
-    <div className="min-h-screen bg-black pb-24">
+    <div className="min-h-dvh bg-black pb-24">
       <div className="px-4 pt-6 pb-2">
         <h1 className="text-2xl font-black text-white">Истории</h1>
         <p className="text-sm text-slate-500 mt-1">Делись моментами, находи людей рядом</p>

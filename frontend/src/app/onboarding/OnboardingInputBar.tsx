@@ -45,7 +45,7 @@ export default function OnboardingInputBar({
             </AnimatePresence>
 
             {/* Поле ввода */}
-            <div className={`p-4 bg-black/80 backdrop-blur border-t border-white/10 transition-all duration-300 ${FLOW_STEPS[stepIndex]?.type === 'photo_upload' ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
+            <div className={`p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black/80 backdrop-blur border-t border-white/10 transition-all duration-300 ${FLOW_STEPS[stepIndex]?.type === 'photo_upload' ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
                 <form onSubmit={(e) => { e.preventDefault(); if (isTextInputAllowed && inputValue.trim() && !isTyping) handleUserResponse(inputValue); }} className="flex items-center space-x-3">
                     <div className="flex-1 relative">
                         <input
@@ -55,7 +55,10 @@ export default function OnboardingInputBar({
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
                             placeholder={isTextInputAllowed ? (isNumberInput ? "Введите число..." : "Напиши ответ...") : "Выберите вариант выше..."}
-                            className={`w-full border-none rounded-2xl px-5 py-3.5 text-white focus:ring-1 focus:ring-[#ff4b91] transition-all text-sm shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isTextInputAllowed ? 'bg-[#1c1c1e] placeholder-gray-500' : 'bg-[#151517] text-gray-600 placeholder-gray-700 cursor-not-allowed'}`}
+                            onFocus={(e) => {
+                                setTimeout(() => (e.target as HTMLInputElement).scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+                            }}
+                            className={`w-full border-none rounded-2xl px-5 py-3.5 text-[16px] text-white focus:ring-1 focus:ring-[#ff4b91] transition-all shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isTextInputAllowed ? 'bg-[#1c1c1e] placeholder-gray-500' : 'bg-[#151517] text-gray-600 placeholder-gray-700 cursor-not-allowed'}`}
                         />
                     </div>
                     <button type="submit" disabled={!isTextInputAllowed || !inputValue.trim() || isTyping} className={`p-3.5 rounded-full shadow-lg transition-all ${isTextInputAllowed && inputValue.trim() ? 'bg-[#ff4b91] text-white' : 'bg-white/5 text-gray-600 cursor-not-allowed'}`}>

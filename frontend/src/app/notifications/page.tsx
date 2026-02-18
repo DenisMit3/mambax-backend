@@ -133,7 +133,7 @@ export default function NotificationsPage() {
 
     if (isChecking || loading) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center">
+            <div className="min-h-dvh bg-black flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
             </div>
         );
@@ -142,7 +142,7 @@ export default function NotificationsPage() {
     if (error) return <ErrorState onRetry={() => loadNotifications()} />;
 
     return (
-        <div className="min-h-screen bg-black text-white pb-24">
+        <div className="min-h-dvh bg-black text-white pb-24">
             {/* Header */}
             <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/5">
                 <div className="flex items-center gap-3 px-4 py-3">

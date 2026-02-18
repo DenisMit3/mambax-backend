@@ -1,6 +1,7 @@
 /* FIX (PERF-002): Using next/image for optimization */
 "use client";
 
+import Image from "next/image";
 import { motion, useMotionValue, useTransform, useAnimation, PanInfo } from "framer-motion";
 import { Gift, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -70,11 +71,14 @@ export function SwipeCard({
         >
             {/* Background Image */}
             <div className="relative w-full h-full">
-                <img
+                <Image
                     src={image}
                     alt={name}
-                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                    fill
+                    sizes="(max-width: 420px) 100vw, 420px"
+                    className="object-cover pointer-events-none"
                     loading={isHero ? "eager" : "lazy"}
+                    priority={isHero}
                 />
 
                 {/* Gradient Overlay */}

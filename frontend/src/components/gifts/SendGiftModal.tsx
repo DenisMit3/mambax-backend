@@ -144,7 +144,7 @@ export function SendGiftModal({
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-5 z-[100]" onClick={handleClose}>
-            <div className="w-full max-w-[480px] max-h-[90vh] bg-background rounded-[24px] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-[480px] max-h-[90dvh] bg-background rounded-[24px] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-gradient-to-br from-primary/10 to-accent/5">
                     <div className="flex items-center gap-2.5">

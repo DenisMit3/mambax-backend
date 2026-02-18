@@ -158,7 +158,7 @@ export default function AuthGatePage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+        <div className="min-h-dvh bg-gray-50 flex flex-col items-center justify-center p-6">
             <div className="w-full max-w-sm flex flex-col items-center">
                 {/* Brand Logo */}
                 <div className="w-24 h-24 mb-8 rounded-[2rem] bg-gradient-to-br from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center shadow-xl shadow-pink-200">

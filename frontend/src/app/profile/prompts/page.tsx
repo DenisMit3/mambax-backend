@@ -107,7 +107,7 @@ export default function PromptsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-black px-4 pt-4 pb-24">
+        <div className="min-h-dvh bg-black px-4 pt-4 pb-24">
             {/* Шапка */}
             <div className="flex items-center gap-3 mb-6">
                 <button

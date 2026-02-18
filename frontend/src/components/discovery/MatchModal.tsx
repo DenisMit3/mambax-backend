@@ -51,7 +51,7 @@ export const MatchModal = ({
                     {/* Background Particles / Effects - Disable on reduced motion */}
                     {!prefersReducedMotion && (
                         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                            {[...Array(20)].map((_, i) => (
+                            {[...Array(8)].map((_, i) => (
                                 <motion.div
                                     key={i}
                                     className="absolute w-2 h-2 rounded-full bg-pink-500/30"

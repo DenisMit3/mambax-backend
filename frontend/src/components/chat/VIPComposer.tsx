@@ -18,7 +18,7 @@ const EmojiPicker = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center justify-center h-[350px] bg-zinc-900">
+      <div className="flex items-center justify-center max-h-[min(350px,40dvh)] h-[350px] bg-zinc-900">
         <Loader2 className="w-6 h-6 animate-spin text-white/50" />
       </div>
     ),
@@ -127,7 +127,7 @@ export const VIPComposer = ({
                 onEmojiClick={handleEmojiClick}
                 theme={Theme.DARK}
                 width="100%"
-                height={350}
+                height="min(350px,40dvh)"
                 searchPlaceHolder="Поиск эмодзи..."
                 skinTonesDisabled={false}
                 lazyLoadEmojis={true}

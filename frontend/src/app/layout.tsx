@@ -82,14 +82,14 @@ export default function RootLayout({
                 {/* Critical CSS inlined intentionally to prevent FOUC (dangerouslySetInnerHTML is safe here — static string, no user input) */}
                 <style dangerouslySetInnerHTML={{
                     __html: `
-                    body { background-color: #ffffff; color: #000000; }
+                    body { background-color: #0f0f11; color: #ffffff; }
                 `}} />
                 <Script
                     src="https://telegram.org/js/telegram-web-app.js"
                     strategy="afterInteractive"
                 />
             </head>
-            <body className={`${manrope.variable} font-sans antialiased text-slate-900 bg-gray-50 overflow-hidden`}>
+            <body className={`${manrope.variable} font-sans antialiased text-white bg-[#0f0f11] overflow-hidden`}>
                 <script dangerouslySetInnerHTML={{ __html: `
                     try {
                         // CRITICAL: Save Telegram initData immediately before any redirects can lose it

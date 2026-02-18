@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@config "../tailwind.config.ts";
 
 @theme {
   --color-primary: #ff4b91;
@@ -127,10 +128,11 @@ input[type=number] {
   -moz-appearance: textfield;
 }
 
-/* Input focus — subtle highlight without layout-shifting scale */
+/* Input focus - visible focus ring for accessibility */
 input:focus,
 textarea:focus {
   outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary);
 }
 
 /* Safe Area Insets — required for iOS notch/home indicator */
@@ -154,9 +156,18 @@ button,
 .overflow-y-auto,
 .overflow-y-scroll {
   overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
+  -webkit-overflow-scrolling: touch; /* deprecated but harmless */
 }
 
+/* Deprecated duplicate */
 .tap-highlight-transparent {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Dynamic viewport height utility */
+.h-dvh {
+  height: 100dvh;
+}
+.min-h-dvh {
+  min-height: 100dvh;
 }

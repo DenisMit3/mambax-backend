@@ -69,7 +69,7 @@ export default function DeleteAccountPage() {
 
     if (isChecking || loading) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center">
+            <div className="min-h-dvh bg-black flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
             </div>
         );
@@ -78,7 +78,7 @@ export default function DeleteAccountPage() {
     // Already scheduled for deletion
     if (deletionStatus?.scheduled) {
         return (
-            <div className="min-h-screen bg-black text-white pb-24">
+            <div className="min-h-dvh bg-black text-white pb-24">
                 <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/5">
                     <div className="flex items-center gap-3 px-4 py-3">
                         <button onClick={() => router.back()} className="p-2 -ml-2 rounded-xl hover:bg-white/5 transition">
@@ -115,7 +115,7 @@ export default function DeleteAccountPage() {
     }
 
     return (
-        <div className="min-h-screen bg-black text-white pb-24">
+        <div className="min-h-dvh bg-black text-white pb-24">
             <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/5">
                 <div className="flex items-center gap-3 px-4 py-3">
                     <button onClick={() => { haptic.light(); router.back(); }} className="p-2 -ml-2 rounded-xl hover:bg-white/5 transition">

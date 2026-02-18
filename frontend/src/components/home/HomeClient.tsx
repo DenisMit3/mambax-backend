@@ -28,7 +28,7 @@ const hashCode = (str: string): number => {
 };
 
 const SmartDiscoveryEngine = dynamic(() => import('@/components/discovery/SmartDiscoveryEngine').then(mod => mod.SmartDiscoveryEngine), {
-    loading: () => <div className="h-screen w-full flex items-center justify-center bg-black text-white">Загрузка...</div>,
+    loading: () => <div className="h-dvh w-full flex items-center justify-center bg-black text-white">Загрузка...</div>,
     ssr: false // Discovery is highly client-dependent (geo, etc)
 });
 

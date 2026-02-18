@@ -141,7 +141,7 @@ export function DailyPicks() {
 
             {/* Picks Carousel */}
             <motion.div
-                className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide"
+                className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory"
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
@@ -150,7 +150,7 @@ export function DailyPicks() {
                     <motion.div
                         key={pick.id}
                         variants={itemVariants}
-                        className="relative flex-shrink-0 w-32 h-48 rounded-2xl overflow-hidden cursor-pointer group"
+                        className="relative flex-shrink-0 w-32 h-48 rounded-2xl overflow-hidden cursor-pointer group snap-start"
                         onClick={() => {
                             // Navigate to profile
                             router.push(`/users/${pick.id}`);

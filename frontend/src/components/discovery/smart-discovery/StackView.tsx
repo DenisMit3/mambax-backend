@@ -82,7 +82,7 @@ export function StackView({
                     <div className="absolute inset-0 w-full h-full">
                         <Image
                             src={currentProfile.photos?.[0] || FALLBACK_AVATAR}
-                            className="w-full h-full object-cover blur-3xl opacity-40 pointer-events-none"
+                            className="w-full h-full object-cover blur-xl opacity-40 pointer-events-none"
                             alt=""
                             aria-hidden="true"
                             fill
@@ -131,7 +131,7 @@ export function StackView({
                     {/* Content Info */}
                     <div className="absolute bottom-0 left-0 right-0 p-5 pb-24 pointer-events-none z-30">
                         <div className="flex items-center gap-3 mb-1">
-                            <h2 className="text-3xl font-bold text-white drop-shadow-md leading-none">
+                            <h2 className="text-3xl font-bold text-white drop-shadow-md leading-none truncate">
                                 {currentProfile.name}, {currentProfile.age}
                             </h2>
                             {currentProfile.is_online && (
@@ -175,11 +175,7 @@ export function StackView({
                             <motion.button
                                 aria-label="Super Like"
                                 onClick={() => swipe('up')}
-                                className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"
-                                animate={{
-                                    boxShadow: ["0 0 20px rgba(255,75,145,0.3)", "0 0 40px rgba(255,75,145,0.6)", "0 0 20px rgba(255,75,145,0.3)"]
-                                }}
-                                transition={{ duration: 1.5, repeat: Infinity }}
+                                className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#ff4b91] to-[#ff9e4a] flex items-center justify-center text-white shadow-[0_0_20px_rgba(255,75,145,0.4)] active:scale-95 transition-all"
                             >
                                 <Zap size={32} fill="white" />
                             </motion.button>

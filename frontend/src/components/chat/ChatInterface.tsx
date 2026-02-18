@@ -87,7 +87,7 @@ export const ChatInterface = ({
     };
 
     return (
-        <div className="flex flex-col h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
+        <div className="flex flex-col h-dvh bg-gradient-to-br from-gray-900 via-black to-gray-900">
             <ChatHeader
                 otherParticipant={otherParticipant}
                 isPremium={isPremium}

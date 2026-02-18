@@ -65,14 +65,14 @@ export default function LanguagePage() {
 
     if (isChecking) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center">
+            <div className="min-h-dvh bg-black flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-black text-white pb-24">
+        <div className="min-h-dvh bg-black text-white pb-24">
             {/* Шапка */}
             <div className="px-6 pt-8 pb-4 flex items-center gap-4">
                 <motion.button

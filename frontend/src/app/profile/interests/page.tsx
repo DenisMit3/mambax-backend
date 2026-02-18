@@ -103,7 +103,7 @@ export default function InterestsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-black text-white pb-24">
+        <div className="min-h-dvh bg-black text-white pb-24">
             {/* Шапка */}
             <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/5 px-4 py-3">
                 <div className="flex items-center gap-3">

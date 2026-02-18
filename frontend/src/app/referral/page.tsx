@@ -220,7 +220,7 @@ export default function ReferralPage() {
 
   if (isChecking || loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-dvh bg-black flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
       </div>
     );
@@ -231,7 +231,7 @@ export default function ReferralPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white pb-24 overflow-x-hidden">
+    <div className="min-h-dvh bg-black text-white pb-24 overflow-x-hidden">
       {/* Toast */}
       <AnimatePresence>
         {toast && (

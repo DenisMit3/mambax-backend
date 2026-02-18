@@ -97,7 +97,7 @@ export default function ProfilePage() {
 
     // Dashboard Mode
     return (
-        <div className="h-full bg-transparent pb-0 relative">
+        <div className="h-full bg-transparent pb-24 relative overflow-y-auto scrollbar-hide">
             {/* Ambient Background */}
             <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-blue-900/20 via-slate-900/50 to-slate-950 pointer-events-none" />
 
@@ -106,7 +106,7 @@ export default function ProfilePage() {
                 <h1 className="text-2xl font-black text-white tracking-wide">ПРОФИЛЬ</h1>
                 <button
                     onClick={() => router.push('/settings')}
-                    className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/70 hover:bg-white/10 transition"
+                    className="w-11 h-11 rounded-full bg-white/5 flex items-center justify-center text-white/70 hover:bg-white/10 transition"
                 >
                     <Settings size={20} />
                 </button>

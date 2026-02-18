@@ -99,7 +99,7 @@ export const SwipeLimitModal = ({
                             {/* Wait */}
                             <button
                                 onClick={onClose}
-                                className="w-full text-gray-400 text-sm py-2"
+                                className="w-full text-gray-400 text-sm py-3 min-h-[44px]"
                             >
                                 Подожду до завтра
                             </button>

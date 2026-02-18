@@ -29,7 +29,7 @@ export const ChatComposer = ({
 
     return (
         <motion.div
-            className="p-4 border-t border-white/10 bg-black/20 backdrop-blur-sm"
+            className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-black/20 backdrop-blur-sm"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
@@ -60,17 +60,31 @@ export const ChatComposer = ({
 
                 {/* Поле ввода */}
                 <div className="flex-1 relative">
-                    <input
-                        ref={inputRef}
-                        type="text"
+                    <textarea
+                        ref={inputRef as React.RefObject<HTMLTextAreaElement | null>}
                         value={message}
-                        onChange={(e) => onMessageChange(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && onSendMessage()}
+                        onChange={(e) => {
+                            onMessageChange(e.target.value);
+                            // Auto-resize
+                            e.target.style.height = 'auto';
+                            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                onSendMessage();
+                            }
+                        }}
+                        onFocus={(e) => {
+                            // Scroll input into view when keyboard opens
+                            setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+                        }}
                         placeholder="Напишите сообщение..."
-                    autoComplete="off"
-                    autoCapitalize="sentences"
-                    enterKeyHint="send"
-                        className="w-full bg-gray-800 text-white rounded-full px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoComplete="off"
+                        autoCapitalize="sentences"
+                        enterKeyHint="send"
+                        rows={1}
+                        className="w-full bg-gray-800 text-[16px] text-white rounded-2xl px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
                     />
                     <button
                         onClick={() => setShowEmojiPicker(!showEmojiPicker)}

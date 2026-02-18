@@ -132,11 +132,13 @@ export const SwipeCard = ({
                     <button
                         className="absolute left-0 top-0 h-full w-1/2"
                         onClick={prevPhoto}
+                        onPointerDown={(e) => e.stopPropagation()}
                         aria-label="Previous photo"
                     />
                     <button
                         className="absolute right-0 top-0 h-full w-1/2"
                         onClick={nextPhoto}
+                        onPointerDown={(e) => e.stopPropagation()}
                         aria-label="Next photo"
                     />
 
@@ -207,7 +209,7 @@ export const SwipeCard = ({
                 <div className="h-1/3 p-6">
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center space-x-2">
-                            <h3 className="text-2xl font-bold text-white">
+                            <h3 className="text-2xl font-bold text-white truncate">
                                 {profile.name}, {profile.age}
                             </h3>
                         </div>

@@ -37,8 +37,20 @@ export function useChatLogic(chat: Chat, currentUserId: string, otherParticipant
     // Синхронизация сообщений из пропсов
     useEffect(() => { setLocalMessages(chat.messages); }, [chat.messages]);
 
-    // Скролл вниз
-    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [allMessages]);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    // Скролл вниз только если пользователь уже внизу
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            return;
+        }
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+        if (isNearBottom) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [allMessages]);
 
     // WebSocket: read receipts, подтверждение, typing
     useEffect(() => {
@@ -171,7 +183,7 @@ export function useChatLogic(chat: Chat, currentUserId: string, otherParticipant
 
     return {
         message, setMessage, allMessages, showReactions, setShowReactions,
-        playingAudio, isPartnerTyping, inputRef, messagesEndRef,
+        playingAudio, isPartnerTyping, inputRef, messagesEndRef, scrollContainerRef,
         handleSendMessage, handleVoiceSend, toggleAudio, handleReaction,
         handleMessageChange,
     };

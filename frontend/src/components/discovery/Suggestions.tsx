@@ -180,7 +180,7 @@ export function Suggestions({ limit = 5, onLike }: SuggestionsProps) {
                             <button
                                 onClick={(e) => handleLike(e, s.id)}
                                 disabled={liked}
-                                className="p-2 rounded-full transition-all flex-shrink-0
+                                className="p-3 rounded-full transition-all flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center
                                     disabled:scale-110
                                     bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20"
                                 aria-label={`Лайкнуть ${s.name}`}

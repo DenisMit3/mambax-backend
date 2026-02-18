@@ -258,7 +258,7 @@ export default function EventsPage() {
     // ============================================
 
     return (
-        <div className="min-h-screen bg-black text-white pb-24">
+        <div className="min-h-dvh bg-black text-white pb-24">
             {/* Toast уведомления */}
             <Toast toast={toast} onClose={hideToast} />
 

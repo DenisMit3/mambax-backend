@@ -90,7 +90,7 @@ export default function PreferencesPage() {
 
     if (isChecking || loading) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center">
+            <div className="min-h-dvh bg-black flex items-center justify-center">
                 <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
             </div>
         );
@@ -101,7 +101,7 @@ export default function PreferencesPage() {
     }
 
     return (
-        <div className="min-h-screen bg-black text-white pb-24">
+        <div className="min-h-dvh bg-black text-white pb-24">
             {/* Header */}
             <div className="px-6 pt-8 pb-6 flex items-center gap-4">
                 <motion.button

@@ -75,7 +75,7 @@ export default function ActivityPage() {
 
     if (isChecking || loading) {
         return (
-            <div className="flex items-center justify-center h-screen bg-black">
+            <div className="flex items-center justify-center h-dvh bg-black">
                 <motion.div
                     className="w-10 h-10 border-2 border-primary-red rounded-full border-t-transparent"
                     animate={{ rotate: 360 }}

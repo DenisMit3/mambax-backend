@@ -69,7 +69,7 @@ export default function FeedbackPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-dvh bg-black text-white">
       {/* Шапка */}
       <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center gap-3 px-4 py-3">

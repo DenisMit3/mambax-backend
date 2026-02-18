@@ -51,11 +51,11 @@ export const ChatMessageBubble = ({
                         ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white'
                         : 'bg-gray-800 text-white'
                         } ${msg.type === 'gift' ? 'p-6' : ''}`}
-                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onTap={() => onTapMessage(msg.id)}
                 >
                     {msg.type === 'text' && (
-                        <p className="text-sm leading-relaxed">{msg.text}</p>
+                        <p className="text-sm leading-relaxed break-words overflow-wrap-anywhere">{msg.text}</p>
                     )}
 
                     {msg.type === 'image' && (
@@ -64,7 +64,7 @@ export const ChatMessageBubble = ({
                                 src={msg.text}
                                 alt="Shared image"
                                 loading="lazy"
-                                className="w-full h-auto max-w-xs"
+                                className="w-full h-auto max-w-full"
                             />
                         </div>
                     )}

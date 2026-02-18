@@ -6,7 +6,7 @@ import { ChevronLeft } from 'lucide-react';
 
 export default function TermsOfServicePage() {
     return (
-        <div className="min-h-screen bg-black text-white p-6 pb-20">
+        <div className="min-h-dvh bg-black text-white p-6 pb-20">
             <header className="flex items-center gap-4 mb-8">
                 <Link href="/profile" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white">
                     <ChevronLeft size={24} />

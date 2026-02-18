@@ -29,7 +29,7 @@ export const VIPImageLightbox = ({ imageUrl, onClose }: VIPImageLightboxProps) =
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.5, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="max-w-full max-h-[90vh] object-contain rounded-md shadow-2xl"
+            className="max-w-full max-h-[90dvh] object-contain rounded-md shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
           <button

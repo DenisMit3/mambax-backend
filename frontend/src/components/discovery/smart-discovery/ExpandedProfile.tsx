@@ -39,7 +39,7 @@ export function ExpandedProfile({ profile, onClose, onSwipe }: ExpandedProfilePr
                     </div>
                     <button
                         onClick={onClose}
-                        className="absolute top-4 right-4 w-10 h-10 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center z-50 text-white"
+                        className="absolute top-4 right-4 w-11 h-11 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center z-50 text-white"
                     >
                         <ChevronDown className="rotate-180" />
                     </button>
@@ -55,7 +55,7 @@ export function ExpandedProfile({ profile, onClose, onSwipe }: ExpandedProfilePr
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
                         <div className="absolute bottom-0 left-0 p-6 w-full">
-                            <h1 className="text-4xl font-bold text-white mb-2">{profile.name}, {profile.age}</h1>
+                            <h1 className="text-4xl font-bold text-white mb-2 truncate">{profile.name}, {profile.age}</h1>
                             <div className="flex items-center space-x-2 text-white/80">
                                 <div className={`w-2 h-2 rounded-full ${profile.is_online ? 'bg-green-500' : 'bg-gray-500'}`} />
                                 <span>{profile.is_online ? 'Онлайн' : formatLastSeen(profile.last_seen)}</span>
@@ -95,14 +95,14 @@ export function ExpandedProfile({ profile, onClose, onSwipe }: ExpandedProfilePr
                                 <Briefcase className="text-purple-400" />
                                 <div>
                                     <p className="text-white/50 text-xs">Работа</p>
-                                    <p className="text-white font-bold">{profile.work || '—'}</p>
+                <p className="text-white font-bold truncate">{profile.work || '—'}</p>
                                 </div>
                             </div>
                             <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3">
                                 <GraduationCap className="text-yellow-400" />
                                 <div>
                                     <p className="text-white/50 text-xs">Образование</p>
-                                    <p className="text-white font-bold">{profile.education || '—'}</p>
+                <p className="text-white font-bold truncate">{profile.education || '—'}</p>
                                 </div>
                             </div>
                             <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3">

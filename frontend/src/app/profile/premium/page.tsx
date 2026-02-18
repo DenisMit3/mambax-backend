@@ -59,7 +59,7 @@ export default function PremiumPage() {
     if (loading || isChecking) {
         return (
             <div style={{
-                minHeight: '100vh',
+                minHeight: '100dvh',
                 background: '#0f0f13',
                 color: 'white',
                 display: 'flex',

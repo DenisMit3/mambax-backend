@@ -29,7 +29,7 @@ export const DiscoveryEngine = ({
     const engine = useDiscoveryEngine(profiles, onSwipe, onFiltersChange, isPremium);
 
     return (
-        <div className="flex flex-col h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
+        <div className="flex flex-col h-dvh bg-gradient-to-br from-gray-900 via-black to-gray-900">
             {/* Header */}
             <motion.div
                 className="flex items-center justify-between p-4 border-b border-white/10"
@@ -38,14 +38,8 @@ export const DiscoveryEngine = ({
             >
                 <div className="flex items-center space-x-3">
                     <motion.div
-                        className="w-10 h-10 rounded-full bg-gradient-to-r from-red-500 to-orange-500 flex items-center justify-center"
-                        animate={engine.boostActive ? {
-                            boxShadow: [
-                                '0 0 20px rgba(255, 59, 48, 0.6)',
-                                '0 0 40px rgba(255, 59, 48, 0.8)',
-                                '0 0 20px rgba(255, 59, 48, 0.6)'
-                            ]
-                        } : {}}
+                        className={`w-10 h-10 rounded-full bg-gradient-to-r from-red-500 to-orange-500 flex items-center justify-center ${engine.boostActive ? 'shadow-[0_0_20px_rgba(255,59,48,0.6)]' : ''}`}
+                        animate={engine.boostActive ? { opacity: [1, 0.7, 1] } : {}}
                         transition={{ duration: 1, repeat: Infinity }}
                     >
                         <Heart className="w-5 h-5 text-white" />

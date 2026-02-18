@@ -117,7 +117,7 @@ export function Spotlight({ limit = 10 }: SpotlightProps) {
 
             {/* Карусель */}
             <motion.div
-                className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide"
+                className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory"
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
@@ -128,7 +128,7 @@ export function Spotlight({ limit = 10 }: SpotlightProps) {
                         variants={itemVariants}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => handleCardTap(profile.id)}
-                        className="relative flex-shrink-0 w-36 h-52 rounded-2xl overflow-hidden cursor-pointer group"
+                        className="relative flex-shrink-0 w-36 h-52 rounded-2xl overflow-hidden cursor-pointer group snap-start"
                     >
                         {/* Фото */}
                         <img

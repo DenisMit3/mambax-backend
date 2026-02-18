@@ -137,8 +137,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
                     {/* Subtle ambient glow */}
                     <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-                        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-600/5 rounded-full blur-[150px]" />
-                        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-pink-600/5 rounded-full blur-[130px]" />
+                        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full" style={{ background: 'radial-gradient(circle, rgba(147,51,234,0.05) 0%, transparent 70%)' }} />
+                        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full" style={{ background: 'radial-gradient(circle, rgba(219,39,119,0.05) 0%, transparent 70%)' }} />
                     </div>
 
                     <BadgeEarnedToast />
@@ -146,7 +146,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
                     {/* iPhone-style Mobile Container */}
                     <div className="fixed inset-0 flex items-center justify-center z-10">
-                        <div className="w-full h-full sm:h-[90vh] sm:max-w-[420px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-[#1c1c1e] sm:shadow-2xl relative flex flex-col overflow-hidden transform">
+                        <div className="w-full h-full sm:h-[90dvh] sm:max-w-[420px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-[#1c1c1e] sm:shadow-2xl relative flex flex-col overflow-hidden">
                             <div className={`flex-1 w-full min-h-0 ${isChatRoom ? 'overflow-hidden' : 'overflow-y-auto'} scrollbar-hide relative`} style={showGlobalNav ? { paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
                                 {children}
                             </div>

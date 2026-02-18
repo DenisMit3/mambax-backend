@@ -122,7 +122,7 @@ export default function StoriesPage() {
   if (loading) return <StorySkeleton />;
 
   return (
-    <div className="min-h-screen bg-black pb-24">
+    <div className="min-h-dvh bg-black pb-24">
       <input
         ref={fileInputRef}
         type="file"

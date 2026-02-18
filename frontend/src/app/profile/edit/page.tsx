@@ -67,7 +67,7 @@ export default function EditProfilePage() {
                             <label style={{ width: '100px', fontWeight: 500, paddingTop: '4px' }}>О себе</label>
                             <textarea value={bio} onChange={e => setBio(e.target.value)}
                                 style={{ flex: 1, border: 'none', background: 'transparent', fontSize: '16px', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
-                                rows={4} placeholder="Расскажите о себе..." autoCapitalize="sentences" enterKeyHint="done" />
+                                rows={4} placeholder="Расскажите о себе..." autoCapitalize="sentences" />
                         </div>
                     </div>
 

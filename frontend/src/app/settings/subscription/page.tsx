@@ -91,7 +91,7 @@ export default function SubscriptionPage() {
 
     if (loading || isChecking) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center">
+            <div className="min-h-dvh bg-black flex items-center justify-center">
                 <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
         );
@@ -100,7 +100,7 @@ export default function SubscriptionPage() {
     const currentPlan = subscription?.plan || "basic";
 
     return (
-        <div className="min-h-screen bg-black text-white">
+        <div className="min-h-dvh bg-black text-white">
             {/* Header */}
             <div className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5">
                 <div className="flex items-center gap-4 px-4 py-4">

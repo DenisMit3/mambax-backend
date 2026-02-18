@@ -21,7 +21,7 @@ export function BottomNav() {
     ];
 
     return (
-        <div className="w-full bg-[#1a1a1e] backdrop-blur-xl border-t border-white/15 pb-safe pt-2 px-6 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] rounded-t-[2rem]">
+        <div className="w-full bg-[#1a1a1e] border-t border-white/15 pb-safe pt-2 px-6 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] rounded-t-[2rem]">
             <div className="flex justify-between items-center h-16 max-w-md mx-auto">
                 {navItems.map((item) => {
                     const isActive = pathname === item.href;

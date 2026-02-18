@@ -39,10 +39,19 @@ export const VIPMessageList = ({
   hapticFeedback,
 }: VIPMessageListProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Автоскролл при новых сообщениях / печати
+  // Автоскролл при новых сообщениях / печати - только если пользователь внизу
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = scrollContainerRef.current;
+    if (!container) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    if (isNearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, isTyping]);
 
   const scrollToBottom = () => {
@@ -50,7 +59,7 @@ export const VIPMessageList = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 min-h-0 scrollbar-hide">
+    <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 min-h-0 scrollbar-hide">
       <AnimatePresence>
         {messages.map((message, index) => {
           // Стиль эмодзи
@@ -74,7 +83,7 @@ export const VIPMessageList = ({
               key={message.id}
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.4, delay: index * 0.05, ease: 'easeOut' }}
+              transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.5), ease: 'easeOut' }}
               className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'} cursor-pointer`}
               onClick={() => {
                 if (activeReactionId === message.id) onSetActiveReactionId(null);
@@ -85,14 +94,25 @@ export const VIPMessageList = ({
               }}
             >
               <div
-                className="max-w-[80%] select-none relative"
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  if (onReaction) {
-                    const newReaction = message.reaction === '❤️' ? '' : '❤️';
-                    onReaction(message.id, newReaction);
-                    hapticFeedback.impactOccurred('medium');
-                  }
+                className="max-w-[80%] select-none relative touch-manipulation"
+                onTouchStart={(e) => {
+                  const timer = setTimeout(() => {
+                    e.stopPropagation();
+                    if (onReaction) {
+                      const newReaction = message.reaction === '❤️' ? '' : '❤️';
+                      onReaction(message.id, newReaction);
+                      hapticFeedback.impactOccurred('medium');
+                    }
+                  }, 500);
+                  (e.currentTarget as HTMLElement).dataset.longPressTimer = String(timer);
+                }}
+                onTouchEnd={(e) => {
+                  const timer = (e.currentTarget as HTMLElement).dataset.longPressTimer;
+                  if (timer) clearTimeout(Number(timer));
+                }}
+                onTouchMove={(e) => {
+                  const timer = (e.currentTarget as HTMLElement).dataset.longPressTimer;
+                  if (timer) clearTimeout(Number(timer));
                 }}
               >
                 {/* Меню реакций */}

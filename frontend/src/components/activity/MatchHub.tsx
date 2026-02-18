@@ -39,7 +39,7 @@ export const MatchHub = ({
     ];
 
     return (
-        <div className="flex flex-col h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 max-w-[430px] mx-auto">
+        <div className="flex flex-col h-dvh bg-gradient-to-br from-gray-900 via-black to-gray-900 max-w-[430px] mx-auto">
             {/* Header */}
             <motion.div
                 className="p-6 border-b border-white/10"
