@@ -140,15 +140,24 @@ export function HomeClient() {
     useEffect(() => {
         if (me) {
             console.log('[Home] me data:', JSON.stringify({ is_complete: me.is_complete, name: me.name, age: me.age, gender: me.gender, photos: me.photos?.length }));
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0374c'},body:JSON.stringify({sessionId:'e0374c',location:'HomeClient.tsx:142',message:'Home useEffect me check',data:{is_complete:me.is_complete,is_complete_type:typeof me.is_complete,name:me.name,age:me.age,photosCount:me.photos?.length,sessionFlag:typeof window!=='undefined'?sessionStorage.getItem('onboarding_completed'):null},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+            // #endregion
             if (me.is_complete !== true) {
                 // Guard: don't redirect back if we just came from onboarding (cache might be stale)
                 const justCompleted = sessionStorage.getItem('onboarding_completed');
                 if (justCompleted) {
                     console.log('[Home] Skipping redirect - onboarding_completed flag set');
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0374c'},body:JSON.stringify({sessionId:'e0374c',location:'HomeClient.tsx:150',message:'Skipping redirect - session flag',data:{justCompleted},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     sessionStorage.removeItem('onboarding_completed');
                     return;
                 }
                 console.warn('[Home] is_complete !== true, redirecting to /onboarding');
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0374c'},body:JSON.stringify({sessionId:'e0374c',location:'HomeClient.tsx:156',message:'REDIRECTING to onboarding',data:{is_complete:me.is_complete,is_complete_type:typeof me.is_complete},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 router.replace('/onboarding');
             }
         }

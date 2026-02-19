@@ -330,11 +330,12 @@ async def update_profile(db: AsyncSession, user_id: str, update_data: UserCreate
         has_name = bool(user.name and len(user.name) > 1)
         has_age = bool(user.age and user.age >= 18)
         has_real_gender = bool(user.gender and user.gender != Gender.OTHER)
-        has_photos = bool(user.photos and len(user.photos) > 0)
+        # FIX: Check photos_rel (relational) instead of photos (deprecated JSON field)
+        has_photos = bool(user.photos_rel and len(user.photos_rel) > 0)
         
         import logging
         _logger = logging.getLogger(__name__)
-        _logger.info(f"[IS_COMPLETE CHECK] user_id={user.id} name='{user.name}' age={user.age} gender={user.gender} photos={user.photos} photos_rel={user.photos_rel}")
+        _logger.info(f"[IS_COMPLETE CHECK] user_id={user.id} name='{user.name}' age={user.age} gender={user.gender} photos_rel_count={len(user.photos_rel) if user.photos_rel else 0}")
         _logger.info(f"[IS_COMPLETE CHECK] has_name={has_name} has_age={has_age} has_real_gender={has_real_gender} has_photos={has_photos}")
         
         if has_name and has_age and has_real_gender and has_photos:
