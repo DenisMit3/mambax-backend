@@ -275,10 +275,6 @@ export function useOnboardingFlow() {
             return;
         }
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0374c'},body:JSON.stringify({sessionId:'e0374c',location:'useOnboardingFlow.ts:280',message:'handleConfirmProfile START',data:{photosCount:userData.photos.length,name:userData.name,age:userData.age,gender:userData.gender},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-
         setIsSubmitting(true);
         try {
             const compositeBio = userData.bio;
@@ -319,19 +315,11 @@ export function useOnboardingFlow() {
 
             // 2. Обновляем профиль - бэкенд увидит фото и выставит is_complete = true
             console.log('[Onboarding] Saving profile:', JSON.stringify(profileData));
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0374c'},body:JSON.stringify({sessionId:'e0374c',location:'useOnboardingFlow.ts:318',message:'Before updateProfile',data:{profileData},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-            // #endregion
             await authService.updateProfile(profileData);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0374c'},body:JSON.stringify({sessionId:'e0374c',location:'useOnboardingFlow.ts:320',message:'After updateProfile OK',data:{},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-            // #endregion
 
             // 3. Проверяем что is_complete стал true
             const me = await authService.getMe();
             console.log('[Onboarding] getMe response:', JSON.stringify({ is_complete: me.is_complete, name: me.name, age: me.age, gender: me.gender, photos: me.photos }));
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/a72da16c-b7a2-4c72-bc73-fd2be527dcae',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0374c'},body:JSON.stringify({sessionId:'e0374c',location:'useOnboardingFlow.ts:327',message:'getMe after updateProfile',data:{is_complete:me.is_complete,name:me.name,age:me.age,gender:me.gender,photosCount:me.photos?.length},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
             // #endregion
             
             // 4. Обновляем кэш напрямую свежими данными (не invalidate, а setQueryData)
