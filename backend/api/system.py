@@ -231,28 +231,34 @@ async def get_audit_logs(
     current_user: User = Depends(get_current_admin)
 ):
     """Get audit logs with filtering (REAL)"""
-    stmt = select(AuditLog).order_by(AuditLog.created_at.desc())
-    
+    # Base query for filtering
+    base_filter = []
     if admin_id:
-        stmt = stmt.where(AuditLog.admin_id == admin_id)
+        base_filter.append(AuditLog.admin_id == admin_id)
     if action:
-        stmt = stmt.where(AuditLog.action == action)
-        
-    # Pagination
+        base_filter.append(AuditLog.action == action)
+    
+    # Count query
+    count_stmt = select(func.count(AuditLog.id))
+    if base_filter:
+        count_stmt = count_stmt.where(*base_filter)
+    total = await db.scalar(count_stmt) or 0
+    
+    # Data query with pagination
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc())
+    if base_filter:
+        stmt = stmt.where(*base_filter)
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     
     result = await db.execute(stmt)
     logs = result.scalars().all()
     
-    # Total count (simplified, optimal would be separate count query)
-    # returning page size count for now to save query time or 1000+
-    total = len(logs) # Placeholder for full count query if needed
-    
     return {
         "logs": logs,
         "page": page,
         "page_size": page_size,
-        "total": total # Approximate or pagination specific
+        "total": total,
+        "total_pages": (total + page_size - 1) // page_size
     }
 
 @router.get("/audit-logs/summary")

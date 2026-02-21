@@ -263,10 +263,20 @@ async def get_current_user_from_token(
         if scheme.lower() != "bearer":
             raise HTTPException(status_code=401, detail="Invalid authentication scheme")
         
+        # Check if token is blacklisted
+        if await redis_manager.is_token_blacklisted(token):
+            raise HTTPException(status_code=401, detail="Token has been revoked")
+        
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: str = payload.get("sub")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Token missing subject")
+        
+        # Check token version (for mass invalidation)
+        token_version = payload.get("ver", 0)
+        current_version = await redis_manager.get_token_version(user_id)
+        if token_version < current_version:
+            raise HTTPException(status_code=401, detail="Token has been invalidated")
         
         try:
             uid = uuid_module.UUID(user_id)

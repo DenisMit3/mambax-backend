@@ -1,6 +1,7 @@
 import redis.asyncio as redis
 from backend.core.config import settings
 import json
+import hashlib
 import logging
 from typing import Any, Optional
 
@@ -262,5 +263,62 @@ class RedisManager:
     async def close(self):
         if self._redis:
             await self._redis.close()
+
+    # === Token Blacklist ===
+    
+    async def blacklist_token(self, token: str, expires_in: int = 86400):
+        """
+        Add token to blacklist. Token will be rejected until expiry.
+        expires_in: seconds until token naturally expires (default 24h)
+        """
+        r = await self.get_redis()
+        if r:
+            try:
+                # Use token hash as key to save space
+                token_hash = hashlib.sha256(token.encode()).hexdigest()[:32]
+                await r.set(f"blacklist:{token_hash}", "1", ex=expires_in)
+                logger.info(f"Token blacklisted: {token_hash[:8]}...")
+            except Exception as e:
+                logger.warning(f"Redis blacklist error: {e}")
+
+    async def is_token_blacklisted(self, token: str) -> bool:
+        """
+        Check if token is blacklisted.
+        Returns False if Redis not configured (fail-open for availability).
+        """
+        r = await self.get_redis()
+        if not r:
+            return False
+        try:
+            token_hash = hashlib.sha256(token.encode()).hexdigest()[:32]
+            return await r.exists(f"blacklist:{token_hash}")
+        except Exception as e:
+            logger.warning(f"Redis blacklist check error: {e}")
+            return False
+
+    async def blacklist_user_tokens(self, user_id: str):
+        """
+        Invalidate all tokens for a user by incrementing their token version.
+        Tokens issued before this version will be rejected.
+        """
+        r = await self.get_redis()
+        if r:
+            try:
+                await r.incr(f"token_version:{user_id}")
+                logger.info(f"Token version incremented for user: {user_id}")
+            except Exception as e:
+                logger.warning(f"Redis token version error: {e}")
+
+    async def get_token_version(self, user_id: str) -> int:
+        """Get current token version for user."""
+        r = await self.get_redis()
+        if not r:
+            return 0
+        try:
+            version = await r.get(f"token_version:{user_id}")
+            return int(version) if version else 0
+        except Exception as e:
+            logger.warning(f"Redis get token version error: {e}")
+            return 0
 
 redis_manager = RedisManager()

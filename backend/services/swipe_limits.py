@@ -234,11 +234,39 @@ async def activate_boost_with_stars(db: AsyncSession, user_id: str, duration_hou
     await db.commit()
     return {"success": True, "boost_until": boost_until.isoformat(), "new_balance": float(user.stars_balance)}
 
-def is_user_boosted(user_id: str) -> bool:
-    # This needs to be async now because of Redis, 
-    # but I'll make a sync wrapper that uses a cached value or similar if needed.
-    # Better to refactor callers to be async.
-    return False # Placeholder for refactoring
+async def is_user_boosted(user_id: str) -> bool:
+    """
+    Check if user currently has an active boost.
+    Returns True if boost is active, False otherwise.
+    """
+    data = await get_user_swipe_data(user_id)
+    boost_until = data.get("boost_until")
+    
+    if not boost_until:
+        return False
+    
+    try:
+        boost_end = datetime.fromisoformat(boost_until.replace("Z", "+00:00"))
+        return datetime.utcnow() < boost_end.replace(tzinfo=None)
+    except (ValueError, AttributeError):
+        return False
+
+
+def is_user_boosted_sync(user_id: str) -> bool:
+    """
+    Synchronous wrapper for is_user_boosted.
+    WARNING: This runs the async function in a new event loop.
+    Prefer using is_user_boosted() directly in async contexts.
+    """
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        # We're in an async context, can't use run_until_complete
+        # Return False as safe default, caller should use async version
+        return False
+    except RuntimeError:
+        # No running loop, safe to create one
+        return asyncio.run(is_user_boosted(user_id))
 
 
 async def add_to_swipe_history(user_id: str, swipe_data: dict):

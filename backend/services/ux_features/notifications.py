@@ -2,13 +2,13 @@
 Push Notifications (FCM)
 ========================
 Отправка push-уведомлений, управление FCM токенами, настройки уведомлений.
+Данные хранятся в Redis для масштабируемости.
 """
 
 import os
 import logging
 import httpx
 from typing import Optional, Dict, Any, List
-from collections import defaultdict
 from enum import Enum
 from pydantic import BaseModel
 
@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 # Firebase FCM Server Key (получить в Firebase Console)
 FCM_SERVER_KEY = os.getenv("FCM_SERVER_KEY", "")
 FCM_API_URL = "https://fcm.googleapis.com/fcm/send"
+
+# Redis key prefixes
+FCM_TOKENS_KEY = "fcm:tokens:"  # fcm:tokens:{user_id} -> list of tokens
+NOTIFICATION_SETTINGS_KEY = "notification:settings:"  # notification:settings:{user_id} -> hash
 
 
 class NotificationType(str, Enum):
@@ -39,49 +43,150 @@ class PushNotification(BaseModel):
     badge: int = 1
 
 
-# In-memory storage для FCM токенов (в продакшене - Redis/БД)
-_fcm_tokens: Dict[str, List[str]] = defaultdict(list)  # user_id -> [tokens]
+# Default notification settings
+DEFAULT_NOTIFICATION_SETTINGS = {
+    "new_match": "1",
+    "new_message": "1",
+    "new_like": "1",
+    "super_like": "1",
+    "profile_view": "0",
+    "match_reminder": "1",
+    "promotion": "0"
+}
 
-# Настройки уведомлений пользователей
-_notification_settings: Dict[str, Dict[str, bool]] = defaultdict(lambda: {
-    "new_match": True,
-    "new_message": True,
-    "new_like": True,
-    "super_like": True,
-    "profile_view": False,
-    "match_reminder": True,
-    "promotion": False
-})
+
+async def _get_redis():
+    """Get Redis client."""
+    from backend.core.redis import redis_manager
+    return await redis_manager.get_redis()
 
 
 def register_fcm_token(user_id: str, token: str) -> Dict[str, Any]:
-    """Зарегистрировать FCM токен устройства"""
-    if token not in _fcm_tokens[user_id]:
-        _fcm_tokens[user_id].append(token)
-        # Храним максимум 5 токенов (5 устройств)
-        if len(_fcm_tokens[user_id]) > 5:
-            _fcm_tokens[user_id] = _fcm_tokens[user_id][-5:]
+    """Зарегистрировать FCM токен устройства (sync wrapper)."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Schedule coroutine
+            future = asyncio.ensure_future(_register_fcm_token_async(user_id, token))
+            return {"status": "registering", "async": True}
+        else:
+            return loop.run_until_complete(_register_fcm_token_async(user_id, token))
+    except RuntimeError:
+        # No event loop
+        return asyncio.run(_register_fcm_token_async(user_id, token))
+
+
+async def _register_fcm_token_async(user_id: str, token: str) -> Dict[str, Any]:
+    """Зарегистрировать FCM токен устройства в Redis."""
+    redis = await _get_redis()
+    if not redis:
+        logger.warning("Redis not available for FCM token registration")
+        return {"status": "error", "error": "redis_unavailable"}
     
+    key = f"{FCM_TOKENS_KEY}{user_id}"
+    
+    # Check if token already exists
+    existing = await redis.lrange(key, 0, -1)
+    if token not in existing:
+        await redis.lpush(key, token)
+        # Keep only last 5 tokens (5 devices max)
+        await redis.ltrim(key, 0, 4)
+        # Set TTL 90 days
+        await redis.expire(key, 60 * 60 * 24 * 90)
+    
+    tokens_count = await redis.llen(key)
     logger.info(f"FCM token registered for user {user_id}")
-    return {"status": "registered", "tokens_count": len(_fcm_tokens[user_id])}
+    return {"status": "registered", "tokens_count": tokens_count}
 
 
 def unregister_fcm_token(user_id: str, token: str) -> Dict[str, Any]:
-    """Удалить FCM токен"""
-    if token in _fcm_tokens[user_id]:
-        _fcm_tokens[user_id].remove(token)
+    """Удалить FCM токен (sync wrapper)."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.ensure_future(_unregister_fcm_token_async(user_id, token))
+            return {"status": "unregistering", "async": True}
+        else:
+            return loop.run_until_complete(_unregister_fcm_token_async(user_id, token))
+    except RuntimeError:
+        return asyncio.run(_unregister_fcm_token_async(user_id, token))
+
+
+async def _unregister_fcm_token_async(user_id: str, token: str) -> Dict[str, Any]:
+    """Удалить FCM токен из Redis."""
+    redis = await _get_redis()
+    if not redis:
+        return {"status": "error", "error": "redis_unavailable"}
+    
+    key = f"{FCM_TOKENS_KEY}{user_id}"
+    await redis.lrem(key, 0, token)
     return {"status": "unregistered"}
 
 
 def get_notification_settings(user_id: str) -> Dict[str, bool]:
-    """Получить настройки уведомлений"""
-    return dict(_notification_settings[user_id])
+    """Получить настройки уведомлений (sync wrapper)."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Return defaults if in async context
+            return {k: v == "1" for k, v in DEFAULT_NOTIFICATION_SETTINGS.items()}
+        else:
+            return loop.run_until_complete(_get_notification_settings_async(user_id))
+    except RuntimeError:
+        return asyncio.run(_get_notification_settings_async(user_id))
+
+
+async def _get_notification_settings_async(user_id: str) -> Dict[str, bool]:
+    """Получить настройки уведомлений из Redis."""
+    redis = await _get_redis()
+    if not redis:
+        return {k: v == "1" for k, v in DEFAULT_NOTIFICATION_SETTINGS.items()}
+    
+    key = f"{NOTIFICATION_SETTINGS_KEY}{user_id}"
+    settings = await redis.hgetall(key)
+    
+    if not settings:
+        # Return defaults
+        return {k: v == "1" for k, v in DEFAULT_NOTIFICATION_SETTINGS.items()}
+    
+    # Convert "1"/"0" to bool
+    return {k: settings.get(k, DEFAULT_NOTIFICATION_SETTINGS.get(k, "1")) == "1" 
+            for k in DEFAULT_NOTIFICATION_SETTINGS.keys()}
 
 
 def update_notification_settings(user_id: str, settings: Dict[str, bool]) -> Dict[str, bool]:
-    """Обновить настройки уведомлений"""
-    _notification_settings[user_id].update(settings)
-    return get_notification_settings(user_id)
+    """Обновить настройки уведомлений (sync wrapper)."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.ensure_future(_update_notification_settings_async(user_id, settings))
+            return {**{k: v == "1" for k, v in DEFAULT_NOTIFICATION_SETTINGS.items()}, **settings}
+        else:
+            return loop.run_until_complete(_update_notification_settings_async(user_id, settings))
+    except RuntimeError:
+        return asyncio.run(_update_notification_settings_async(user_id, settings))
+
+
+async def _update_notification_settings_async(user_id: str, settings: Dict[str, bool]) -> Dict[str, bool]:
+    """Обновить настройки уведомлений в Redis."""
+    redis = await _get_redis()
+    if not redis:
+        return {k: v == "1" for k, v in DEFAULT_NOTIFICATION_SETTINGS.items()}
+    
+    key = f"{NOTIFICATION_SETTINGS_KEY}{user_id}"
+    
+    # Convert bool to "1"/"0"
+    redis_settings = {k: "1" if v else "0" for k, v in settings.items()}
+    
+    if redis_settings:
+        await redis.hset(key, mapping=redis_settings)
+        await redis.expire(key, 60 * 60 * 24 * 365)  # 1 year TTL
+    
+    return await _get_notification_settings_async(user_id)
 
 
 async def send_push_notification(
@@ -92,10 +197,18 @@ async def send_push_notification(
     """Отправить push-уведомление через FCM"""
     
     # Проверяем настройки
-    if not _notification_settings[user_id].get(notification.type.value, True):
+    settings = await _get_notification_settings_async(user_id)
+    if not settings.get(notification.type.value, True):
         return {"sent": False, "reason": "notifications_disabled"}
     
-    tokens = _fcm_tokens.get(user_id, [])
+    # Get tokens from Redis
+    redis = await _get_redis()
+    if not redis:
+        return {"sent": False, "reason": "redis_unavailable"}
+    
+    key = f"{FCM_TOKENS_KEY}{user_id}"
+    tokens = await redis.lrange(key, 0, -1)
+    
     if not tokens:
         return {"sent": False, "reason": "no_fcm_tokens"}
     
@@ -140,6 +253,14 @@ async def send_push_notification(
             if response.status_code == 200:
                 result = response.json()
                 logger.info(f"Push sent to {user_id}: {result.get('success', 0)} success")
+                
+                # Remove invalid tokens
+                if result.get("results"):
+                    for i, res in enumerate(result["results"]):
+                        if res.get("error") in ["InvalidRegistration", "NotRegistered"]:
+                            if i < len(tokens):
+                                await redis.lrem(key, 0, tokens[i])
+                
                 return {"sent": True, "success": result.get("success", 0)}
             else:
                 logger.error(f"FCM error: {response.status_code} - {response.text}")

@@ -27,10 +27,10 @@ async def test_banned_user_login_otp(client, db_session):
     await db_session.commit()
     
     otp = "1234"
-    save_otp(phone, otp)
+    await save_otp(phone, otp)
 
     # 3. Attempt Login
-    response = await client.post("/auth/login", json={
+    response = await client.post("/api/auth/login", json={
         "identifier": phone,
         "otp": otp
     })
@@ -65,10 +65,10 @@ async def test_banned_user_login_telegram(client, db_session):
         "first_name": "Banned"
     }
 
-    with patch("backend.api.auth.validate_telegram_data", return_value=auth_data_mock):
+    with patch("backend.api.auth.login.validate_telegram_data", return_value=auth_data_mock):
         # 3. Attempt Login
         # We can pass any string as init_data since the validator is mocked
-        response = await client.post("/auth/telegram", json={
+        response = await client.post("/api/auth/telegram", json={
             "init_data": "query_id=..."
         })
 

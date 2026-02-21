@@ -107,6 +107,7 @@ async def resolve_moderation_item(
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(get_current_admin)
 ):
+    from backend.core.redis import redis_manager
     
     # Check if it's a report
     report = await db.get(Report, item_id)
@@ -120,7 +121,8 @@ async def resolve_moderation_item(
                  .where(User.id == report.reported_id)
                  .values(status=UserStatus.BANNED, is_active=False)
              )
-             # TODO: Invalidate tokens (requires redis blacklist or token versioning)
+             # Invalidate all tokens for banned user
+             await redis_manager.blacklist_user_tokens(str(report.reported_id))
              
         await db.commit()
         return {"status": "success", "message": f"Report resolved with action {action.value}"}

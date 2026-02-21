@@ -54,9 +54,11 @@ async def test_get_question_of_the_day_returns_string():
     """get_question_of_the_day returns a non-empty string."""
     with patch.object(ai_service, 'generate_content', new_callable=AsyncMock) as m_gen:
         m_gen.return_value = (["What's your favorite season?"], {})
-        with patch('backend.services.ai.redis_manager') as m_redis:
+        with patch('backend.core.redis.redis_manager') as m_redis:
             m_redis.get_json = AsyncMock(return_value=None)
             m_redis.set_json = AsyncMock()
             result = await ai_service.get_question_of_the_day()
+    assert isinstance(result, str)
+    assert len(result) > 0
     assert isinstance(result, str)
     assert len(result) > 0

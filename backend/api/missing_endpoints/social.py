@@ -1,14 +1,37 @@
 # Missing Endpoints - Social: likes, notifications, referral, rewards, views, compatibility
 
-from fastapi import APIRouter, Depends, Body
+from fastapi import APIRouter, Depends, Body, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, select, func, desc, update
 from typing import Optional
 from datetime import datetime, timedelta
 import logging
+import uuid as _uuid
 
 from backend.db.session import get_db
 from backend.api.missing_endpoints.deps import get_current_user_id
+
+# Import real services
+from backend.services.gamification.daily_rewards import (
+    get_daily_reward_status,
+    claim_daily_reward
+)
+from backend.services.social.profile_views import (
+    record_profile_view,
+    get_who_viewed_me,
+    get_view_stats
+)
+from backend.services.social.compatibility import calculate_compatibility
+from backend.services.social.stories import (
+    create_story,
+    get_stories_feed,
+    view_story,
+    react_to_story,
+    get_story_viewers,
+    delete_story,
+    get_my_stories
+)
+from backend.services.swipe_limits import get_swipe_status
 
 logger = logging.getLogger(__name__)
 
@@ -73,16 +96,22 @@ async def like_user(
 # --- Swipes Status ---
 @router.get("/swipes/status")
 async def get_swipes_status(
+    db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
-    """Get swipe status — remaining swipes, limits etc."""
+    """Get swipe status - remaining swipes, limits etc."""
+    uid = _uuid.UUID(current_user_id)
+    
+    # Get real status from swipe_limits service
+    status = await get_swipe_status(db, uid)
+    
     return {
-        "remaining_swipes": 50,
-        "max_swipes": 50,
-        "reset_at": (datetime.utcnow() + timedelta(hours=24)).isoformat(),
-        "is_unlimited": False,
-        "superlikes_remaining": 1,
-        "boosts_remaining": 0
+        "remaining_swipes": status.get("remaining", 50),
+        "max_swipes": status.get("max", 50),
+        "reset_at": status.get("reset_at"),
+        "is_unlimited": status.get("is_unlimited", False),
+        "superlikes_remaining": status.get("superlikes_remaining", 1),
+        "boosts_remaining": status.get("boosts_remaining", 0)
     }
 
 
@@ -91,7 +120,11 @@ async def buy_swipe_pack(
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Buy additional swipe pack"""
-    return {"success": True, "remaining_swipes": 100, "message": "Swipe pack purchased"}
+    # TODO: Integrate with payment system
+    return {
+        "success": False,
+        "message": "Используй Telegram Stars для покупки"
+    }
 
 
 # --- Notifications ---
@@ -104,8 +137,6 @@ async def get_notifications(
 ):
     """Get user notifications list from in_app_notifications table."""
     from backend.models.notifications import InAppNotification
-    from sqlalchemy import select, func, desc
-    import uuid as _uuid
 
     uid = _uuid.UUID(current_user_id) if isinstance(current_user_id, str) else current_user_id
     offset = (page - 1) * limit
@@ -159,8 +190,6 @@ async def mark_notification_read(
 ):
     """Mark notification as read"""
     from backend.models.notifications import InAppNotification
-    import uuid as _uuid
-    from datetime import datetime
 
     uid = _uuid.UUID(current_user_id) if isinstance(current_user_id, str) else current_user_id
     nid = _uuid.UUID(notification_id)
@@ -181,9 +210,6 @@ async def mark_all_notifications_read(
 ):
     """Mark all notifications as read"""
     from backend.models.notifications import InAppNotification
-    from sqlalchemy import update
-    from datetime import datetime
-    import uuid as _uuid
 
     uid = _uuid.UUID(current_user_id) if isinstance(current_user_id, str) else current_user_id
 
@@ -215,11 +241,10 @@ async def get_referral_code(
 ):
     """Get or create user's referral code from DB"""
     from backend.models.user import User
-    from uuid import UUID
 
-    user = await db.get(User, UUID(current_user_id))
+    user = await db.get(User, _uuid.UUID(current_user_id))
     if not user:
-        return {"error": "Пользователь не найден"}, 404
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     # Generate code if missing
     if not user.referral_code:
@@ -251,8 +276,7 @@ async def get_referral_stats(
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Get real referral statistics from DB"""
-    from uuid import UUID
-    uid = UUID(current_user_id)
+    uid = _uuid.UUID(current_user_id)
 
     # Total referrals (where I am the referrer)
     total_q = await db.execute(
@@ -288,8 +312,7 @@ async def get_referral_invited(
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Get list of invited users"""
-    from uuid import UUID
-    uid = UUID(current_user_id)
+    uid = _uuid.UUID(current_user_id)
 
     rows = await db.execute(
         text("""
@@ -325,11 +348,10 @@ async def apply_referral_code(
     """Apply a referral code with full validation"""
     from backend.models.user import User
     from backend.models.marketing import Referral, ReferralStatus
-    from uuid import UUID
     from decimal import Decimal
 
     code = code.strip().upper()
-    uid = UUID(current_user_id)
+    uid = _uuid.UUID(current_user_id)
 
     # 1. Validate code format
     if not code or len(code) < 5:
@@ -405,73 +427,222 @@ async def apply_referral_code(
 # --- Daily Rewards ---
 @router.get("/rewards/daily")
 async def get_daily_rewards(
+    db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Get daily rewards status"""
-    return {
-        "available": True,
-        "streak": 1,
-        "reward": {"type": "stars", "amount": 10},
-        "next_reward_at": (datetime.utcnow() + timedelta(hours=24)).isoformat(),
-        "streak_bonus": None
-    }
+    uid = _uuid.UUID(current_user_id)
+    result = await get_daily_reward_status(db, uid)
+    return result
 
 
 @router.post("/rewards/daily/claim")
-async def claim_daily_reward(
+async def claim_daily_reward_endpoint(
+    db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Claim daily reward"""
-    return {
-        "success": True,
-        "reward": {"type": "stars", "amount": 10},
-        "new_streak": 1,
-        "message": "Daily reward claimed!"
-    }
+    uid = _uuid.UUID(current_user_id)
+    result = await claim_daily_reward(db, uid)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    
+    return result
 
 
 # --- Who Viewed Me ---
 @router.get("/views/who-viewed-me")
 async def who_viewed_me(
     limit: int = 20,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Get list of users who viewed my profile"""
-    return {
-        "viewers": [],
-        "total": 0,
-        "is_premium_feature": True
-    }
+    from backend.models.user import User
+    
+    uid = _uuid.UUID(current_user_id)
+    
+    # Check if user is VIP
+    user = await db.get(User, uid)
+    is_vip = user.is_vip if user and hasattr(user, 'is_vip') else False
+    
+    result = await get_who_viewed_me(db, uid, limit, offset, is_vip)
+    return result
+
+
+@router.get("/views/stats")
+async def get_views_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get profile view statistics"""
+    uid = _uuid.UUID(current_user_id)
+    result = await get_view_stats(db, uid)
+    return result
+
+
+@router.post("/views/record")
+async def record_view(
+    viewed_user_id: str = Body(..., embed=True),
+    source: str = Body("discover"),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Record a profile view"""
+    viewer_id = _uuid.UUID(current_user_id)
+    viewed_id = _uuid.UUID(viewed_user_id)
+    
+    result = await record_profile_view(db, viewer_id, viewed_id, source)
+    return result
 
 
 # --- Compatibility ---
 @router.get("/compatibility/{user_id}")
 async def get_compatibility(
     user_id: str,
+    db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Get compatibility score with another user"""
-    return {
-        "score": 75,
-        "breakdown": {
-            "interests": 80,
-            "lifestyle": 70,
-            "values": 75
-        },
-        "common_interests": [],
-        "tips": ["You both enjoy similar activities"]
-    }
+    uid1 = _uuid.UUID(current_user_id)
+    uid2 = _uuid.UUID(user_id)
+    
+    result = await calculate_compatibility(db, uid1, uid2)
+    
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    
+    return result
+
+
+# --- Stories ---
+@router.get("/stories")
+async def get_stories(
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get stories feed from matches"""
+    uid = _uuid.UUID(current_user_id)
+    feed = await get_stories_feed(db, uid, limit)
+    return {"stories": feed}
+
+
+@router.get("/stories/my")
+async def get_my_stories_endpoint(
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get my active stories"""
+    uid = _uuid.UUID(current_user_id)
+    stories = await get_my_stories(db, uid)
+    return {"stories": stories}
+
+
+@router.post("/stories")
+async def create_story_endpoint(
+    media_url: str = Body(...),
+    media_type: str = Body("image"),
+    caption: Optional[str] = Body(None),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create a new story"""
+    uid = _uuid.UUID(current_user_id)
+    result = await create_story(db, uid, media_url, media_type, caption)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    
+    return result
+
+
+@router.post("/stories/{story_id}/view")
+async def view_story_endpoint(
+    story_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Mark story as viewed"""
+    uid = _uuid.UUID(current_user_id)
+    sid = _uuid.UUID(story_id)
+    
+    result = await view_story(db, sid, uid)
+    return result
+
+
+@router.post("/stories/{story_id}/react")
+async def react_to_story_endpoint(
+    story_id: str,
+    emoji: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """React to a story"""
+    uid = _uuid.UUID(current_user_id)
+    sid = _uuid.UUID(story_id)
+    
+    result = await react_to_story(db, sid, uid, emoji)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    
+    return result
+
+
+@router.get("/stories/{story_id}/viewers")
+async def get_story_viewers_endpoint(
+    story_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get story viewers (only for story owner)"""
+    uid = _uuid.UUID(current_user_id)
+    sid = _uuid.UUID(story_id)
+    
+    result = await get_story_viewers(db, sid, uid)
+    
+    if "error" in result:
+        raise HTTPException(status_code=403, detail=result["error"])
+    
+    return result
+
+
+@router.delete("/stories/{story_id}")
+async def delete_story_endpoint(
+    story_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Delete a story"""
+    uid = _uuid.UUID(current_user_id)
+    sid = _uuid.UUID(story_id)
+    
+    result = await delete_story(db, sid, uid)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    
+    return result
 
 
 # --- Superlike Info ---
 @router.get("/superlike/info")
 async def get_superlike_info(
+    db: AsyncSession = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id)
 ):
     """Get superlike info"""
+    uid = _uuid.UUID(current_user_id)
+    
+    # Get from swipe status
+    status = await get_swipe_status(db, uid)
+    
     return {
-        "remaining": 1,
+        "remaining": status.get("superlikes_remaining", 1),
         "max_daily": 1,
-        "reset_at": (datetime.utcnow() + timedelta(hours=24)).isoformat(),
+        "reset_at": status.get("reset_at"),
         "price_stars": 50
     }

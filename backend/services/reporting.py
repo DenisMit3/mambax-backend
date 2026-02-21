@@ -86,35 +86,108 @@ async def generate_report_task(report_id: uuid.UUID):
 async def _fetch_data_for_report(db: AsyncSession, report: CustomReport):
     if not PANDAS_AVAILABLE:
         return None
+    
+    from backend.models.monetization import RevenueTransaction, GiftTransaction
+    from backend.models.marketing import MarketingCampaign
+    from datetime import timedelta
         
     report_type = report.report_type
+    config = report.configuration or {}
+    period = config.get("period", "30d")
+    
+    # Calculate date range
+    days = int(period.replace("d", "")) if period.endswith("d") else 30
+    start_date = datetime.utcnow() - timedelta(days=days)
     
     if report_type == "user_analytics":
-        # Example: Users by date
-        stmt = select(User.created_at, User.email, User.name, User.gender)
+        # Users by date with stats
+        stmt = select(
+            User.created_at, 
+            User.email, 
+            User.name, 
+            User.gender,
+            User.is_vip,
+            User.is_complete,
+            User.status
+        ).where(User.created_at >= start_date).order_by(User.created_at.desc())
         result = await db.execute(stmt)
         data = result.all()
-        return pd.DataFrame(data, columns=["Created At", "Email", "Name", "Gender"])
+        return pd.DataFrame(data, columns=["Created At", "Email", "Name", "Gender", "VIP", "Complete", "Status"])
         
     elif report_type == "financial":
-        # Mock financial data
-        return pd.DataFrame([
-            {"Date": "2024-01-01", "Revenue": 100.0, "Source": "Subscription"},
-            {"Date": "2024-01-02", "Revenue": 150.0, "Source": "Subscription"},
-        ])
+        # Real financial data from RevenueTransaction
+        stmt = select(
+            RevenueTransaction.created_at,
+            RevenueTransaction.amount,
+            RevenueTransaction.currency,
+            RevenueTransaction.transaction_type,
+            RevenueTransaction.status,
+            RevenueTransaction.payment_provider
+        ).where(RevenueTransaction.created_at >= start_date).order_by(RevenueTransaction.created_at.desc())
+        result = await db.execute(stmt)
+        data = result.all()
+        
+        if data:
+            df = pd.DataFrame(data, columns=["Date", "Amount", "Currency", "Type", "Status", "Provider"])
+            # Add summary row
+            total = df[df["Status"] == "completed"]["Amount"].sum() if "completed" in df["Status"].values else 0
+            return df
+        else:
+            # Return empty dataframe with correct columns
+            return pd.DataFrame(columns=["Date", "Amount", "Currency", "Type", "Status", "Provider"])
         
     elif report_type == "marketing":
-        # Mock marketing
-        return pd.DataFrame([
-             {"Campaign": "Instagram", "Clicks": 1200, "Conversions": 50},
-             {"Campaign": "TikTok", "Clicks": 5000, "Conversions": 10}
-        ])
+        # Real marketing campaign data
+        stmt = select(
+            MarketingCampaign.name,
+            MarketingCampaign.campaign_type,
+            MarketingCampaign.status,
+            MarketingCampaign.target_segment,
+            MarketingCampaign.sent_count,
+            MarketingCampaign.open_count,
+            MarketingCampaign.click_count,
+            MarketingCampaign.conversion_count,
+            MarketingCampaign.created_at
+        ).where(MarketingCampaign.created_at >= start_date).order_by(MarketingCampaign.created_at.desc())
+        result = await db.execute(stmt)
+        data = result.all()
+        
+        if data:
+            df = pd.DataFrame(data, columns=[
+                "Campaign", "Type", "Status", "Segment", 
+                "Sent", "Opens", "Clicks", "Conversions", "Created"
+            ])
+            # Calculate rates
+            df["Open Rate %"] = (df["Opens"] / df["Sent"] * 100).fillna(0).round(2)
+            df["Click Rate %"] = (df["Clicks"] / df["Sent"] * 100).fillna(0).round(2)
+            df["Conversion Rate %"] = (df["Conversions"] / df["Sent"] * 100).fillna(0).round(2)
+            return df
+        else:
+            return pd.DataFrame(columns=["Campaign", "Type", "Status", "Segment", "Sent", "Opens", "Clicks", "Conversions", "Created"])
         
     elif report_type == "ai_usage":
         stmt = select(AIUsageLog.timestamp, AIUsageLog.feature, AIUsageLog.model, AIUsageLog.tokens_used, AIUsageLog.cost)
         result = await db.execute(stmt)
         data = result.all()
         return pd.DataFrame(data, columns=["Timestamp", "Feature", "Model", "Tokens", "Cost"])
+    
+    elif report_type == "gifts":
+        # Gift transactions report
+        stmt = select(
+            GiftTransaction.created_at,
+            GiftTransaction.sender_id,
+            GiftTransaction.recipient_id,
+            GiftTransaction.gift_id,
+            GiftTransaction.stars_amount,
+            GiftTransaction.status
+        ).where(GiftTransaction.created_at >= start_date).order_by(GiftTransaction.created_at.desc())
+        result = await db.execute(stmt)
+        data = result.all()
+        
+        if data:
+            return pd.DataFrame(data, columns=["Date", "Sender", "Recipient", "Gift ID", "Stars", "Status"])
+        else:
+            return pd.DataFrame(columns=["Date", "Sender", "Recipient", "Gift ID", "Stars", "Status"])
 
     else:
-        return pd.DataFrame([{"Error": "Unknown report type"}])
+        return pd.DataFrame([{"Error": f"Unknown report type: {report_type}"}])

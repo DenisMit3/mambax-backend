@@ -179,7 +179,7 @@ class StorageService:
     async def save_voice_message(self, file: UploadFile, db: AsyncSession) -> tuple[str, int]:
         """
         Save voice message as blob (no image processing).
-        Returns (url, duration). Duration detection is best-effort.
+        Returns (url, duration_seconds).
         """
         from backend.models.user import PhotoBlob
 
@@ -196,6 +196,9 @@ class StorageService:
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Empty file")
 
+        # Detect audio duration
+        duration = await self._detect_audio_duration(content, file.content_type)
+
         blob = PhotoBlob(
             data=content,
             content_type=file.content_type or "audio/ogg",
@@ -206,8 +209,71 @@ class StorageService:
         await db.flush()
 
         url = f"/api/photos/{blob.id}"
-        logger.info(f"Voice saved to DB: {url} ({len(content)} bytes)")
-        return url, 0  # Duration detection not implemented yet
+        logger.info(f"Voice saved to DB: {url} ({len(content)} bytes, {duration}s)")
+        return url, duration
+
+    async def _detect_audio_duration(self, content: bytes, content_type: str = None) -> int:
+        """
+        Detect audio duration in seconds using mutagen library.
+        Returns 0 if detection fails (graceful fallback).
+        """
+        try:
+            return await asyncio.to_thread(self._detect_audio_duration_sync, content, content_type)
+        except Exception as e:
+            logger.warning(f"Audio duration detection failed: {e}")
+            return 0
+
+    def _detect_audio_duration_sync(self, content: bytes, content_type: str = None) -> int:
+        """Synchronous audio duration detection."""
+        import io
+        
+        try:
+            from mutagen import File as MutagenFile
+            from mutagen.ogg import OggFileType
+            from mutagen.mp3 import MP3
+            from mutagen.mp4 import MP4
+            from mutagen.oggopus import OggOpus
+            from mutagen.oggvorbis import OggVorbis
+        except ImportError:
+            logger.warning("mutagen not installed, audio duration detection disabled")
+            return 0
+
+        try:
+            audio_file = io.BytesIO(content)
+            
+            # Try to detect format automatically
+            audio = MutagenFile(audio_file)
+            
+            if audio is not None and audio.info:
+                return int(audio.info.length)
+            
+            # Fallback: try specific formats based on content_type
+            audio_file.seek(0)
+            
+            if content_type:
+                if "ogg" in content_type or "opus" in content_type:
+                    try:
+                        audio = OggOpus(audio_file)
+                        return int(audio.info.length)
+                    except:
+                        audio_file.seek(0)
+                        try:
+                            audio = OggVorbis(audio_file)
+                            return int(audio.info.length)
+                        except:
+                            pass
+                elif "mp3" in content_type or "mpeg" in content_type:
+                    audio = MP3(audio_file)
+                    return int(audio.info.length)
+                elif "mp4" in content_type or "m4a" in content_type:
+                    audio = MP4(audio_file)
+                    return int(audio.info.length)
+            
+            return 0
+            
+        except Exception as e:
+            logger.debug(f"Audio parsing error: {e}")
+            return 0
 
     def delete_file(self, file_url: str):
         """
